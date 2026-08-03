@@ -151,6 +151,17 @@ public enum Cat {
 
     /// The entire physics and state machine, as one pure function over value types.
     public static func step(_ state: CatState, world: Skyline, dt: TimeInterval) -> CatState {
+        var s = step(inner: state, world: world, dt: dt)
+        // A clip has to start at its first frame, and several places assign `activity` without
+        // thinking about the clock — the settled branch reassigns it every single tick. Left to
+        // itself, `sitdown` and `curl` are non-looping, so they were handed an elapsed time of
+        // however long he had been idle and snapped straight to their last frame. Neither
+        // animation had ever actually played.
+        if s.activity != state.activity { s.activityElapsed = 0 }
+        return s
+    }
+
+    private static func step(inner state: CatState, world: Skyline, dt: TimeInterval) -> CatState {
         var s = state
         s.activityElapsed += dt
         s.squashElapsed += dt
@@ -230,13 +241,11 @@ public enum Cat {
                 s.position = CGPoint(x: x, y: y1)
                 // The righting reflex. He twists, gets his feet under him, and lands on
                 // four paws every single time — by construction, not by luck.
+                // The twist itself finishes long before he lands, but he stays in `.righting`
+                // for the whole descent: it draws the same sheet as `.slip`, and staying put
+                // means the clip is never restarted underneath him.
                 if s.righting < 1 {
                     s.righting = min(1, s.righting + CGFloat(dt) / CGFloat(Feel.Timing.righting))
-                    // Falling, not jumping. `.airborne` means he chose to leave the ground and
-                    // draws the jump sheet; being dropped is the fall sheet from the first
-                    // frame to the last. `activityElapsed` deliberately keeps running across
-                    // this handover so the clip continues rather than restarting.
-                    s.activity = s.righting < 1 ? .righting : .slip
                 }
                 // `.slip` used to time out into `.airborne` after 0.12s, which meant a cat
                 // whose window closed played 120ms of the fall and then the jump sheet for the

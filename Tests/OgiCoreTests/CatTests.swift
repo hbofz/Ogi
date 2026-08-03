@@ -201,3 +201,26 @@ private let dt = Feel.Timing.fixedDT
             "a washing bout ran \(longest)s and should cap at \(Feel.Timing.groomSeconds)s")
     #expect(Sprites.clip(for: .groom, dangling: false) == .groom)
 }
+
+@MainActor
+@Test func aNonLoopingClipStartsAtItsFirstFrame() {
+    // The settled branch reassigns `activity` every tick, so nothing there ever reset the
+    // animation clock. `sitdown` and `curl` do not loop, which meant they were handed however
+    // long he had been idle and rendered their last frame immediately — the settling animation
+    // existed in the sheet and had never once played on screen.
+    let ground = surface(.window(1), y: 500, from: 0, to: 900)
+    var cat = CatState(position: CGPoint(x: 400, y: 500))
+    cat.support = .grounded(Perch(id: .window(1), dx: 400))
+    for _ in 0..<600 { cat = Cat.step(cat, world: sky([ground]), dt: dt) }   // let time pile up
+    #expect(cat.activityElapsed > 1, "needed a stale clock to make this test mean anything")
+
+    cat.repose = .curled
+    cat = Cat.step(cat, world: sky([ground]), dt: dt)
+    #expect(cat.activity == .curl)
+    #expect(Sprites.index(.curl, activity: .curl, walkPhase: 0, elapsed: cat.activityElapsed) == 0,
+            "curl began at frame \(Sprites.index(.curl, activity: .curl, walkPhase: 0, elapsed: cat.activityElapsed))")
+
+    // ...and it does not restart every tick either, or it would never leave frame 0.
+    for _ in 0..<40 { cat = Cat.step(cat, world: sky([ground]), dt: dt) }
+    #expect(cat.activityElapsed > 0.1, "the clock is being reset every tick")
+}

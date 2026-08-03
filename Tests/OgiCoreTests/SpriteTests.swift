@@ -5,7 +5,7 @@ import CoreGraphics
 /// Clips regenerated against the current `art/character.png`. Add each name as its sheet
 /// lands. Kept by hand on purpose: the old version inferred this from eye colour, which
 /// stopped meaning anything the moment the cat himself became ginger.
-private let redrawnClips: Set<String> = ["walk", "fall", "land", "idle", "jump", "run", "sitdown", "sleep", "alert", "held"]
+private let redrawnClips: Set<String> = ["walk", "fall", "land", "idle", "jump", "run", "sitdown", "sleep", "alert", "held", "groom", "curl"]
 
 /// The drawn frames come from separately-generated sheets that draw him at wildly different
 /// sizes, so `Sprites` rescales each clip to make him one cat. These check that it works,
@@ -26,7 +26,7 @@ private let redrawnClips: Set<String> = ["walk", "fall", "land", "idle", "jump",
     // nearly twice a sitting cat's while his eye stays the same. His ratio is honestly 0.047
     // against everyone else's 0.06-0.10, and including him would fail correct art.
     var ratios: [(String, Double)] = []
-    for clip in [Sprites.Clip.walk, .idle, .jump, .land, .fall, .run, .alert, .sitdown, .sleep]
+    for clip in [Sprites.Clip.walk, .idle, .jump, .land, .fall, .run, .alert, .sitdown, .sleep, .groom, .curl]
     where redrawnClips.contains(clip.rawValue) {
         // Median across frames. One frame is a bad sample for the same reason clipScale takes
         // a median: a squash frame is legitimately short and would read as an oversized eye.

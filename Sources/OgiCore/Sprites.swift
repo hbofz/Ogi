@@ -20,7 +20,7 @@ public enum Sprites {
 
     /// Ordered frames per animation. Names match the files in Resources/Sprites.
     public enum Clip: String {
-        case walk, idle, jump, land, fall, run, alert, sitdown, held, sleep, groom
+        case walk, idle, jump, land, fall, run, alert, sitdown, held, sleep, groom, curl
 
         var count: Int {
             switch self {
@@ -35,6 +35,7 @@ public enum Sprites {
             case .held: 4
             case .alert: 3
             case .groom: 6
+            case .curl: 5
             }
         }
 
@@ -52,6 +53,7 @@ public enum Sprites {
             case .held: 4
             case .alert: 1.2
             case .groom: 8
+            case .curl: 6
             }
         }
 
@@ -60,7 +62,8 @@ public enum Sprites {
             // groom loops: a cat washing does it for a while, and the sheet's last frame
             // returns to the sitting pose it started from, so the seam is invisible.
             case .walk, .run, .idle, .sleep, .held, .alert, .groom: true
-            case .jump, .land, .fall, .sitdown: false
+            // curl settles into the sleep pose and holds it until sleep takes over.
+            case .jump, .land, .fall, .sitdown, .curl: false
             }
         }
     }
@@ -95,7 +98,8 @@ public enum Sprites {
         case .scruffed:             return .held
         case .land, .landHard:      return .land
         case .sit:                  return .sitdown
-        case .curl, .sleep:         return .sleep
+        case .curl:                 return .curl
+        case .sleep:                return .sleep
         case .alert, .brace:        return .alert
         case .groom:                return .groom
         case .idle:                 return .idle
@@ -222,6 +226,12 @@ public enum Sprites {
             }
             // Whiskers and highlights are thin; an eye is a chunky blob.
             guard count > 12, maxX - minX > 2, maxY - minY > 2 else { continue }
+            // An eye is roughly as tall as it is wide. A *closed* eyelid is a long flat line,
+            // and being long it can win on area over the open eye beside it — on `curl` a
+            // 37x14 lid beat a 19x21 eye, and the clip rendered at nearly half the right size
+            // because clipScale divides by that width. Rejecting flat blobs changes nothing on
+            // ten of the twelve clips and fixes the two it should.
+            guard (maxY - minY + 1) * 20 >= (maxX - minX + 1) * 11 else { continue }
             // An eye is a feature, not the animal. Without this the dark test would match the
             // whole of a black cat as one blob and hand back his entire silhouette as an eye,
             // which is both wrong and the largest thing on the frame, so it would win.
