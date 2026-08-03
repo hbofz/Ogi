@@ -67,8 +67,10 @@ public final class Overlay {
         window.ignoresMouseEvents = !wanted
     }
 
-    public func render(_ cat: CatState, gaze: Gaze, heightAboveGround: CGFloat, occluders: [CGRect]) {
-        view.apply(cat, gaze: gaze, heightAboveGround: heightAboveGround, occluders: occluders)
+    public func render(_ cat: CatState, pose: Body.Pose, gaze: Gaze,
+                       heightAboveGround: CGFloat, occluders: [CGRect]) {
+        view.apply(cat, pose: pose, gaze: gaze,
+                   heightAboveGround: heightAboveGround, occluders: occluders)
     }
 
     fileprivate func tick(_ t: CFTimeInterval) { onTick?(t) }
@@ -114,7 +116,6 @@ final class OgiView: NSView {
         // the ONLY thing visible there, so it has to carry him alone. 0.22 was too faint.
         bodyLayer.strokeColor = NSColor.white.withAlphaComponent(0.45).cgColor
         bodyLayer.lineWidth = 1.25
-        bodyLayer.path = Body.placeholder()
 
         shadowLayer.fillColor = NSColor.black.cgColor
 
@@ -159,7 +160,8 @@ final class OgiView: NSView {
         overlay?.tick(l.targetTimestamp)
     }
 
-    func apply(_ cat: CatState, gaze: Gaze, heightAboveGround h: CGFloat, occluders: [CGRect]) {
+    func apply(_ cat: CatState, pose: Body.Pose, gaze: Gaze,
+               heightAboveGround h: CGFloat, occluders: [CGRect]) {
         let bodyRect = CGRect(x: cat.position.x - Feel.Shape.width / 2, y: cat.position.y,
                               width: Feel.Shape.width, height: Feel.Shape.height)
         // The shadow separates from him as he rises, so the box has to follow it down.
@@ -182,10 +184,14 @@ final class OgiView: NSView {
         // Squash, plus a lean into the motion of whatever he is standing on. Rotating
         // about the feet (the anchor point) is what makes it read as bracing rather than
         // sliding: his paws stay put and his body tips.
+        // Squash, a lean into whatever is carrying him, and a mirror for facing.
+        // Rotating about the feet is what makes the lean read as bracing rather than
+        // sliding: his paws stay put and his body tips.
         let s = cat.scale
-        let lean = -cat.lean * Feel.Physics.maxLean
+        let lean = -cat.lean * Feel.Physics.maxLean * cat.facing
+        bodyLayer.path = Body.path(pose)
         bodyLayer.transform = CATransform3DConcat(
-            CATransform3DMakeScale(s.width, s.height, 1),
+            CATransform3DMakeScale(s.width * cat.facing, s.height, 1),
             CATransform3DMakeRotation(lean, 0, 0, 1))
 
         // Eyes ride the body but take only HALF the squash. Undeformed eyes on a squashed
@@ -194,9 +200,10 @@ final class OgiView: NSView {
         eyesLayer.bounds = bodyLayer.bounds
         eyesLayer.position = bodyLayer.position
         eyesLayer.transform = CATransform3DConcat(
-            CATransform3DMakeScale(1 + (s.width - 1) * 0.5, 1 + (s.height - 1) * 0.5, 1),
+            CATransform3DMakeScale((1 + (s.width - 1) * 0.5) * cat.facing,
+                                   1 + (s.height - 1) * 0.5, 1),
             CATransform3DMakeRotation(lean, 0, 0, 1))
-        eyesLayer.path = Body.eyes(gaze: gaze)
+        eyesLayer.path = Body.eyes(gaze: gaze, pose: pose)
 
         shadowLayer.position = CGPoint(x: cat.position.x - origin.x,
                                        y: cat.position.y - h - origin.y)

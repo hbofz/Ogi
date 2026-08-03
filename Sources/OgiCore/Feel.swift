@@ -77,10 +77,14 @@ public enum Feel {
     }
 
     public enum Shape {
-        public static let height: CGFloat = 34
-        public static let width: CGFloat = 46
+        // A cat in side view is much longer than it is tall. Getting this ratio wrong is
+        // what makes these things read as bears or rats.
+        public static let height: CGFloat = 32
+        public static let width: CGFloat = 52
         /// Squash depth is proportional to impact speed, capped here.
         public static let maxSquash: CGFloat = 0.30
+        /// Ground covered per full gait cycle. Tuned so the paws do not skate.
+        public static let strideLength: CGFloat = 30
         /// Impact speed that produces maxSquash.
         public static let squashReference: CGFloat = 900
     }

@@ -11,6 +11,9 @@ public final class OgiApp: NSObject, NSApplicationDelegate {
                                   screen: ScreenGeometry(frame: .zero, visibleFrame: .zero, notch: nil))
     private var cat = CatState(position: .zero)
     private var gaze = Gaze()
+    private var tail = TailSim()
+    private var walkPhase: CGFloat = 0
+    private var crouchAmount: CGFloat = 0
 
     private var accumulator: TimeInterval = 0
     private var lastTick: CFTimeInterval = 0
@@ -99,7 +102,8 @@ public final class OgiApp: NSObject, NSApplicationDelegate {
                   dt: CGFloat(Feel.Timing.fixedDT * Double(steps)))
 
         let h = heightAboveGround()
-        overlay.render(cat, gaze: gaze, heightAboveGround: h,
+        overlay.render(cat, pose: buildPose(dt: CGFloat(Feel.Timing.fixedDT * Double(steps))),
+                       gaze: gaze, heightAboveGround: h,
                        occluders: skyline.occluders(above: perchZ(),
                                                     intersecting: hitRect().insetBy(dx: -40, dy: -h - 40)))
 
@@ -117,6 +121,35 @@ public final class OgiApp: NSObject, NSApplicationDelegate {
     }
 
     private func log(_ m: String) { if debug { print("[ogi] \(m)") } }
+
+    /// Advances everything that is computed rather than simulated: the gait cycle, the
+    /// crouch blend, and the tail.
+    private func buildPose(dt: CGFloat) -> Body.Pose {
+        var pose = Body.Pose()
+
+        let walking = cat.activity == .walk
+        pose.stride = walking ? 1 : 0
+        if walking {
+            // Gait speed follows walk speed, so the feet do not skate.
+            walkPhase += dt * Feel.Physics.walkSpeed / Feel.Shape.strideLength
+            walkPhase = walkPhase.truncatingRemainder(dividingBy: 1)
+        }
+        pose.walkPhase = walkPhase
+
+        // Blend into and out of the crouch rather than snapping, so the wind-up reads.
+        let wantCrouch: CGFloat = cat.activity == .crouch ? 1 : 0
+        crouchAmount += (wantCrouch - crouchAmount) * min(1, dt * 18)
+        pose.crouch = crouchAmount
+
+        if case .falling = cat.support { pose.airborne = true }
+        pose.earAngle = cat.activity == .landHard ? -0.35 : 0
+
+        // The tail is simulated in body space, so it inherits the mirror and the squash for
+        // free and never needs unwinding from the world transform.
+        tail.step(base: Body.tailBase(pose), dt: dt)
+        pose.tail = tail.points
+        return pose
+    }
 
     /// Where a click counts as touching him. Padded, because a 46x34 cat is a small target.
     private func hitRect() -> CGRect {

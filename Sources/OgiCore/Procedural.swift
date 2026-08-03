@@ -134,13 +134,14 @@ extension Feel {
         public static let doubleBlinkGap: CGFloat = 0.12
 
         /// How far the eyes travel within the head, in points.
-        public static let travel: CGFloat = 2.6
-        /// Perfect symmetry reads as a logo, so the right eye is slightly smaller.
-        public static let asymmetry: CGFloat = 0.92
-        public static let radiusX: CGFloat = 5.0
-        public static let radiusY: CGFloat = 5.6
-        public static let separation: CGFloat = 0.23   // × body width, from the midline
-        public static let heightFraction: CGFloat = 0.60   // × body height
+        public static let travel: CGFloat = 1.0
+        /// Perfect symmetry reads as a logo, so the far eye is slightly smaller.
+        public static let asymmetry: CGFloat = 0.80
+        // Sized against a head radius of H*0.19 (~6pt). Anything larger reads as googly
+        // eyes rather than as a cat, which was the first thing wrong with this.
+        public static let radiusX: CGFloat = 1.9
+        public static let radiusY: CGFloat = 2.2
+        public static let heightFraction: CGFloat = 0.78   // × body height, for the head
     }
 }
 
@@ -152,4 +153,107 @@ public func lookDirection(from head: CGPoint, to point: CGPoint) -> CGPoint {
     // Saturates quickly: anything past ~200px away is simply "over there".
     let m = min(d / 200, 1)
     return CGPoint(x: dx / d * m, y: dy / d * m)
+}
+
+// MARK: - Tail
+
+/// A three-link chain trailing the body, in body space.
+///
+/// Verlet with distance constraints rather than springs. Three reasons, and the third is
+/// the one that matters: it is unconditionally stable at any timestep, it has no stiffness
+/// to tune, and it **will not explode when a window teleports across the screen** — which
+/// is the classic desktop-pet failure where the pet's appendages fly off to infinity.
+///
+/// Nothing here is scripted. The counter-swing on a turn and the whip on landing both fall
+/// out of moving the anchor and letting physics answer.
+public struct TailSim: Sendable {
+    public private(set) var points: [CGPoint]
+    private var previous: [CGPoint]
+    private let lengths: [CGFloat]
+
+    public init() {
+        lengths = Feel.Tail.linkLengths
+        var p: [CGPoint] = [.zero]
+        for l in lengths { p.append(CGPoint(x: p.last!.x - l, y: p.last!.y)) }
+        points = p
+        previous = p
+    }
+
+    public mutating func step(base: CGPoint, dt: CGFloat, damping: CGFloat = Feel.Tail.damping) {
+        guard dt > 0 else { return }
+        for i in points.indices {
+            let vx = (points[i].x - previous[i].x) * damping
+            let vy = (points[i].y - previous[i].y) * damping
+            previous[i] = points[i]
+            // A tail is light and muscle-supported, so it does not fall like a rock.
+            points[i].x += vx + Feel.Tail.carriage.dx * dt * dt
+            points[i].y += vy + (Feel.Tail.carriage.dy
+                                 - Feel.Physics.gravity * Feel.Tail.gravityScale) * dt * dt
+        }
+        points[0] = base
+        previous[0] = base
+
+        for _ in 0..<Feel.Tail.relaxations { relax() }
+        limitAngles()
+    }
+
+    private mutating func relax() {
+        for i in 0..<lengths.count {
+            let a = points[i], b = points[i + 1]
+            let dx = b.x - a.x, dy = b.y - a.y
+            let d = max(hypot(dx, dy), 0.0001)
+            let correction = (d - lengths[i]) / d
+            // Link 0 is pinned to the body, so it applies the whole correction to the tip.
+            let wa: CGFloat = i == 0 ? 0 : 0.5
+            let wb: CGFloat = i == 0 ? 1 : 0.5
+            points[i].x += dx * correction * wa
+            points[i].y += dy * correction * wa
+            points[i + 1].x -= dx * correction * wb
+            points[i + 1].y -= dy * correction * wb
+        }
+    }
+
+    /// Stops the tail folding back through the body, which is the single worst artifact
+    /// and costs six lines to eliminate.
+    private mutating func limitAngles() {
+        for i in 1..<lengths.count {
+            let prev = atan2(points[i].y - points[i - 1].y, points[i].x - points[i - 1].x)
+            let cur = atan2(points[i + 1].y - points[i].y, points[i + 1].x - points[i].x)
+            var delta = cur - prev
+            while delta > .pi { delta -= 2 * .pi }
+            while delta < -.pi { delta += 2 * .pi }
+            let clamped = max(-Feel.Tail.maxJointAngle, min(Feel.Tail.maxJointAngle, delta))
+            guard clamped != delta else { continue }
+            let a = prev + clamped
+            points[i + 1] = CGPoint(x: points[i].x + cos(a) * lengths[i],
+                                    y: points[i].y + sin(a) * lengths[i])
+        }
+    }
+
+    /// One impulse. Produces the whip on landing and the flick when irritated.
+    public mutating func kick(_ v: CGVector, from index: Int = 1) {
+        for i in index..<points.count {
+            previous[i].x -= v.dx
+            previous[i].y -= v.dy
+        }
+    }
+}
+
+extension Feel {
+    public enum Tail {
+        // A cat's tail is close to its body length. A short one reads as a stub.
+        public static let linkLengths: [CGFloat] = [9.0, 8.0, 7.0, 6.0]
+        public static let damping: CGFloat = 0.94
+        /// A tail does not fall like a rock; it is light and held up by muscle.
+        public static let gravityScale: CGFloat = 0.22
+        public static let relaxations = 4
+        public static let maxJointAngle: CGFloat = 0.95   // radians per joint
+        /// Muscle tone. Without this the tail simply hangs, which reads as dead. Rearward
+        /// and up, so it trails behind him and lifts at rest the way a cat's does.
+        public static let carriage = CGVector(dx: -1050, dy: 780)
+        public static let baseWidth: CGFloat = 2.9
+        public static let tipWidth: CGFloat = 0.7
+        /// Upward carriage when he is alert. Manifesto: "ears forward, tail high".
+        public static let alertLift: CGFloat = 0.9
+    }
 }
