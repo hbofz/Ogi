@@ -174,13 +174,39 @@ public enum Sprites {
 
     private static var eyeCache: [String: [CGRect]] = [:]
 
+    /// How much to scale a clip so he is the same size in all of them.
+    ///
+    /// The source sheets were generated separately and drew him at quite different sizes —
+    /// the walk band is 158px tall and the sit band is 287px — so one global scale made him
+    /// visibly shrink the moment he started walking.
+    ///
+    /// Normalised on **eye width**, because it is the one feature present and consistent in
+    /// every frame regardless of pose: a crouching cat is legitimately shorter than a
+    /// sitting one, so height cannot be the reference, but his eyes are always his eyes.
+    static func clipScale(_ clip: Clip) -> CGFloat {
+        if let s = scaleCache[clip.rawValue] { return s }
+        var scale: CGFloat = 1
+        // Search for a frame with a visible eye; sleeping frames have them closed.
+        for i in 0..<clip.count {
+            guard let img = image(clip, i), let eye = eyes(clip, i).first else { continue }
+            let widthPx = eye.width * CGFloat(img.width)
+            guard widthPx > 2 else { continue }
+            scale = Feel.Shape.referenceEyeWidth / widthPx
+            break
+        }
+        scaleCache[clip.rawValue] = scale
+        return scale
+    }
+
+    private static var scaleCache: [String: CGFloat] = [:]
+
     /// Aspect-correct size. Frames within a clip already share a vertical band, so this keeps
     /// him a consistent height across an animation.
     public static func size(_ clip: Clip, _ index: Int) -> CGSize {
         guard let img = image(clip, index) else {
             return CGSize(width: Feel.Shape.width, height: Feel.Shape.height)
         }
-        let s = Feel.Shape.spriteScale
+        let s = Feel.Shape.spriteScale * clipScale(clip)
         return CGSize(width: CGFloat(img.width) * s, height: CGFloat(img.height) * s)
     }
 }

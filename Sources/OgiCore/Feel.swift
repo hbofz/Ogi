@@ -21,9 +21,13 @@ public enum Feel {
 
         /// How high he clears the higher end of a jump.
         public static let jumpArc: CGFloat = 58
-        public static let maxJumpRise: CGFloat = 190       // vertical reach, either direction
+        public static let maxJumpRise: CGFloat = 190       // how far UP he will jump
+        /// How far DOWN he will drop. Much further than he can jump up, because falling is
+        /// free — and without this he almost never jumps at all, since on a normal desktop
+        /// the only things below him are a long way down.
+        public static let maxJumpDrop: CGFloat = 700
         public static let maxJumpReach: CGFloat = 420      // horizontal reach
-        public static let jumpChance = 0.35
+        public static let jumpChance = 0.55
         /// Deliberate aiming error. A cat that always sticks the landing reads as a machine.
         public static let aimError: CGFloat = 0.09
         /// However hard you flick him, he does not become a projectile.
@@ -88,7 +92,10 @@ public enum Feel {
         public static let width: CGFloat = 52
         /// Reference frames are ~70-95px tall. 0.55 puts him at roughly 40-50pt, which is
         /// large enough to read on a window edge and small enough to stay out of the way.
-        public static let spriteScale: CGFloat = 0.19
+        public static let spriteScale: CGFloat = 1.0
+        /// Target on-screen eye width in points. Every clip is scaled to match it, which is
+        /// what keeps him the same size whether he is sitting or walking.
+        public static let referenceEyeWidth: CGFloat = 2.1
         /// Squash depth is proportional to impact speed, capped here.
         public static let maxSquash: CGFloat = 0.30
         /// Ground covered per full gait cycle. Tuned so the paws do not skate.

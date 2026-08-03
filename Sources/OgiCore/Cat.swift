@@ -336,7 +336,8 @@ public enum Cat {
         let reach = (s.position.x - Feel.Physics.maxJumpReach)...(s.position.x + Feel.Physics.maxJumpReach)
         let reachable = world.surfaces.filter { other in
             other.id != surface.id && other.targetable && !other.spans.isEmpty
-                && abs(other.y - surface.y) < Feel.Physics.maxJumpRise
+                && (other.y - surface.y < Feel.Physics.maxJumpRise)
+                && (surface.y - other.y < Feel.Physics.maxJumpDrop)
                 && other.extent.overlaps(reach)
         }
 

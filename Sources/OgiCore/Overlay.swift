@@ -235,46 +235,12 @@ final class OgiView: NSView {
             CATransform3DMakeScale(s.width * cat.facing, s.height, 1),
             CATransform3DMakeRotation(lean, 0, 0, 1))
 
-        // Live pupils, drawn inside the eyes the artwork already has.
-        //
-        // The frames come with a pupil painted in, so each socket is repainted white first
-        // and a fresh pupil drawn at the gaze offset. Without the repaint you get two
-        // pupils per eye the moment he looks anywhere.
-        let sockets = Sprites.eyes(clip, idx)
-        if sockets.isEmpty || cat.activity == .sleep || cat.activity == .curl {
-            eyesLayer.path = nil          // asleep: the drawn closed eyes are correct
-            pupilLayer.path = nil
-        } else {
-            let whites = CGMutablePath(), pupils = CGMutablePath()
-            for unit in sockets {
-                let r = CGRect(x: unit.minX * size.width, y: unit.minY * size.height,
-                               width: unit.width * size.width, height: unit.height * size.height)
-                whites.addEllipse(in: r.insetBy(dx: -0.5, dy: -0.5))
-                // The pupil rides inside the socket rather than on top of the whole head,
-                // so it stays put when the socket is small or partly hidden.
-                let pr = min(r.width, r.height) * Feel.Eyes.pupilRadius
-                let travelX = max(r.width / 2 - pr, 0), travelY = max(r.height / 2 - pr, 0)
-                let c = CGPoint(x: r.midX + gaze.offset.x * travelX * cat.facing,
-                                y: r.midY + gaze.offset.y * travelY)
-                // Blink closes the socket vertically, and the pupil closes with it.
-                let ry = pr * max(gaze.lid, 0.05)
-                pupils.addEllipse(in: CGRect(x: c.x - pr, y: c.y - ry,
-                                             width: pr * 2, height: ry * 2))
-            }
-            eyesLayer.path = whites
-            pupilLayer.path = pupils
-        }
-        for l in [eyesLayer, pupilLayer] {
-            l.anchorPoint = bodyLayer.anchorPoint
-            l.bounds = bodyLayer.bounds
-            l.position = bodyLayer.position
-            l.transform = bodyLayer.transform
-        }
-
-        shadowLayer.position = CGPoint(x: cat.position.x - origin.x,
-                                       y: cat.position.y - h - origin.y)
-        shadowLayer.path = Body.shadow(width: Feel.Shape.width, height: h)
-        shadowLayer.opacity = Float(Body.shadowOpacity(height: h))
+        // No procedural eyes. The drawn frames already have them, and painting a live
+        // pupil over the artwork looked worse than the artwork does — the repainted socket
+        // never quite matched the hand-drawn eye shape. Cursor tracking is not worth
+        // degrading every single frame to get.
+        eyesLayer.path = nil
+        pupilLayer.path = nil
 
         applyOcclusion(occluders, in: padded)
 
