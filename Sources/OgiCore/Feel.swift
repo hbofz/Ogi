@@ -14,6 +14,18 @@ public enum Feel {
         public static let terminalVelocity: CGFloat = 1400
         /// Sideways nudge when the ground vanishes underfoot, so he doesn't drop straight down.
         public static let slipKick: CGFloat = 40
+
+        public static let walkSpeed: CGFloat = 46          // px/s
+        /// He never arrives exactly on the mark.
+        public static let arrivalSlop: CGFloat = 3
+
+        /// How high he clears the higher end of a jump.
+        public static let jumpArc: CGFloat = 58
+        public static let maxJumpRise: CGFloat = 190       // vertical reach, either direction
+        public static let maxJumpReach: CGFloat = 420      // horizontal reach
+        public static let jumpChance = 0.35
+        /// Deliberate aiming error. A cat that always sticks the landing reads as a machine.
+        public static let aimError: CGFloat = 0.09
     }
 
     public enum Timing {
@@ -25,6 +37,11 @@ public enum Feel {
         /// difference between a cat and a teleporting rectangle.
         public static let anticipation: TimeInterval = 0.100
         public static let squashRecovery: TimeInterval = 0.080
+
+        /// How long he stays put between ideas. Restraint is the feature: he is still by
+        /// default and most interesting when you are not working.
+        public static let restMin: TimeInterval = 3.5
+        public static let restJitter: TimeInterval = 9.0
     }
 
     public enum World {

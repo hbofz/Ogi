@@ -45,6 +45,19 @@ public struct Occluder: Sendable {
     public let rect: CGRect
     public let z: Int
     public let layer: Int
+
+    /// A real application window, as opposed to system furniture.
+    ///
+    /// Defined once because getting it wrong has already caused three separate bugs, all
+    /// with the same root cause: **the Dock process owns a full-screen layer-20 window**
+    /// in addition to the visible Dock. It straddles every surface and sits in front of
+    /// everything, so counting it as geometry variously put the floor at the top of the
+    /// screen, masked him away entirely, and carved every walkable span down to nothing.
+    ///
+    /// Menus, popovers, sheets and tooltips are excluded for a second reason: they are
+    /// above our window level, so they already occlude him for real, and they are
+    /// transient — a walkable ledge should not evaporate because someone opened a menu.
+    public var isRealWindow: Bool { layer == 0 }
 }
 
 public struct ScreenGeometry: Sendable {
@@ -100,13 +113,7 @@ public struct Skyline: Sendable {
     /// occupies the band above it, which belongs to whatever is behind. He is therefore
     /// just in front of his perch and behind everything in front of it.
     public func occluders(above z: Int, intersecting r: CGRect) -> [CGRect] {
-        // Normal windows only. Two reasons, both load-bearing:
-        //   - The Dock process owns a FULL-SCREEN layer-20 window. Left in, it sits in front
-        //     of everything and masks him away completely, everywhere.
-        //   - Menus, popovers, sheets and tooltips are not rectangles, so a rect mask gets
-        //     them visibly wrong. They are also at a higher level than our overlay, so they
-        //     already occlude him for real.
-        occluders.filter { $0.layer == 0 && $0.z < z && $0.rect.intersects(r) }.map(\.rect)
+        occluders.filter { $0.isRealWindow && $0.z < z && $0.rect.intersects(r) }.map(\.rect)
     }
 }
 
@@ -150,7 +157,7 @@ public enum World {
         /// Cuts every occluder in front of `z` whose body straddles the line at `y`.
         func carve(_ initial: [ClosedRange<CGFloat>], y: CGFloat, z: Int) -> [ClosedRange<CGFloat>] {
             var spans = initial
-            for o in occluders where o.z < z {
+            for o in occluders where o.isRealWindow && o.z < z {
                 // `>` and not `>=`: coplanar top edges must not erase each other.
                 guard o.rect.minY <= y, o.rect.maxY > y + Feel.World.coplanarEpsilon else { continue }
                 guard o.rect.minX <= o.rect.maxX else { continue }

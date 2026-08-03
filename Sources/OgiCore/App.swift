@@ -18,9 +18,10 @@ public final class OgiApp: NSObject, NSApplicationDelegate {
     private var flipOrigin: CGFloat = 0
     private var ownPID = getpid()
 
-    /// M0 only. Prints the answers to the four questions research could not settle.
-    private var probeFired = false
+    /// OGI_DEBUG=1 narrates what he is doing. Off, he is silent.
+    private let debug = ProcessInfo.processInfo.environment["OGI_DEBUG"] != nil
     private var wasOverHim = false
+    private var lastActivity: Activity = .idle
 
     public override init() { super.init() }
 
@@ -34,10 +35,10 @@ public final class OgiApp: NSObject, NSApplicationDelegate {
 
         overlay = Overlay(screen: screen)
         overlay.onTick = { [weak self] t in self?.tick(t) }
-        overlay.onClick = { p, onCat in
+        overlay.onClick = { [weak self] p, onCat in
             // With the cursor poll driving ignoresMouseEvents, every click that reaches us
-            // should be on him. An onCat=false here means the hit rect and the poll disagree.
-            print("[probe] click at \(Int(p.x)),\(Int(p.y)) onCat=\(onCat)")
+            // should be on him. onCat=false means the hit rect and the poll disagree.
+            self?.log("click at \(Int(p.x)),\(Int(p.y)) onCat=\(onCat)")
         }
 
         poll(force: true)
@@ -53,7 +54,7 @@ public final class OgiApp: NSObject, NSApplicationDelegate {
         overlay.start()
 
         let g = ScreenGeometry(screen)
-        print("[ogi] screen=\(g.frame) visible=\(g.visibleFrame) notch=\(g.notch.map { "\($0)" } ?? "none")")
+        log("screen=\(g.frame) visible=\(g.visibleFrame) notch=\(g.notch.map { "\($0)" } ?? "none")")
     }
 
     private func setupStatusItem() {
@@ -87,7 +88,7 @@ public final class OgiApp: NSObject, NSApplicationDelegate {
             steps += 1
             let before = cat.support
             cat = Cat.step(cat, world: skyline, dt: Feel.Timing.fixedDT)
-            if before != cat.support { logSupportChange(from: before) }   // M0 probe
+            if before != cat.support { logSupportChange(from: before) }
             accumulator -= Feel.Timing.fixedDT
         }
 
@@ -104,13 +105,18 @@ public final class OgiApp: NSObject, NSApplicationDelegate {
 
         let overHim = hitRect().contains(NSEvent.mouseLocation)
         overlay.setInteractive(overHim)
-        if overHim != wasOverHim {   // M0 probe, delete with the rest
-            print("[probe] cursor \(overHim ? "entered" : "left") him -> " +
-                  "window \(overHim ? "now swallows clicks" : "is click-through")")
+        if overHim != wasOverHim {
+            log("cursor \(overHim ? "entered" : "left") him -> " +
+                "window \(overHim ? "swallows clicks" : "is click-through")")
             wasOverHim = overHim
         }
-        fireProbeOnce()
+        if cat.activity != lastActivity {
+            log("\(lastActivity) -> \(cat.activity) at x=\(Int(cat.position.x)) y=\(Int(cat.position.y))")
+            lastActivity = cat.activity
+        }
     }
+
+    private func log(_ m: String) { if debug { print("[ogi] \(m)") } }
 
     /// Where a click counts as touching him. Padded, because a 46x34 cat is a small target.
     private func hitRect() -> CGRect {
@@ -158,23 +164,13 @@ public final class OgiApp: NSObject, NSApplicationDelegate {
     private func logSupportChange(from before: Support) {
         switch (before, cat.support) {
         case (.grounded(let p), .falling):
-            print("[probe] FALL — \(p.id) went away under him at y=\(Int(cat.position.y))")
+            log("FALL — \(p.id) went away under him at y=\(Int(cat.position.y))")
         case (.falling, .grounded(let p)):
-            print("[probe] LAND on \(p.id) at y=\(Int(cat.position.y)) " +
-                  "squash=\(String(format: "%.2f", cat.squash)) (\(cat.activity))")
+            log("LAND on \(p.id) at y=\(Int(cat.position.y)) " +
+                "squash=\(String(format: "%.2f", cat.squash))")
         default: break
         }
     }
 
-    private func fireProbeOnce() {
-        guard !probeFired, case .grounded(let perch) = cat.support else { return }
-        probeFired = true
-        let walkable = skyline.surfaces.filter { $0.id != .floor && $0.id != .menuBar }
-        print("""
-        [probe] landed on \(perch.id) after \(skyline.surfaces.count) surfaces built
-        [probe] window surfaces: \(walkable.count), occluders: \(skyline.occluders.count)
-        [probe] click on empty space to test click-through; use the menu bar cat to quit
-        """)
-    }
 }
 #endif

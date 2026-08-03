@@ -155,6 +155,26 @@ private let screen = ScreenGeometry(
     #expect(hits.isEmpty, "the Dock's full-screen window masked him away")
 }
 
+@Test func theDockFullScreenBackingWindowDoesNotCarveAwayWalkableSpans() {
+    // Regression, found by M3: the same phantom window that broke the floor and the mask
+    // also straddles every surface, so counting it as geometry carved every walkable span
+    // down to nothing and he stood frozen forever with no reachable destination.
+    let dockBacking = win(9, CGRect(x: 0, y: 0, width: 1920, height: 1243), layer: 20, owner: "Dock")
+    let ledge = win(2, CGRect(x: 200, y: 300, width: 450, height: 332))
+    let sky = World.build(windows: [dockBacking, ledge], screen: screen, ownPID: 99)
+
+    let s = try! #require(sky.surface(.window(2)))
+    #expect(!s.spans.isEmpty, "the Dock's phantom window carved away the whole ledge")
+}
+
+@Test func menusDoNotCarveAwayWalkableSpans() {
+    // A ledge should not evaporate because someone opened a menu over it.
+    let menu = win(1, CGRect(x: 0, y: 0, width: 1920, height: 1243), layer: 101)
+    let ledge = win(2, CGRect(x: 200, y: 300, width: 450, height: 332))
+    let sky = World.build(windows: [menu, ledge], screen: screen, ownPID: 99)
+    #expect(!(try! #require(sky.surface(.window(2)))).spans.isEmpty)
+}
+
 @Test func menusAndPopoversDoNotOcclude() {
     // They are above our window level, so they occlude him for real. Masking as well would
     // double-count, and their shapes are not rectangles anyway.
