@@ -224,6 +224,23 @@ let kept = merged.filter {
 // crouch and a leap would render at identical heights.
 let sheetTop = kept.map(\.minY).min() ?? 0
 let sheetBottom = kept.map(\.maxY).max() ?? 0
+
+// GROUNDED=1 additionally pulls every frame down so its lowest paw rests on the sheet's floor.
+//
+// Rule 1 of docs/ART-BRIEF.md is that his feet share one ground line, and it says that matters
+// more than the drawing does, because a frame drawn a few pixels high makes him bob no matter
+// how good the art is. The generator gets it close and not exact: `land` came back with the
+// standing frame sitting 16px above the squash frame's paws, which is him rising off the
+// surface as he recovers from an impact.
+//
+// It is opt-in and must stay that way. Applying it to `fall` or `jump` would plant an airborne
+// cat on a floor that is the entire point of those clips not having.
+let groundAlign = ProcessInfo.processInfo.environment["GROUNDED"] != nil
+if groundAlign {
+    let feet = kept.map(\.maxY)
+    let spread = (feet.max() ?? 0) - (feet.min() ?? 0)
+    print("grounded: pulling \(kept.count) frames onto the floor, was \(spread)px of drift")
+}
 print("found \(merged.count) blobs, kept \(kept.count), shared band y=\(sheetTop)...\(sheetBottom)")
 
 let out = URL(fileURLWithPath: args[2])
@@ -231,13 +248,18 @@ try? FileManager.default.createDirectory(at: out, withIntermediateDirectories: t
 
 for (n, blob) in kept.enumerated() {
     var b = blob
+    // How far this frame's lowest paw sits above the sheet's floor. Sampling the source that
+    // much higher up is what drops him onto it, and it is zero unless GROUNDED is set.
+    let lift = groundAlign ? sheetBottom - b.maxY : 0
     b.minY = sheetTop
     b.maxY = sheetBottom
     let bw = b.maxX - b.minX + 1, bh = b.maxY - b.minY + 1
     var cropped = [UInt8](repeating: 0, count: bw * bh * 4)
     for y in 0..<bh {
         for x in 0..<bw {
-            let si = (b.minY + y) * w + (b.minX + x)
+            let sy = b.minY + y - lift
+            guard sy >= 0, sy < h else { continue }
+            let si = sy * w + (b.minX + x)
             let di = (y * bw + x) * 4
             guard isInk(si) else { continue }
             let (r, g, b) = rgb(si)
