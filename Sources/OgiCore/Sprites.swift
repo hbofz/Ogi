@@ -1,76 +1,125 @@
 #if canImport(AppKit)
 import AppKit
 
-/// The drawn cat.
+/// The drawn cat: 45 frames across ten animations.
 ///
-/// Ogi was procedural first — one filled path assembled from a torso, a skull, four IK-ish
-/// legs and a simulated tail. It worked, it animated, and it did not look good enough. The
-/// silhouette read as *a* cat rather than as *this* cat, and charm is the entire product.
+/// Ogi was procedural first — one filled path assembled from a torso, a skull, four legs and
+/// a simulated tail. It worked, it animated, and it did not look good enough. The silhouette
+/// read as *a* cat rather than as *this* cat, and charm is the entire product.
 ///
-/// So the body is now drawn frames, cut from a reference sheet. Physics, terrain, occlusion,
-/// squash and facing are untouched: they were never coupled to how he was drawn, which is why
-/// swapping the renderer was a small change rather than a rewrite.
+/// Physics, terrain, occlusion, squash and facing are untouched. They were never coupled to
+/// how he was drawn, which is why swapping the renderer was a small change rather than a
+/// rewrite.
 ///
-/// The tail is still simulated for poses that need it, and the eyes are still procedural on
-/// top — see `Sprites.eyeSockets`.
+/// **Every frame in an animation shares one vertical band**, aligned on the source sheet's own
+/// ground line, rather than being cropped tight to its own ink. That is what preserves the air
+/// in a jump: crop each frame individually and an airborne cat gets re-planted on the ground,
+/// so a crouch and a leap render at exactly the same height. See `Tools/extract-sprites.swift`.
 @MainActor
 public enum Sprites {
 
-    public enum Frame: String, CaseIterable {
-        case idle, sit, alert, crouch, airborne, midair, land, curl, sleep, fall
-        case walk0, walk1, walk2
+    /// Ordered frames per animation. Names match the files in Resources/Sprites.
+    public enum Clip: String {
+        case walk, idle, jump, land, fall, run, alert, sitdown, held, sleep
+
+        var count: Int {
+            switch self {
+            case .walk: 8
+            case .jump, .run: 6
+            case .idle, .land, .fall, .sitdown, .sleep: 4
+            case .held: 3
+            case .alert: 2
+            }
+        }
+
+        /// Frames per second. Deliberately low: a slightly-lower framerate reads as
+        /// handmade, while 60fps sprite motion reads as a screensaver.
+        var fps: Double {
+            switch self {
+            case .walk: 10
+            case .run: 14
+            case .land: 14      // impacts are quick
+            case .fall: 12
+            case .jump: 12
+            case .idle, .sleep: 2.5   // breathing, not action
+            case .sitdown: 8
+            case .held: 3
+            case .alert: 1.2
+            }
+        }
+
+        var loops: Bool {
+            switch self {
+            case .walk, .run, .idle, .sleep, .held, .alert: true
+            case .jump, .land, .fall, .sitdown: false
+            }
+        }
     }
 
     // Everything in this app runs on the main actor, so a plain cache needs no lock.
-    private static var cache: [Frame: CGImage] = [:]
+    private static var cache: [String: CGImage] = [:]
 
-    public static func image(_ f: Frame) -> CGImage? {
-        if let c = cache[f] { return c }
-        guard let url = Bundle.module.url(forResource: f.rawValue, withExtension: "png",
+    public static func image(_ clip: Clip, _ index: Int) -> CGImage? {
+        let name = "\(clip.rawValue)\(min(max(index, 0), clip.count - 1))"
+        if let c = cache[name] { return c }
+        guard let url = Bundle.module.url(forResource: name, withExtension: "png",
                                           subdirectory: "Sprites")
-                ?? Bundle.module.url(forResource: f.rawValue, withExtension: "png"),
+                ?? Bundle.module.url(forResource: name, withExtension: "png"),
               let data = try? Data(contentsOf: url),
               let src = NSImage(data: data),
               let cg = src.cgImage(forProposedRect: nil, context: nil, hints: nil)
         else { return nil }
-        cache[f] = cg
+        cache[name] = cg
         return cg
     }
 
-    /// Which frame to show, given what he is doing.
-    ///
-    /// The walk cycle is three drawn frames sampled from the gait phase, deliberately at
-    /// 8-10fps rather than the display rate: a slightly-lower framerate reads as handmade,
-    /// while 60fps sprite motion reads as a screensaver.
-    public static func frame(for activity: Activity, walkPhase: CGFloat,
-                             airborne: Bool, dangling: Bool) -> Frame {
-        if dangling { return .fall }
+    /// Which animation a given behaviour plays.
+    public static func clip(for activity: Activity, dangling: Bool) -> Clip {
+        if dangling { return .held }
         switch activity {
-        case .walk:
-            let n = [Frame.walk0, .walk1, .walk2, .walk1]
-            return n[Int(walkPhase * CGFloat(n.count)) % n.count]
-        case .crouch:   return .crouch
-        case .airborne: return .airborne
-        case .slip:     return .fall
-        case .righting: return .midair
-        case .scruffed: return .fall
-        case .land, .landHard: return .land
-        case .sit:      return .sit
-        case .curl:     return .curl
-        case .sleep:    return .sleep
-        case .alert:    return .alert
-        case .brace:    return .alert
-        case .idle:     return airborne ? .midair : .idle
+        case .walk:                 return .walk
+        case .crouch:               return .jump      // the wind-up frames
+        case .airborne, .righting:  return .jump
+        case .slip:                 return .fall
+        case .scruffed:             return .held
+        case .land, .landHard:      return .land
+        case .sit:                  return .sitdown
+        case .curl, .sleep:         return .sleep
+        case .alert, .brace:        return .alert
+        case .idle:                 return .idle
         }
     }
 
-    /// Aspect-correct size for a frame, scaled so every pose shares one ground plane.
-    /// Sprites are cropped to their own ink, so their heights differ; scaling by height
-    /// alone would make him grow and shrink as he changed pose.
-    public static func size(_ f: Frame) -> CGSize {
-        guard let img = image(f) else { return CGSize(width: Feel.Shape.width, height: Feel.Shape.height) }
-        let scale = Feel.Shape.spriteScale
-        return CGSize(width: CGFloat(img.width) * scale, height: CGFloat(img.height) * scale)
+    /// Where in the animation to be.
+    ///
+    /// Locomotion is driven by the gait phase so the paws do not skate; everything else runs
+    /// off its own elapsed time. Non-looping clips hold their last frame.
+    public static func index(_ clip: Clip, activity: Activity,
+                             walkPhase: CGFloat, elapsed: TimeInterval) -> Int {
+        switch clip {
+        case .walk, .run:
+            return Int(walkPhase * CGFloat(clip.count)) % clip.count
+        case .jump where activity == .crouch:
+            // Hold on the coiled frame for the whole 100ms wind-up.
+            return 1
+        case .jump:
+            // Skip the wind-up frames; he is already in the air.
+            let n = clip.count - 2
+            return 2 + min(n - 1, Int(elapsed * clip.fps))
+        default:
+            let raw = Int(elapsed * clip.fps)
+            return clip.loops ? raw % clip.count : min(raw, clip.count - 1)
+        }
+    }
+
+    /// Aspect-correct size. Frames within a clip already share a vertical band, so this keeps
+    /// him a consistent height across an animation.
+    public static func size(_ clip: Clip, _ index: Int) -> CGSize {
+        guard let img = image(clip, index) else {
+            return CGSize(width: Feel.Shape.width, height: Feel.Shape.height)
+        }
+        let s = Feel.Shape.spriteScale
+        return CGSize(width: CGFloat(img.width) * s, height: CGFloat(img.height) * s)
     }
 }
 #endif

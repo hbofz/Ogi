@@ -218,10 +218,11 @@ final class OgiView: NSView {
         // sliding: his paws stay put and his body tips.
         let s = cat.scale
         let lean = -cat.lean * Feel.Physics.maxLean * cat.facing
-        let frame = Sprites.frame(for: cat.activity, walkPhase: pose.walkPhase,
-                                  airborne: pose.airborne, dangling: pose.dangling)
-        let size = Sprites.size(frame)
-        bodyLayer.contents = Sprites.image(frame)
+        let clip = Sprites.clip(for: cat.activity, dangling: pose.dangling)
+        let idx = Sprites.index(clip, activity: cat.activity,
+                                walkPhase: pose.walkPhase, elapsed: cat.activityElapsed)
+        let size = Sprites.size(clip, idx)
+        bodyLayer.contents = Sprites.image(clip, idx)
         // Nearest-neighbour: these are pixel art, and smoothing turns crisp edges to mush.
         bodyLayer.magnificationFilter = .nearest
         bodyLayer.minificationFilter = .trilinear

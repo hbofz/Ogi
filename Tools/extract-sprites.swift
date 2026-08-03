@@ -47,7 +47,19 @@ let bgKey = histogram.max { $0.value < $1.value }!.key
 let bg = (((bgKey >> 16) & 0xFF) * 8, ((bgKey >> 8) & 0xFF) * 8, (bgKey & 0xFF) * 8)
 print("background ≈ rgb\(bg)")
 
+// Some sheets include a human hand holding the cat. Ogi is black and skin is warm, so a
+// red-minus-blue test removes the hand and keeps everything else — including the white of
+// his eyes, which is neutral and so survives.
+let dropWarm = ProcessInfo.processInfo.environment["DROP_WARM"] != nil
+
+@inline(__always) func isSkin(_ i: Int) -> Bool {
+    guard dropWarm else { return false }
+    let (r, g, b) = rgb(i)
+    return r - b > 22 && r > 120
+}
+
 @inline(__always) func isInk(_ i: Int) -> Bool {
+    if isSkin(i) { return false }
     let (r, g, b) = rgb(i)
     let d = abs(r - bg.0) + abs(g - bg.1) + abs(b - bg.2)
     return d > 60
@@ -117,12 +129,21 @@ let kept = merged.filter {
     return bh >= minH && bh <= maxH && bw >= 20 && $0.count > 400
 }.sorted { ($0.minY / 60, $0.minX) < ($1.minY / 60, $1.minX) }
 
-print("found \(merged.count) blobs, kept \(kept.count)")
+// Every frame in a sheet gets the SAME vertical extent, aligned on the sheet's own ground
+// line. Cropping each frame tight to its ink would throw away exactly the information that
+// makes a jump read as a jump: an airborne cat would be re-planted on the ground, and a
+// crouch and a leap would render at identical heights.
+let sheetTop = kept.map(\.minY).min() ?? 0
+let sheetBottom = kept.map(\.maxY).max() ?? 0
+print("found \(merged.count) blobs, kept \(kept.count), shared band y=\(sheetTop)...\(sheetBottom)")
 
 let out = URL(fileURLWithPath: args[2])
 try? FileManager.default.createDirectory(at: out, withIntermediateDirectories: true)
 
-for (n, b) in kept.enumerated() {
+for (n, blob) in kept.enumerated() {
+    var b = blob
+    b.minY = sheetTop
+    b.maxY = sheetBottom
     let bw = b.maxX - b.minX + 1, bh = b.maxY - b.minY + 1
     var cropped = [UInt8](repeating: 0, count: bw * bh * 4)
     for y in 0..<bh {
