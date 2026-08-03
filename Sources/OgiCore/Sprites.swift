@@ -1,7 +1,7 @@
 #if canImport(AppKit)
 import AppKit
 
-/// The drawn cat: 48 frames across ten animations, generated per `docs/ART-BRIEF.md`.
+/// The drawn cat: 59 frames across twelve animations, generated per `docs/ART-BRIEF.md`.
 ///
 /// Ogi was procedural first — one filled path assembled from a torso, a skull, four legs and
 /// a simulated tail. It worked, it animated, and it did not look good enough. The silhouette
@@ -50,7 +50,7 @@ public enum Sprites {
             case .jump: 12
             case .idle, .sleep: 2.5   // breathing, not action
             case .sitdown: 8
-            case .held: 4
+            case .held: 3
             case .alert: 1.2
             case .groom: 8
             case .curl: 6

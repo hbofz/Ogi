@@ -37,7 +37,7 @@ He walks your window edges, jumps between them, falls when you close the one he 
 on, and **goes behind windows that are in front of him** — which nothing else on any platform
 does. He settles when you stop typing, and freezes when your microphone goes live.
 
-He is a ginger tabby, drawn across 48 frames in ten animations. Cursor-tracking eyes are built
+He is a ginger tabby, drawn across 59 frames in twelve animations. Cursor-tracking eyes are built
 and currently switched off: painting a live pupil needs an empty socket in the artwork, and the
 drawn frames have the eye complete. See `docs/ART-BRIEF.md`.
 
