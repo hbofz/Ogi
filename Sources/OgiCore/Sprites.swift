@@ -31,7 +31,7 @@ public enum Sprites {
             case .sitdown: 5
             case .sleep: 3
             case .idle: 4
-            case .held: 3
+            case .held: 4
             case .alert: 3
             }
         }
@@ -47,7 +47,7 @@ public enum Sprites {
             case .jump: 12
             case .idle, .sleep: 2.5   // breathing, not action
             case .sitdown: 8
-            case .held: 3
+            case .held: 4
             case .alert: 1.2
             }
         }
@@ -121,8 +121,9 @@ public enum Sprites {
     /// Where his feet are, as a fraction up from the bottom of the frame.
     ///
     /// Most sheets are drawn with a ground line, so the bottom of the band IS the floor. The
-    /// exception is `held`, where he hangs from a hand that has been erased: anchoring him at
-    /// the bottom would hang him by the tail.
+    /// exception is `held`, where nothing touches the ground: he is gripped by the scruff, so
+    /// he attaches at the nape of his neck. Anchoring him at the bottom would hang him by the
+    /// tail. Measured off the sheet at 0.952-0.960 across its four frames.
     ///
     /// `fall` used to be listed here at 0.30, because on the old sheet he never reached the
     /// bottom of his band and anchoring at the floor left him hovering. The redrawn sheet ends
@@ -132,7 +133,7 @@ public enum Sprites {
     /// sheet, not of the animation.
     static func footAnchor(_ clip: Clip) -> CGFloat {
         switch clip {
-        case .held: return 0.86     // gripped by the scruff, near the top
+        case .held: return 0.95     // gripped by the scruff, near the top
         default:    return 0
         }
     }

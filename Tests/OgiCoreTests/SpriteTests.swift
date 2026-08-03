@@ -5,7 +5,7 @@ import CoreGraphics
 /// Clips regenerated against the current `art/character.png`. Add each name as its sheet
 /// lands. Kept by hand on purpose: the old version inferred this from eye colour, which
 /// stopped meaning anything the moment the cat himself became ginger.
-private let redrawnClips: Set<String> = ["walk", "fall", "land", "idle", "jump", "run", "sitdown", "sleep", "alert"]
+private let redrawnClips: Set<String> = ["walk", "fall", "land", "idle", "jump", "run", "sitdown", "sleep", "alert", "held"]
 
 /// The drawn frames come from separately-generated sheets that draw him at wildly different
 /// sizes, so `Sprites` rescales each clip to make him one cat. These check that it works,
@@ -22,6 +22,9 @@ private let redrawnClips: Set<String> = ["walk", "fall", "land", "idle", "jump",
     // is legitimately shorter than a sitting one, and an airborne clip's frame is mostly empty
     // band. What holds is that his eye is a fixed fraction of *him*, so measuring eye width
     // against his own ink height catches a bad reading without punishing an honest pose.
+    // `held` is deliberately absent: he dangles fully stretched out, so his ink height is
+    // nearly twice a sitting cat's while his eye stays the same. His ratio is honestly 0.047
+    // against everyone else's 0.06-0.10, and including him would fail correct art.
     var ratios: [(String, Double)] = []
     for clip in [Sprites.Clip.walk, .idle, .jump, .land, .fall, .run, .alert, .sitdown, .sleep]
     where redrawnClips.contains(clip.rawValue) {
