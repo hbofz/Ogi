@@ -88,7 +88,10 @@ public final class OgiApp: NSObject, NSApplicationDelegate {
             accumulator -= Feel.Timing.fixedDT
         }
 
-        overlay.render(cat, heightAboveGround: heightAboveGround())
+        let h = heightAboveGround()
+        overlay.render(cat, heightAboveGround: h,
+                       occluders: skyline.occluders(above: perchZ(),
+                                                    intersecting: hitRect().insetBy(dx: -40, dy: -h - 40)))
 
         let overHim = hitRect().contains(NSEvent.mouseLocation)
         overlay.setInteractive(overHim)
@@ -111,6 +114,25 @@ public final class OgiApp: NSObject, NSApplicationDelegate {
         let raw = World.snapshot(flipOrigin: flipOrigin)
         let fresh = World.build(windows: raw, screen: ScreenGeometry(screen), ownPID: ownPID)
         skyline = tracker.ingest(fresh)
+    }
+
+    /// His depth in the window stack, which decides what is allowed to occlude him.
+    ///
+    /// He rests ON his perch, so his body occupies the band above it, which geometrically
+    /// belongs to whatever is behind. He is therefore just in front of his perch and behind
+    /// everything in front of it. Windows *behind* his perch never occlude him, even where
+    /// they overlap his body — that is the case a naive "mask against every overlapping
+    /// window" gets wrong.
+    private func perchZ() -> Int {
+        switch cat.support {
+        case .grounded(let p):
+            return skyline.surface(p.id)?.z ?? .max
+        case .falling:
+            // Use the surface he is heading for, so his depth stays stable through a fall.
+            // He vanishes behind a frontmost window mid-drop and re-emerges below it.
+            return skyline.supportBelow(x: cat.position.x, from: cat.position.y,
+                                        to: -.greatestFiniteMagnitude)?.z ?? .max
+        }
     }
 
     /// Distance to whatever is under him, for the contact shadow.

@@ -67,8 +67,8 @@ public final class Overlay {
         window.ignoresMouseEvents = !wanted
     }
 
-    public func render(_ cat: CatState, heightAboveGround: CGFloat) {
-        view.apply(cat, heightAboveGround: heightAboveGround)
+    public func render(_ cat: CatState, heightAboveGround: CGFloat, occluders: [CGRect]) {
+        view.apply(cat, heightAboveGround: heightAboveGround, occluders: occluders)
     }
 
     fileprivate func tick(_ t: CFTimeInterval) { onTick?(t) }
@@ -80,6 +80,11 @@ final class OgiView: NSView {
     fileprivate weak var overlay: Overlay?
 
     private let root = CALayer()
+    /// Everything that can be occluded lives inside this, so one mask covers them all.
+    /// Sized to him rather than to the screen: a screen-sized CAShapeLayer mask would
+    /// rasterise a ~38MB alpha texture every time a window moves.
+    private let maskContainer = CALayer()
+    private let maskShape = CAShapeLayer()
     private let shadowLayer = CAShapeLayer()
     private let bodyLayer = CAShapeLayer()
     private var link: CADisplayLink?
@@ -97,7 +102,7 @@ final class OgiView: NSView {
             "transform": NSNull(), "mask": NSNull(), "opacity": NSNull(),
             "fillColor": NSNull(), "contents": NSNull(),
         ]
-        for l in [root, shadowLayer, bodyLayer] { l.actions = noActions }
+        for l in [root, maskContainer, maskShape, shadowLayer, bodyLayer] { l.actions = noActions }
 
         bodyLayer.fillColor = NSColor(srgbRed: 0.043, green: 0.043, blue: 0.051, alpha: 1).cgColor
         // The rim light. On a light background the fill carries the contrast and this
@@ -112,8 +117,9 @@ final class OgiView: NSView {
 
         shadowLayer.fillColor = NSColor.black.cgColor
 
-        root.addSublayer(shadowLayer)
-        root.addSublayer(bodyLayer)
+        maskContainer.addSublayer(shadowLayer)
+        maskContainer.addSublayer(bodyLayer)
+        root.addSublayer(maskContainer)
         layer?.addSublayer(root)
         updateScale()
     }
@@ -131,7 +137,7 @@ final class OgiView: NSView {
 
     private func updateScale() {
         let s = window?.backingScaleFactor ?? 2
-        for l in [root, shadowLayer, bodyLayer] { l.contentsScale = s }
+        for l in [root, maskContainer, maskShape, shadowLayer, bodyLayer] { l.contentsScale = s }
     }
 
     func startLink() {
@@ -148,23 +154,66 @@ final class OgiView: NSView {
         overlay?.tick(l.targetTimestamp)
     }
 
-    func apply(_ cat: CatState, heightAboveGround h: CGFloat) {
+    func apply(_ cat: CatState, heightAboveGround h: CGFloat, occluders: [CGRect]) {
+        let bodyRect = CGRect(x: cat.position.x - Feel.Shape.width / 2, y: cat.position.y,
+                              width: Feel.Shape.width, height: Feel.Shape.height)
+        // The shadow separates from him as he rises, so the box has to follow it down.
+        let shadowRect = CGRect(x: cat.position.x - Feel.Shape.width,
+                                y: cat.position.y - h - 12,
+                                width: Feel.Shape.width * 2, height: 24)
+        let padded = bodyRect.union(shadowRect).insetBy(dx: -8, dy: -8)
+
         CATransaction.begin()
         CATransaction.setDisableActions(true)
 
-        bodyLayer.position = cat.position
+        maskContainer.frame = padded
+        let origin = padded.origin   // children are positioned relative to the container
+
         // Anchor at the feet so squash keeps them planted.
         bodyLayer.anchorPoint = CGPoint(x: 0.5, y: 0)
         bodyLayer.bounds = CGRect(x: -Feel.Shape.width / 2, y: 0,
                                   width: Feel.Shape.width, height: Feel.Shape.height)
+        bodyLayer.position = CGPoint(x: cat.position.x - origin.x, y: cat.position.y - origin.y)
         let s = cat.scale
         bodyLayer.transform = CATransform3DMakeScale(s.width, s.height, 1)
 
-        shadowLayer.position = CGPoint(x: cat.position.x, y: cat.position.y - h)
+        shadowLayer.position = CGPoint(x: cat.position.x - origin.x,
+                                       y: cat.position.y - h - origin.y)
         shadowLayer.path = Body.shadow(width: Feel.Shape.width, height: h)
         shadowLayer.opacity = Float(Body.shadowOpacity(height: h))
 
+        applyOcclusion(occluders, in: padded)
+
         CATransaction.commit()
+    }
+
+    /// Clips him to the region not covered by windows in front of his perch. This is the
+    /// thing no other desktop pet does, and the reason he reads as being *in* your screen
+    /// rather than pasted on top of it.
+    private func applyOcclusion(_ occluders: [CGRect], in padded: CGRect) {
+        let relevant = occluders.filter { $0.intersects(padded) }
+        guard !relevant.isEmpty else {
+            // ~95% of frames. Skips mask rasterisation entirely.
+            maskContainer.mask = nil
+            return
+        }
+
+        let local = CGRect(origin: .zero, size: padded.size)
+        var region = CGPath(rect: local, transform: nil)
+        for r in relevant {
+            let o = r.offsetBy(dx: -padded.minX, dy: -padded.minY)
+            // Real boolean subtraction, NOT an even-odd compound path. Even-odd looks
+            // right until two occluders overlap, at which point the intersection has an
+            // odd crossing count and renders *filled* — he'd show through the overlap.
+            // Overlapping windows are the normal case.
+            region = region.subtracting(
+                CGPath(roundedRect: o,
+                       cornerWidth: Feel.World.windowCornerRadius,
+                       cornerHeight: Feel.World.windowCornerRadius, transform: nil))
+        }
+        maskShape.frame = local
+        maskShape.path = region
+        maskContainer.mask = maskShape
     }
 
     // M0 probe: does per-pixel alpha hit testing still work on this macOS?

@@ -130,6 +130,53 @@ private let screen = ScreenGeometry(
     #expect(sky.occluders.count == 1, "but it still occludes")
 }
 
+// MARK: - Occlusion
+
+@Test func onlyWindowsInFrontOfThePerchOcclude() {
+    let front = win(1, CGRect(x: 100, y: 100, width: 400, height: 400))
+    let perch = win(2, CGRect(x: 100, y: 100, width: 400, height: 400))
+    let behind = win(3, CGRect(x: 100, y: 100, width: 400, height: 400))
+    let sky = World.build(windows: [front, perch, behind], screen: screen, ownPID: 99)
+
+    let perchZ = try! #require(sky.surface(.window(2))).z
+    let hits = sky.occluders(above: perchZ, intersecting: CGRect(x: 200, y: 200, width: 50, height: 50))
+    #expect(hits.count == 1, "only the window in front of his perch should occlude him")
+}
+
+@Test func theDockFullScreenBackingWindowNeverOccludesHim() {
+    // Regression: this window is at layer 20 and sits in front of everything. Left in the
+    // occluder set it masks him away completely, everywhere, at all times.
+    let dockBacking = win(9, CGRect(x: 0, y: 0, width: 1920, height: 1243), layer: 20, owner: "Dock")
+    let perch = win(2, CGRect(x: 100, y: 100, width: 400, height: 400))
+    let sky = World.build(windows: [dockBacking, perch], screen: screen, ownPID: 99)
+
+    let perchZ = try! #require(sky.surface(.window(2))).z
+    let hits = sky.occluders(above: perchZ, intersecting: CGRect(x: 200, y: 200, width: 50, height: 50))
+    #expect(hits.isEmpty, "the Dock's full-screen window masked him away")
+}
+
+@Test func menusAndPopoversDoNotOcclude() {
+    // They are above our window level, so they occlude him for real. Masking as well would
+    // double-count, and their shapes are not rectangles anyway.
+    let menu = win(1, CGRect(x: 150, y: 150, width: 200, height: 300), layer: 101)
+    let perch = win(2, CGRect(x: 100, y: 100, width: 400, height: 400))
+    let sky = World.build(windows: [menu, perch], screen: screen, ownPID: 99)
+
+    let perchZ = try! #require(sky.surface(.window(2))).z
+    #expect(sky.occluders(above: perchZ,
+                          intersecting: CGRect(x: 200, y: 200, width: 50, height: 50)).isEmpty)
+}
+
+@Test func standingOnTheFloorEverythingOccludes() {
+    // floor.z == Int.max, so every normal window is in front of him. Correct: he is behind
+    // everything when he is down on the desktop.
+    let w = win(1, CGRect(x: 100, y: 100, width: 400, height: 400))
+    let sky = World.build(windows: [w], screen: screen, ownPID: 99)
+    let floorZ = try! #require(sky.surface(.floor)).z
+    #expect(sky.occluders(above: floorZ,
+                          intersecting: CGRect(x: 200, y: 200, width: 50, height: 50)).count == 1)
+}
+
 // MARK: - Hysteresis
 
 @Test func oneFrameDropoutDoesNotRemoveASurface() {

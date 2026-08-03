@@ -44,6 +44,7 @@ public struct Surface: Sendable {
 public struct Occluder: Sendable {
     public let rect: CGRect
     public let z: Int
+    public let layer: Int
 }
 
 public struct ScreenGeometry: Sendable {
@@ -99,7 +100,13 @@ public struct Skyline: Sendable {
     /// occupies the band above it, which belongs to whatever is behind. He is therefore
     /// just in front of his perch and behind everything in front of it.
     public func occluders(above z: Int, intersecting r: CGRect) -> [CGRect] {
-        occluders.filter { $0.z < z && $0.rect.intersects(r) }.map(\.rect)
+        // Normal windows only. Two reasons, both load-bearing:
+        //   - The Dock process owns a FULL-SCREEN layer-20 window. Left in, it sits in front
+        //     of everything and masks him away completely, everywhere.
+        //   - Menus, popovers, sheets and tooltips are not rectangles, so a rect mask gets
+        //     them visibly wrong. They are also at a higher level than our overlay, so they
+        //     already occlude him for real.
+        occluders.filter { $0.layer == 0 && $0.z < z && $0.rect.intersects(r) }.map(\.rect)
     }
 }
 
@@ -137,7 +144,7 @@ public enum World {
                 && w.rect.intersects(screen.frame)
         }
 
-        let occluders = visible.enumerated().map { Occluder(rect: $1.rect, z: $0) }
+        let occluders = visible.enumerated().map { Occluder(rect: $1.rect, z: $0, layer: $1.layer) }
         let screenSpan = screen.visibleFrame.minX...screen.visibleFrame.maxX
 
         /// Cuts every occluder in front of `z` whose body straddles the line at `y`.

@@ -7,7 +7,10 @@ setbuf(stdout, nil)
 let app = NSApplication.shared
 app.setActivationPolicy(.regular)   // .accessory apps cannot enter fullscreen
 
-let rect = NSRect(x: 60, y: 300, width: 380, height: 400)   // top edge y=700, clear of other windows
+let rect: NSRect = ProcessInfo.processInfo.environment["DECOY_RECT"].map { s in
+    let v = s.split(separator: ",").compactMap { Double($0) }
+    return NSRect(x: v[0], y: v[1], width: v[2], height: v[3])
+} ?? NSRect(x: 60, y: 300, width: 380, height: 400)
 let w = NSWindow(contentRect: rect, styleMask: [.titled, .closable, .resizable],
                  backing: .buffered, defer: false)
 w.title = "decoy"
