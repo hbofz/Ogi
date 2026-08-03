@@ -26,6 +26,8 @@ public enum Feel {
         public static let jumpChance = 0.35
         /// Deliberate aiming error. A cat that always sticks the landing reads as a machine.
         public static let aimError: CGFloat = 0.09
+        /// However hard you flick him, he does not become a projectile.
+        public static let maxThrow: CGFloat = 1500
 
         /// Per-tick drift at which he leans as far as he ever will (~480 px/s of drag).
         public static let driftReference: CGFloat = 4.0
@@ -47,6 +49,9 @@ public enum Feel {
 
         /// How long he stays put between ideas. Restraint is the feature: he is still by
         /// default and most interesting when you are not working.
+        /// The mid-air twist. Fixed duration, so he is always feet-down before he lands.
+        public static let righting: TimeInterval = 0.18
+
         public static let restMin: TimeInterval = 3.5
         public static let restJitter: TimeInterval = 9.0
     }

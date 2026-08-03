@@ -19,6 +19,10 @@ public enum Body {
         public var stride: CGFloat = 0        // 0 standing, 1 walking
         public var crouch: CGFloat = 0        // 0 standing, 1 fully wound up
         public var airborne = false
+        /// Hanging by the scruff: legs tucked, body long and limp.
+        public var dangling = false
+        /// 0..1 through the mid-air twist.
+        public var righting: CGFloat = 1
         public var tail: [CGPoint] = []       // body space, from base to tip
         public var earAngle: CGFloat = 0      // radians, positive = perked
         public init() {}
@@ -168,8 +172,10 @@ public enum Body {
 
     private static func footPosition(hipX: CGFloat, phase: CGFloat, pose: Pose) -> CGPoint {
         guard !pose.airborne else {
-            // Tucked, which is also what makes the righting reflex read later.
-            return CGPoint(x: hipX + W * 0.04, y: H * 0.16)
+            // Tucked. Dangling tucks them tighter and higher than a normal fall does,
+            // which is most of what makes "limp" read at this size.
+            let tuck = pose.dangling ? H * 0.26 : H * 0.16
+            return CGPoint(x: hipX + W * 0.04, y: tuck)
         }
         let stride = W * 0.16 * pose.stride
         // Stance is the longer part of the cycle: a walking cat has feet on the ground

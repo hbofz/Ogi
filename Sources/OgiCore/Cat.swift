@@ -16,6 +16,8 @@ public struct Perch: Sendable, Equatable {
 public enum Support: Sendable, Equatable {
     case grounded(Perch)
     case falling
+    /// Dangling from the cursor. This is what actually happens to cats.
+    case held(CGPoint)
 }
 
 public enum Activity: Sendable, Equatable {
@@ -24,6 +26,8 @@ public enum Activity: Sendable, Equatable {
     case curl
     case sleep
     case alert      // frozen and listening: the mic went live
+    case scruffed   // limp, legs tucked, dangling
+    case righting   // the twist, mid-air
     case walk
     case crouch     // the 100ms wind-up before every jump
     case brace      // riding a window that is being dragged
@@ -103,6 +107,8 @@ public struct CatState: Sendable {
     public var repose: Repose = .awake
     /// Frozen and listening because the microphone went live. Also a privacy indicator.
     public var listening = false
+    /// How far through the righting reflex he is, 0..1.
+    public var righting: CGFloat = 1
     /// 0..1. Low battery or Low Power Mode. He moves less and settles sooner.
     public var languor: Double = 0
 
@@ -143,6 +149,16 @@ public enum Cat {
         s.squashElapsed += dt
 
         switch s.support {
+        case .held(let point):
+            // Limp. Legs tucked, no physics: he is not falling, he is being carried.
+            s.position = point
+            s.velocity = .zero
+            s.activity = .scruffed
+            s.goal = nil
+            s.drift = 0
+            s.lastPerchOrigin = nil
+            return s
+
         case .grounded(let perch):
             guard let surface = world.surface(perch.id) else {
                 // His platform vanished. This is the demo.
@@ -199,9 +215,17 @@ public enum Cat {
                 s.squashElapsed = 0
                 s.activity = impact > 600 ? .landHard : .land
                 s.activityElapsed = 0
+                s.righting = 1
             } else {
                 s.position = CGPoint(x: x, y: y1)
-                if s.activityElapsed > 0.12, s.activity == .slip { s.activity = .airborne }
+                // The righting reflex. He twists, gets his feet under him, and lands on
+                // four paws every single time — by construction, not by luck.
+                if s.righting < 1 {
+                    s.righting = min(1, s.righting + CGFloat(dt) / CGFloat(Feel.Timing.righting))
+                    s.activity = s.righting < 1 ? .righting : .airborne
+                } else if s.activityElapsed > 0.12, s.activity == .slip {
+                    s.activity = .airborne
+                }
             }
         }
 
@@ -210,6 +234,29 @@ public enum Cat {
             s.activity = .idle
             s.activityElapsed = 0
         }
+        return s
+    }
+
+    /// Picked up. He goes limp rather than struggling, because that is what cats do.
+    public static func grab(_ state: CatState, at point: CGPoint) -> CatState {
+        var s = state
+        s.support = .held(point)
+        s.activity = .scruffed
+        s.activityElapsed = 0
+        s.goal = nil
+        return s
+    }
+
+    /// Let go. He twists, rights himself, and lands on his feet.
+    public static func release(_ state: CatState, throwVelocity v: CGVector) -> CatState {
+        var s = state
+        s.support = .falling
+        s.velocity = CGVector(dx: max(-Feel.Physics.maxThrow, min(Feel.Physics.maxThrow, v.dx)),
+                              dy: max(-Feel.Physics.maxThrow, min(Feel.Physics.maxThrow, v.dy)))
+        s.activity = .righting
+        s.activityElapsed = 0
+        s.righting = 0
+        s.facing = v.dx >= 0 ? 1 : -1
         return s
     }
 

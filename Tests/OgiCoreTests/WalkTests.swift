@@ -181,3 +181,73 @@ private func standing(at x: CGFloat, on s: Surface) -> CatState {
     #expect(cat.support == .falling)
     #expect(cat.drift == 0, "he would fall through the air still leaning")
 }
+
+// MARK: - Being handled
+
+@Test func pickingHimUpMakesHimGoLimp() {
+    var cat = standing(at: 400, on: surface(.window(1), y: 500, from: 0, to: 800))
+    cat = Cat.grab(cat, at: CGPoint(x: 410, y: 600))
+    #expect(cat.support == .held(CGPoint(x: 410, y: 600)))
+    #expect(cat.activity == .scruffed)
+    #expect(cat.goal == nil, "he should stop whatever he was doing")
+}
+
+@Test func heIsNotAffectedByGravityWhileHeld() {
+    var cat = CatState(position: CGPoint(x: 400, y: 600))
+    cat = Cat.grab(cat, at: CGPoint(x: 400, y: 600))
+    for _ in 0..<Int(2 / dt) {
+        cat = Cat.step(cat, world: sky([surface(.floor, y: 0, from: 0, to: 1920)]), dt: dt)
+    }
+    #expect(cat.position.y == 600, "he fell out of your hand")
+    #expect(cat.velocity.dy == 0)
+}
+
+@Test func heAlwaysLandsOnHisFeet() {
+    // The righting reflex, by construction rather than by luck. Try it from every angle
+    // and every throw speed we allow.
+    let ground = surface(.floor, y: 100, from: 0, to: 1920)
+    for vx in stride(from: -1400.0, through: 1400.0, by: 350) {
+        for vy in stride(from: -1400.0, through: 1400.0, by: 700) {
+            var cat = CatState(position: CGPoint(x: 900, y: 800))
+            cat = Cat.grab(cat, at: CGPoint(x: 900, y: 800))
+            cat = Cat.release(cat, throwVelocity: CGVector(dx: vx, dy: vy))
+            #expect(cat.righting == 0, "the twist should start from scratch")
+
+            var landed = false
+            for _ in 0..<Int(12 / dt) {
+                cat = Cat.step(cat, world: sky([ground]), dt: dt)
+                if case .grounded = cat.support { landed = true; break }
+            }
+            guard landed else { continue }   // thrown clean off the side, fine
+            #expect(cat.righting == 1, "he landed mid-twist, on his side, from \\(vx),\\(vy)")
+            #expect(cat.activity == .land || cat.activity == .landHard)
+        }
+    }
+}
+
+@Test func theTwistFinishesLongBeforeATypicalLanding() {
+    var cat = CatState(position: CGPoint(x: 900, y: 800))
+    cat = Cat.release(Cat.grab(cat, at: CGPoint(x: 900, y: 800)),
+                      throwVelocity: CGVector(dx: 0, dy: 0))
+    let ground = surface(.floor, y: 100, from: 0, to: 1920)
+
+    var rightedAt: TimeInterval?
+    var t: TimeInterval = 0
+    for _ in 0..<Int(12 / dt) {
+        cat = Cat.step(cat, world: sky([ground]), dt: dt)
+        t += dt
+        if rightedAt == nil, cat.righting >= 1 { rightedAt = t }
+        if case .grounded = cat.support { break }
+    }
+    let righted = try! #require(rightedAt)
+    #expect(righted <= Feel.Timing.righting + 0.02)
+    #expect(righted < t, "he was still twisting when he hit the ground")
+}
+
+@Test func aViolentFlickDoesNotTurnHimIntoAProjectile() {
+    var cat = CatState(position: CGPoint(x: 900, y: 800))
+    cat = Cat.release(Cat.grab(cat, at: CGPoint(x: 900, y: 800)),
+                      throwVelocity: CGVector(dx: 99_000, dy: 99_000))
+    #expect(abs(cat.velocity.dx) <= Feel.Physics.maxThrow)
+    #expect(abs(cat.velocity.dy) <= Feel.Physics.maxThrow)
+}

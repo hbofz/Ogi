@@ -3,12 +3,15 @@ import AppKit
 import QuartzCore
 
 /// The window, the layer tree, and the clock. All AppKit lives here.
+public enum DragPhase: Sendable { case began, moved, ended }
+
 @MainActor
 public final class Overlay {
 
     public var onTick: ((CFTimeInterval) -> Void)?
     /// Set by M0's click-through probe. See `OgiView.mouseDown`.
     public var onClick: ((NSPoint, Bool) -> Void)?
+    public var onDrag: ((DragPhase, CGPoint) -> Void)?
 
     private let window: NSWindow
     private let view: OgiView
@@ -88,6 +91,7 @@ public final class Overlay {
 
     fileprivate func tick(_ t: CFTimeInterval) { onTick?(t) }
     fileprivate func click(_ p: NSPoint, onCat: Bool) { onClick?(p, onCat) }
+    fileprivate func drag(_ phase: DragPhase, _ p: CGPoint) { onDrag?(phase, p) }
 }
 
 @MainActor
@@ -275,8 +279,16 @@ final class OgiView: NSView {
     // If a click on empty space reaches us, Apple's 26.3-era regression is present here.
     override func mouseDown(with event: NSEvent) {
         let p = convert(event.locationInWindow, from: nil)
-        let hit = bodyLayer.frame.insetBy(dx: -8, dy: -8).contains(p)
-        overlay?.click(p, onCat: hit)
+        overlay?.click(p, onCat: true)
+        overlay?.drag(.began, p)
+    }
+
+    override func mouseDragged(with event: NSEvent) {
+        overlay?.drag(.moved, convert(event.locationInWindow, from: nil))
+    }
+
+    override func mouseUp(with event: NSEvent) {
+        overlay?.drag(.ended, convert(event.locationInWindow, from: nil))
     }
 
     override func acceptsFirstMouse(for event: NSEvent?) -> Bool { true }

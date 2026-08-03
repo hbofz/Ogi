@@ -44,6 +44,7 @@ public final class OgiApp: NSObject, NSApplicationDelegate {
 
         overlay = Overlay(screen: screen)
         overlay.onTick = { [weak self] t in self?.tick(t) }
+        overlay.onDrag = { [weak self] phase, point in self?.handleDrag(phase, point) }
         overlay.onClick = { [weak self] p, onCat in
             // With the cursor poll driving ignoresMouseEvents, every click that reaches us
             // should be on him. onCat=false means the hit rect and the poll disagree.
@@ -162,7 +163,10 @@ public final class OgiApp: NSObject, NSApplicationDelegate {
                        occluders: skyline.occluders(above: perchZ(),
                                                     intersecting: hitRect().insetBy(dx: -40, dy: -h - 40)))
 
-        let overHim = hitRect().contains(NSEvent.mouseLocation)
+        // While he is held the window must keep swallowing events even if the cursor
+        // outruns him, or a fast drag drops him the instant it leaves his hit rect.
+        var overHim = hitRect().contains(NSEvent.mouseLocation)
+        if case .held = cat.support { overHim = true }
         overlay.setInteractive(overHim)
         if overHim != wasOverHim {
             log("cursor \(overHim ? "entered" : "left") him -> " +
@@ -176,6 +180,40 @@ public final class OgiApp: NSObject, NSApplicationDelegate {
     }
 
     private func log(_ m: String) { if debug { print("[ogi] \(m)") } }
+
+    // MARK: - Being handled
+
+    private var dragSamples: [(t: CFTimeInterval, p: CGPoint)] = []
+
+    private func handleDrag(_ phase: DragPhase, _ point: CGPoint) {
+        switch phase {
+        case .began:
+            guard hitRect().contains(point) else { return }
+            cat = Cat.grab(cat, at: point)
+            dragSamples = [(CACurrentMediaTime(), point)]
+            log("scruffed")
+        case .moved:
+            guard case .held = cat.support else { return }
+            cat.support = .held(point)
+            dragSamples.append((CACurrentMediaTime(), point))
+            if dragSamples.count > 6 { dragSamples.removeFirst() }
+        case .ended:
+            guard case .held = cat.support else { return }
+            // Throw velocity from the last few samples, not from the final pair: a single
+            // frame of jitter at release otherwise launches him across the screen.
+            var v = CGVector.zero
+            if let first = dragSamples.first, let last = dragSamples.last {
+                let dt = last.t - first.t
+                if dt > 0.001 {
+                    v = CGVector(dx: (last.p.x - first.p.x) / CGFloat(dt),
+                                 dy: (last.p.y - first.p.y) / CGFloat(dt))
+                }
+            }
+            cat = Cat.release(cat, throwVelocity: v)
+            dragSamples = []
+            log("released, righting")
+        }
+    }
 
     /// Advances everything that is computed rather than simulated: the gait cycle, the
     /// crouch blend, and the tail.
@@ -196,7 +234,12 @@ public final class OgiApp: NSObject, NSApplicationDelegate {
         crouchAmount += (wantCrouch - crouchAmount) * min(1, dt * 18)
         pose.crouch = crouchAmount
 
-        if case .falling = cat.support { pose.airborne = true }
+        switch cat.support {
+        case .falling: pose.airborne = true
+        case .held: pose.airborne = true; pose.dangling = true
+        case .grounded: break
+        }
+        pose.righting = cat.righting
         pose.earAngle = cat.activity == .landHard ? -0.35 : 0
 
         // The tail is simulated in body space, so it inherits the mirror and the squash for
@@ -284,6 +327,8 @@ public final class OgiApp: NSObject, NSApplicationDelegate {
             // He vanishes behind a frontmost window mid-drop and re-emerges below it.
             return skyline.supportBelow(x: cat.position.x, from: cat.position.y,
                                         to: -.greatestFiniteMagnitude)?.z ?? .max
+        case .held:
+            return -1   // in your hand, in front of everything
         }
     }
 
