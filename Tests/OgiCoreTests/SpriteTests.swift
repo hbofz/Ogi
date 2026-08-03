@@ -5,43 +5,59 @@ import CoreGraphics
 /// Clips regenerated against the current `art/character.png`. Add each name as its sheet
 /// lands. Kept by hand on purpose: the old version inferred this from eye colour, which
 /// stopped meaning anything the moment the cat himself became ginger.
-private let redrawnClips: Set<String> = []
+private let redrawnClips: Set<String> = ["walk", "fall", "land", "idle"]
 
 /// The drawn frames come from separately-generated sheets that draw him at wildly different
 /// sizes, so `Sprites` rescales each clip to make him one cat. These check that it works,
 /// because when it does not the failure is subtle on any single frame and glaring in motion.
 
 @MainActor
-@Test func everyClipRendersHimTheSameSize() {
-    // The bug this exists for: `clipScale` used to measure the first frame that had a visible
-    // eye, and on `idle` that frame reads 14px against a median of 25. He sat at one size and
-    // changed size the moment he walked. Nothing about a single frame catches that; only
-    // comparing clips against each other does.
+@Test func everyClipMeasuresHisEyeConsistently() {
+    // `clipScale` divides a reference width by the measured eye, so a clip whose eye is
+    // mis-measured renders at the wrong size — silently, and only obviously in motion. It has
+    // happened twice: `fall` once read a 5px eye against everything else's 20px and rendered
+    // nearly 3x too big, and `idle` read 14px against its own median of 25.
     //
-    // Scoped to clips regenerated against docs/ART-BRIEF.md. The older white-eyed sheets are
-    // a 7x spread — `sitdown` measures 100px against `sleep`'s 14 — because eye detection on
-    // them is simply unreliable: `sitdown` reads [6, 19, 5] and a sleeping cat's closed eyes
-    // read [27, 40, 9, 4], none of which are eyes. No amount of statistics rescues a bad
-    // measurement, and the fix is the sheet, not the code. So this covers the art that has
-    // been redrawn, and gains teeth with each sheet that lands.
-    let clips: [Sprites.Clip] = [.walk, .idle, .jump, .land, .fall, .run, .alert, .sitdown, .sleep]
-        .filter { redrawnClips.contains($0.rawValue) }
-    guard clips.count > 1 else { return }   // nothing to compare yet
-    let heights: [(Sprites.Clip, CGFloat)] = clips.compactMap { clip in
-        let sizes = (0..<clip.count).map { Sprites.size(clip, $0).height }
-        guard let tallest = sizes.max(), tallest > 0 else { return nil }
-        return (clip, tallest)
+    // The invariant is not that clips render to the same height. They must not: a curled cat
+    // is legitimately shorter than a sitting one, and an airborne clip's frame is mostly empty
+    // band. What holds is that his eye is a fixed fraction of *him*, so measuring eye width
+    // against his own ink height catches a bad reading without punishing an honest pose.
+    var ratios: [(String, Double)] = []
+    for clip in [Sprites.Clip.walk, .idle, .jump, .land, .fall, .run, .alert, .sitdown, .sleep]
+    where redrawnClips.contains(clip.rawValue) {
+        // Median across frames. One frame is a bad sample for the same reason clipScale takes
+        // a median: a squash frame is legitimately short and would read as an oversized eye.
+        var perFrame: [Double] = []
+        for i in 0..<clip.count {
+            guard let img = Sprites.image(clip, i), let eye = Sprites.eyes(clip, i).first else { continue }
+            let w = img.width, h = img.height
+            var px = [UInt8](repeating: 0, count: w * h * 4)
+            px.withUnsafeMutableBytes { buf in
+                CGContext(data: buf.baseAddress, width: w, height: h, bitsPerComponent: 8,
+                          bytesPerRow: w * 4, space: CGColorSpaceCreateDeviceRGB(),
+                          bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue)?
+                    .draw(img, in: CGRect(x: 0, y: 0, width: w, height: h))
+            }
+            var top = h, bottom = 0
+            for y in 0..<h {
+                for x in 0..<w where px[(y * w + x) * 4 + 3] > 128 {
+                    top = min(top, y); bottom = max(bottom, y); break
+                }
+            }
+            let inkHeight = bottom - top + 1
+            guard inkHeight > 20 else { continue }
+            perFrame.append(Double(eye.width * CGFloat(w) / CGFloat(inkHeight)))
+        }
+        guard !perFrame.isEmpty else { continue }
+        perFrame.sort()
+        ratios.append((clip.rawValue, perFrame[perFrame.count / 2]))
     }
-    #expect(heights.count == clips.count, "some clips failed to load")
-
-    let values = heights.map(\.1)
-    let smallest = values.min()!, largest = values.max()!
-    // `held` is excluded above: he dangles fully stretched out, so being taller is correct.
-    // Everything else is a cat standing, crouching or curled, and those legitimately differ
-    // by well under 2x. A 44% error hid inside the old 3x spread without anyone noticing.
-    let spread = heights.sorted { $0.1 < $1.1 }
-        .map { "\($0.0.rawValue) \(Int($0.1))" }.joined(separator: ", ")
-    #expect(largest / smallest < 2.0, "he changes size between animations: \(spread)")
+    guard ratios.count > 1 else { return }   // nothing to compare yet
+    let vals = ratios.map(\.1)
+    let report = ratios.sorted { $0.1 < $1.1 }
+        .map { "\($0.0) \(String(format: "%.3f", $0.1))" }.joined(separator: ", ")
+    #expect(vals.max()! / vals.min()! < 2.0,
+            "one of these clips is mis-measuring his eye, so it renders at the wrong size: \(report)")
 }
 
 @MainActor
