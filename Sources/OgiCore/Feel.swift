@@ -86,6 +86,9 @@ public enum Feel {
         // what makes these things read as bears or rats.
         public static let height: CGFloat = 32
         public static let width: CGFloat = 52
+        /// Reference frames are ~70-95px tall. 0.55 puts him at roughly 40-50pt, which is
+        /// large enough to read on a window edge and small enough to stay out of the way.
+        public static let spriteScale: CGFloat = 0.55
         /// Squash depth is proportional to impact speed, capped here.
         public static let maxSquash: CGFloat = 0.30
         /// Ground covered per full gait cycle. Tuned so the paws do not skate.

@@ -209,8 +209,6 @@ final class OgiView: NSView {
 
         // Anchor at the feet so squash keeps them planted.
         bodyLayer.anchorPoint = CGPoint(x: 0.5, y: 0)
-        bodyLayer.bounds = CGRect(x: -Feel.Shape.width / 2, y: 0,
-                                  width: Feel.Shape.width, height: Feel.Shape.height)
         bodyLayer.position = CGPoint(x: cat.position.x - origin.x, y: cat.position.y - origin.y)
         // Squash, plus a lean into the motion of whatever he is standing on. Rotating
         // about the feet (the anchor point) is what makes it read as bracing rather than
@@ -220,7 +218,15 @@ final class OgiView: NSView {
         // sliding: his paws stay put and his body tips.
         let s = cat.scale
         let lean = -cat.lean * Feel.Physics.maxLean * cat.facing
-        bodyLayer.path = Body.path(pose)
+        let frame = Sprites.frame(for: cat.activity, walkPhase: pose.walkPhase,
+                                  airborne: pose.airborne, dangling: pose.dangling)
+        let size = Sprites.size(frame)
+        bodyLayer.contents = Sprites.image(frame)
+        // Nearest-neighbour: these are pixel art, and smoothing turns crisp edges to mush.
+        bodyLayer.magnificationFilter = .nearest
+        bodyLayer.minificationFilter = .trilinear
+        bodyLayer.path = nil
+        bodyLayer.bounds = CGRect(x: 0, y: 0, width: size.width, height: size.height)
         bodyLayer.transform = CATransform3DConcat(
             CATransform3DMakeScale(s.width * cat.facing, s.height, 1),
             CATransform3DMakeRotation(lean, 0, 0, 1))
@@ -234,7 +240,9 @@ final class OgiView: NSView {
             CATransform3DMakeScale((1 + (s.width - 1) * 0.5) * cat.facing,
                                    1 + (s.height - 1) * 0.5, 1),
             CATransform3DMakeRotation(lean, 0, 0, 1))
-        eyesLayer.path = Body.eyes(gaze: gaze, pose: pose)
+        // The drawn frames carry their own eyes. Procedural pupils go back on top of them
+        // in a follow-up; the art has to be right first.
+        eyesLayer.path = nil
 
         shadowLayer.position = CGPoint(x: cat.position.x - origin.x,
                                        y: cat.position.y - h - origin.y)

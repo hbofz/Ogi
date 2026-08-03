@@ -8,7 +8,7 @@ let package = Package(
     name: "Ogi",
     platforms: [.macOS(.v14)],   // NSView.displayLink(target:selector:)
     targets: [
-        .target(name: "OgiCore"),
+        .target(name: "OgiCore", resources: [.copy("Resources/Sprites")]),
         .executableTarget(name: "Ogi", dependencies: ["OgiCore"]),
         .executableTarget(name: "Decoy"),   // test fixture: a window Ogi can stand on
         .testTarget(name: "OgiCoreTests", dependencies: ["OgiCore"]),
