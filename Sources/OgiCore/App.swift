@@ -10,6 +10,7 @@ public final class OgiApp: NSObject, NSApplicationDelegate {
     private var skyline = Skyline(surfaces: [], occluders: [],
                                   screen: ScreenGeometry(frame: .zero, visibleFrame: .zero, notch: nil))
     private var cat = CatState(position: .zero)
+    private var gaze = Gaze()
 
     private var accumulator: TimeInterval = 0
     private var lastTick: CFTimeInterval = 0
@@ -81,15 +82,23 @@ public final class OgiApp: NSObject, NSApplicationDelegate {
         accumulator += min(now - lastTick, Feel.Timing.maxFrameDelta)
         lastTick = now
 
+        var steps = 0
         while accumulator >= Feel.Timing.fixedDT {
+            steps += 1
             let before = cat.support
             cat = Cat.step(cat, world: skyline, dt: Feel.Timing.fixedDT)
             if before != cat.support { logSupportChange(from: before) }   // M0 probe
             accumulator -= Feel.Timing.fixedDT
         }
 
+        // He looks at your cursor. The strongest aliveness signal that exists.
+        let head = CGPoint(x: cat.position.x,
+                           y: cat.position.y + Feel.Shape.height * Feel.Eyes.heightFraction)
+        gaze.step(target: lookDirection(from: head, to: NSEvent.mouseLocation),
+                  dt: CGFloat(Feel.Timing.fixedDT * Double(steps)))
+
         let h = heightAboveGround()
-        overlay.render(cat, heightAboveGround: h,
+        overlay.render(cat, gaze: gaze, heightAboveGround: h,
                        occluders: skyline.occluders(above: perchZ(),
                                                     intersecting: hitRect().insetBy(dx: -40, dy: -h - 40)))
 

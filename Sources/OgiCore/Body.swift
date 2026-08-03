@@ -34,6 +34,31 @@ public enum Body {
         return p
     }
 
+    /// The eyes, in body space (origin at his feet, midline, +y up).
+    ///
+    /// Two bright shapes on a dark silhouette is the highest expression-per-pixel ratio in
+    /// animation. There is no separate pupil: the eye *is* the bright region, so mood is
+    /// carried by its size and shape rather than by a dot inside it.
+    public static func eyes(gaze: Gaze,
+                            width: CGFloat = Feel.Shape.width,
+                            height: CGFloat = Feel.Shape.height) -> CGPath {
+        let p = CGMutablePath()
+        let cy = height * Feel.Eyes.heightFraction
+        let dx = gaze.offset.x * Feel.Eyes.travel
+        let dy = gaze.offset.y * Feel.Eyes.travel
+
+        for (i, side) in [CGFloat(-1), 1].enumerated() {
+            let scale = i == 0 ? 1 : Feel.Eyes.asymmetry
+            let rx = Feel.Eyes.radiusX * scale
+            // The lid closes by flattening the eye vertically about its own centre.
+            let ry = Feel.Eyes.radiusY * scale * gaze.lid
+            let cx = side * width * Feel.Eyes.separation
+            p.addEllipse(in: CGRect(x: cx + dx - rx, y: cy + dy - ry,
+                                    width: rx * 2, height: ry * 2))
+        }
+        return p
+    }
+
     /// Contact shadow. Tightens and darkens on landing, softens and separates in the air.
     /// Sells "he is standing on that window" more than anything else in the app.
     public static func shadow(width: CGFloat, height h: CGFloat) -> CGPath {

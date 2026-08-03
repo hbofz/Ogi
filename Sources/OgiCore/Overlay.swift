@@ -67,8 +67,8 @@ public final class Overlay {
         window.ignoresMouseEvents = !wanted
     }
 
-    public func render(_ cat: CatState, heightAboveGround: CGFloat, occluders: [CGRect]) {
-        view.apply(cat, heightAboveGround: heightAboveGround, occluders: occluders)
+    public func render(_ cat: CatState, gaze: Gaze, heightAboveGround: CGFloat, occluders: [CGRect]) {
+        view.apply(cat, gaze: gaze, heightAboveGround: heightAboveGround, occluders: occluders)
     }
 
     fileprivate func tick(_ t: CFTimeInterval) { onTick?(t) }
@@ -87,6 +87,7 @@ final class OgiView: NSView {
     private let maskShape = CAShapeLayer()
     private let shadowLayer = CAShapeLayer()
     private let bodyLayer = CAShapeLayer()
+    private let eyesLayer = CAShapeLayer()
     private var link: CADisplayLink?
 
     override init(frame: NSRect) {
@@ -102,7 +103,7 @@ final class OgiView: NSView {
             "transform": NSNull(), "mask": NSNull(), "opacity": NSNull(),
             "fillColor": NSNull(), "contents": NSNull(),
         ]
-        for l in [root, maskContainer, maskShape, shadowLayer, bodyLayer] { l.actions = noActions }
+        for l in [root, maskContainer, maskShape, shadowLayer, bodyLayer, eyesLayer] { l.actions = noActions }
 
         bodyLayer.fillColor = NSColor(srgbRed: 0.043, green: 0.043, blue: 0.051, alpha: 1).cgColor
         // The rim light. On a light background the fill carries the contrast and this
@@ -117,8 +118,12 @@ final class OgiView: NSView {
 
         shadowLayer.fillColor = NSColor.black.cgColor
 
+        // Warm off-white. Pure white reads clinical.
+        eyesLayer.fillColor = NSColor(srgbRed: 0.949, green: 0.941, blue: 0.910, alpha: 1).cgColor
+
         maskContainer.addSublayer(shadowLayer)
         maskContainer.addSublayer(bodyLayer)
+        maskContainer.addSublayer(eyesLayer)
         root.addSublayer(maskContainer)
         layer?.addSublayer(root)
         updateScale()
@@ -137,7 +142,7 @@ final class OgiView: NSView {
 
     private func updateScale() {
         let s = window?.backingScaleFactor ?? 2
-        for l in [root, maskContainer, maskShape, shadowLayer, bodyLayer] { l.contentsScale = s }
+        for l in [root, maskContainer, maskShape, shadowLayer, bodyLayer, eyesLayer] { l.contentsScale = s }
     }
 
     func startLink() {
@@ -154,7 +159,7 @@ final class OgiView: NSView {
         overlay?.tick(l.targetTimestamp)
     }
 
-    func apply(_ cat: CatState, heightAboveGround h: CGFloat, occluders: [CGRect]) {
+    func apply(_ cat: CatState, gaze: Gaze, heightAboveGround h: CGFloat, occluders: [CGRect]) {
         let bodyRect = CGRect(x: cat.position.x - Feel.Shape.width / 2, y: cat.position.y,
                               width: Feel.Shape.width, height: Feel.Shape.height)
         // The shadow separates from him as he rises, so the box has to follow it down.
@@ -176,6 +181,15 @@ final class OgiView: NSView {
         bodyLayer.position = CGPoint(x: cat.position.x - origin.x, y: cat.position.y - origin.y)
         let s = cat.scale
         bodyLayer.transform = CATransform3DMakeScale(s.width, s.height, 1)
+
+        // Eyes ride the body but take only HALF the squash. Undeformed eyes on a squashed
+        // body look pasted on; fully deformed ones look broken. Half is the animator's cheat.
+        eyesLayer.anchorPoint = bodyLayer.anchorPoint
+        eyesLayer.bounds = bodyLayer.bounds
+        eyesLayer.position = bodyLayer.position
+        eyesLayer.transform = CATransform3DMakeScale(1 + (s.width - 1) * 0.5,
+                                                     1 + (s.height - 1) * 0.5, 1)
+        eyesLayer.path = Body.eyes(gaze: gaze)
 
         shadowLayer.position = CGPoint(x: cat.position.x - origin.x,
                                        y: cat.position.y - h - origin.y)
