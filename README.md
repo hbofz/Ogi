@@ -8,7 +8,9 @@ your battery, your microphone, and how long you have been working without a brea
 
 He asks nothing of you, ever, and there is nothing to manage.
 
-See [MANIFESTO.md](MANIFESTO.md) for what he is and why.
+- [MANIFESTO.md](MANIFESTO.md) — what he is, and why
+- [ROADMAP.md](ROADMAP.md) — where he is now, what ships in each version
+- [docs/DESIGN.md](docs/DESIGN.md) — architecture, and the research behind every decision
 
 ---
 
@@ -29,20 +31,16 @@ There is no account, no network, no telemetry, and no backend.
 
 ---
 
-## Status: early
+## Status: v0.1, early
 
-Milestone 0 works. He falls.
+**He falls.** He reads your real windows as terrain, obeys gravity, and drops when the window
+he is standing on closes, landing with a squash proportional to how far he fell.
 
-- [x] **M0 — the fall.** Reads your real windows as terrain, obeys gravity, lands with a
-      squash proportional to impact, and drops when his window closes
-- [ ] M1 — occlusion (he goes behind windows in front of his perch)
-- [ ] M2 — eyes that track your cursor
-- [ ] M3 — walking and jumping
-- [ ] M4 — surfing a dragged window
-- [ ] M5 — the real silhouette (he is currently a blob with ears)
-- [ ] M6 — mic, battery, idle, sleep
-- [ ] M7 — pick him up and he lands on his feet
-- [ ] M8 — the notch home, and the bookends
+He is currently a blob with ears. That is on purpose — the real silhouette is v0.6, because if
+the fall is not charming with a blob then the problem is timing, and timing is code, not art.
+
+Next up is v0.2: he goes *behind* windows that are in front of him. See
+[ROADMAP.md](ROADMAP.md) for the full plan.
 
 ## Build and run
 
