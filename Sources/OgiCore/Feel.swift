@@ -91,6 +91,23 @@ public enum Feel {
         public static let positionDeadband: CGFloat = 1
     }
 
+    /// The drifting "z"s while he sleeps. Deliberately slow and faint: this is the one thing on
+    /// screen while he is doing nothing, so it has to be noticeable once and then ignorable.
+    public enum Sleepiness {
+        /// Seconds for one z to rise, fade in and fade out.
+        public static let riseSeconds: Double = 3.4
+        /// How many are in flight at once, evenly staggered across the rise.
+        public static let count = 3
+        /// How far one travels over its life, as a multiple of his rendered height.
+        public static let driftHeight: CGFloat = 0.85
+        /// Sideways drift over the same life, same units. Small; they wander, not zigzag.
+        public static let driftSide: CGFloat = 0.22
+        /// Size of the first z, as a multiple of his height. Each one grows as it rises.
+        public static let glyphHeight: CGFloat = 0.15
+        public static let growth: CGFloat = 0.6
+        public static let peakOpacity: Float = 0.65
+    }
+
     public enum Shape {
         // A cat in side view is much longer than it is tall. Getting this ratio wrong is
         // what makes these things read as bears or rats.

@@ -108,6 +108,7 @@ final class OgiView: NSView {
     private let bodyLayer = CAShapeLayer()
     private let eyesLayer = CAShapeLayer()
     private let pupilLayer = CAShapeLayer()
+    private let zzzLayer = CAShapeLayer()
     private var link: CADisplayLink?
 
     override init(frame: NSRect) {
@@ -123,7 +124,7 @@ final class OgiView: NSView {
             "transform": NSNull(), "mask": NSNull(), "opacity": NSNull(),
             "fillColor": NSNull(), "contents": NSNull(),
         ]
-        for l in [root, maskContainer, maskShape, shadowLayer, bodyLayer, eyesLayer, pupilLayer] { l.actions = noActions }
+        for l in [root, maskContainer, maskShape, shadowLayer, bodyLayer, eyesLayer, pupilLayer, zzzLayer] { l.actions = noActions }
 
         bodyLayer.fillColor = NSColor(srgbRed: 0.043, green: 0.043, blue: 0.051, alpha: 1).cgColor
         // The rim light. On a light background the fill carries the contrast and this
@@ -145,6 +146,14 @@ final class OgiView: NSView {
         pupilLayer.fillColor = NSColor(srgbRed: 0.06, green: 0.06, blue: 0.08, alpha: 1).cgColor
         maskContainer.addSublayer(eyesLayer)
         maskContainer.addSublayer(pupilLayer)
+        // Drawn rather than lettered: a Z is a three-segment polyline, and a stroked path scales
+        // with him and stays crisp where a font would not at this size. It also has to be code
+        // rather than art — the cutter flood-fills connected ink, so a Z drawn into a sheet would
+        // come back as its own blob and either be discarded or split the frame.
+        zzzLayer.fillColor = nil
+        zzzLayer.lineJoin = .round
+        zzzLayer.lineCap = .round
+        maskContainer.addSublayer(zzzLayer)
         root.addSublayer(maskContainer)
         layer?.addSublayer(root)
         updateScale()
@@ -163,7 +172,7 @@ final class OgiView: NSView {
 
     private func updateScale() {
         let s = window?.backingScaleFactor ?? 2
-        for l in [root, maskContainer, maskShape, shadowLayer, bodyLayer, eyesLayer, pupilLayer] { l.contentsScale = s }
+        for l in [root, maskContainer, maskShape, shadowLayer, bodyLayer, eyesLayer, pupilLayer, zzzLayer] { l.contentsScale = s }
     }
 
     func startLink() {
@@ -202,7 +211,14 @@ final class OgiView: NSView {
         let shadowRect = CGRect(x: cat.position.x - Feel.Shape.width,
                                 y: cat.position.y - h - 12,
                                 width: Feel.Shape.width * 2, height: 24)
-        let padded = bodyRect.union(shadowRect).insetBy(dx: -8, dy: -8)
+        // The z's rise well above his head, and `applyOcclusion` masks everything to this rect,
+        // so leaving them out of it means they vanish the moment any window overlaps him —
+        // which is most of the time, since he sleeps on a window edge.
+        let sleepRect = cat.activity == .sleep
+            ? CGRect(x: cat.position.x - Feel.Shape.width, y: cat.position.y,
+                     width: Feel.Shape.width * 2, height: Feel.Shape.height * 2.4)
+            : bodyRect
+        let padded = bodyRect.union(shadowRect).union(sleepRect).insetBy(dx: -8, dy: -8)
 
         CATransaction.begin()
         CATransaction.setDisableActions(true)
@@ -243,9 +259,58 @@ final class OgiView: NSView {
         eyesLayer.path = nil
         pupilLayer.path = nil
 
+        drawSleepiness(cat, size: size, in: padded)
+
         applyOcclusion(occluders, in: padded)
 
         CATransaction.commit()
+    }
+
+    /// The drifting "z"s while he is asleep.
+    ///
+    /// Procedural for the same reason the tail and the shadow are: they need to drift and fade
+    /// on their own clock rather than repeat in lockstep with a 3-frame breathing loop, and a
+    /// z drawn into a sheet would be flood-filled by the cutter as a separate blob anyway.
+    ///
+    /// Three of them, evenly staggered across one rise, so there is always one faint near the
+    /// top and one just appearing. Each grows and fades as it goes, which reads as distance.
+    private func drawSleepiness(_ cat: CatState, size: CGSize, in padded: CGRect) {
+        guard cat.activity == .sleep else {
+            zzzLayer.path = nil
+            return
+        }
+        typealias f = Feel.Sleepiness
+        let h = size.height
+        // Start just above his head. He sleeps curled with his head at the *back* of the
+        // sprite, so this is against his facing rather than with it — the sheet mirrors with
+        // `facing`, and his nose ends up on whichever side his tail is not.
+        let origin = CGPoint(x: cat.position.x - padded.minX - h * 0.30 * cat.facing,
+                             y: cat.position.y - padded.minY + h * 0.52)
+
+        let path = CGMutablePath()
+        for i in 0..<f.count {
+            // Each z is offset a fraction of a rise ahead of the last, and the whole thing
+            // wraps, so this is one clock rather than three independent ones.
+            let t = ((cat.activityElapsed / f.riseSeconds) + Double(i) / Double(f.count))
+                .truncatingRemainder(dividingBy: 1)
+            let p = CGFloat(t)
+            let glyph = h * f.glyphHeight * (1 + p * f.growth)
+            let x = origin.x - h * f.driftSide * p * cat.facing
+            let y = origin.y + h * f.driftHeight * p
+            // A capital Z is exactly three strokes, so it is three lines rather than a font.
+            let w = glyph * 0.72
+            path.move(to: CGPoint(x: x, y: y + glyph))
+            path.addLine(to: CGPoint(x: x + w, y: y + glyph))
+            path.addLine(to: CGPoint(x: x, y: y))
+            path.addLine(to: CGPoint(x: x + w, y: y))
+        }
+        zzzLayer.path = path
+        zzzLayer.frame = CGRect(origin: .zero, size: padded.size)
+        zzzLayer.lineWidth = max(1, h * 0.028)
+        zzzLayer.strokeColor = NSColor.white.withAlphaComponent(0.9).cgColor
+        // Fade the whole group in and out with the newest z, so nothing pops into existence.
+        let lead = (cat.activityElapsed / f.riseSeconds).truncatingRemainder(dividingBy: 1)
+        zzzLayer.opacity = f.peakOpacity * Float(min(1, sin(lead * .pi) * 1.6 + 0.35))
     }
 
     /// Clips him to the region not covered by windows in front of his perch. This is the
