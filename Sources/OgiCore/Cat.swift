@@ -22,6 +22,7 @@ public enum Activity: Sendable, Equatable {
     case idle
     case walk
     case crouch     // the 100ms wind-up before every jump
+    case brace      // riding a window that is being dragged
     case slip       // the ground just went away
     case airborne
     case land
@@ -47,6 +48,17 @@ public struct CatState: Sendable {
     /// 0 = no squash, 0.30 = a hard landing.
     public var squash: CGFloat = 0
     public var squashElapsed: TimeInterval = 0
+
+    /// Low-passed drift of the surface under him, in points per physics tick.
+    /// Positive means his platform is moving right.
+    public var drift: CGFloat = 0
+    /// Internal to the drift low-pass. Public only because `Cat.step` is a free function.
+    public var lastPerchOrigin: CGFloat?
+
+    /// -1..1. How hard he is leaning against the motion of his platform.
+    public var lean: CGFloat {
+        max(-1, min(1, drift / Feel.Physics.driftReference))
+    }
 
     public var goal: Goal?
     /// Seconds of stillness left before he thinks of something to do.
@@ -89,6 +101,8 @@ public enum Cat {
                 s.activity = .slip
                 s.activityElapsed = 0
                 s.velocity = CGVector(dx: s.facing * Feel.Physics.slipKick, dy: 0)
+                s.drift = 0
+                s.lastPerchOrigin = nil
                 return s
             }
             // Walked off, or the window shrank out from under him.
@@ -98,10 +112,27 @@ public enum Cat {
                 s.activityElapsed = 0
                 return s
             }
-            // World position is derived. Surfing is free.
-            s.position = CGPoint(x: surface.extent.lowerBound + perch.dx, y: surface.y)
+            // World position is derived. Surfing is free — he is already being carried.
+            // What this measures is his *reaction* to being carried.
+            //
+            // The origin arrives as a ~100ms staircase from the world poll, so per-tick
+            // drift is zero on most ticks and a big step on the others. Low-pass it hard
+            // rather than differentiating, which would produce spikes.
+            let origin = surface.extent.lowerBound
+            let step = origin - (s.lastPerchOrigin ?? origin)
+            s.lastPerchOrigin = origin
+            s.drift += (step - s.drift) * Feel.Physics.driftSmoothing
+
+            s.position = CGPoint(x: origin + perch.dx, y: surface.y)
             s.velocity = .zero
             s = ground(s, on: surface, world: world, dt: dt)
+
+            // Braced against the motion. He is standing on a moving object.
+            if abs(s.lean) > Feel.Physics.braceThreshold, s.goal == nil {
+                s.activity = .brace
+            } else if s.activity == .brace {
+                s.activity = .idle
+            }
 
         case .falling:
             s.velocity.dy = max(s.velocity.dy - Feel.Physics.gravity * dt,

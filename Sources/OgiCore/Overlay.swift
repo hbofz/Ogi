@@ -179,16 +179,23 @@ final class OgiView: NSView {
         bodyLayer.bounds = CGRect(x: -Feel.Shape.width / 2, y: 0,
                                   width: Feel.Shape.width, height: Feel.Shape.height)
         bodyLayer.position = CGPoint(x: cat.position.x - origin.x, y: cat.position.y - origin.y)
+        // Squash, plus a lean into the motion of whatever he is standing on. Rotating
+        // about the feet (the anchor point) is what makes it read as bracing rather than
+        // sliding: his paws stay put and his body tips.
         let s = cat.scale
-        bodyLayer.transform = CATransform3DMakeScale(s.width, s.height, 1)
+        let lean = -cat.lean * Feel.Physics.maxLean
+        bodyLayer.transform = CATransform3DConcat(
+            CATransform3DMakeScale(s.width, s.height, 1),
+            CATransform3DMakeRotation(lean, 0, 0, 1))
 
         // Eyes ride the body but take only HALF the squash. Undeformed eyes on a squashed
         // body look pasted on; fully deformed ones look broken. Half is the animator's cheat.
         eyesLayer.anchorPoint = bodyLayer.anchorPoint
         eyesLayer.bounds = bodyLayer.bounds
         eyesLayer.position = bodyLayer.position
-        eyesLayer.transform = CATransform3DMakeScale(1 + (s.width - 1) * 0.5,
-                                                     1 + (s.height - 1) * 0.5, 1)
+        eyesLayer.transform = CATransform3DConcat(
+            CATransform3DMakeScale(1 + (s.width - 1) * 0.5, 1 + (s.height - 1) * 0.5, 1),
+            CATransform3DMakeRotation(lean, 0, 0, 1))
         eyesLayer.path = Body.eyes(gaze: gaze)
 
         shadowLayer.position = CGPoint(x: cat.position.x - origin.x,

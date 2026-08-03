@@ -26,6 +26,13 @@ public enum Feel {
         public static let jumpChance = 0.35
         /// Deliberate aiming error. A cat that always sticks the landing reads as a machine.
         public static let aimError: CGFloat = 0.09
+
+        /// Per-tick drift at which he leans as far as he ever will (~480 px/s of drag).
+        public static let driftReference: CGFloat = 4.0
+        public static let driftSmoothing: CGFloat = 0.02
+        public static let braceThreshold: CGFloat = 0.25
+        /// How far he tips into the motion, in radians. Small: he is bracing, not falling over.
+        public static let maxLean: CGFloat = 0.30
     }
 
     public enum Timing {
