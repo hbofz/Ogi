@@ -3,14 +3,85 @@
 // ponytail: CoreGraphics rather than Pillow/OpenCV. No pip install, no vendored dependency,
 // and it is a build-time tool that never ships. Run with: swift Tools/extract-sprites.swift <sheet.png> <outDir>
 //
-// The sheet is a flat cream background with dark cat poses on it, so "not background" is a
-// single colour-distance test and the rest is one flood fill.
+// The sheet is a flat background with dark cat poses on it, so "not background" is a single
+// colour-distance test and the rest is one flood fill.
 import AppKit
 import CoreGraphics
 
+// MARK: - Chroma key
+//
+// Edge pixels are a blend of cat and background, and writing them fully opaque welds a bright
+// rim around him — the pale halo on every sprite cut before this existed.
+//
+// Recovering their true coverage needs a real chroma key, and a chroma key needs a background
+// the subject cannot reach. Distance from the background is NOT good enough: it cannot tell a
+// light-coloured cat pixel from a half-covered edge pixel, and Ogi's white eyes sit 45 away
+// from cream, so keying on distance renders them at alpha 17/255 and you see the wallpaper
+// through his face. That failure is why this keys on a single channel instead.
+//
+// Ogi is black, warm grey, amber and white. In all of those, green is at or below the larger
+// of red and blue — so against a pure-green sheet, `green - max(red, blue)` is exactly how
+// much background is showing through and nothing else. Magenta does not work for this palette
+// because white and amber both sit close to it; red would collide with the amber.
+
+/// The dominant channel of a background colour, if it has one. `nil` for a neutral background
+/// like the old cream sheets, which cannot be keyed and fall back to opaque edges.
+func keyChannel(for bg: (Int, Int, Int)) -> (index: Int, range: Double)? {
+    let c = [bg.0, bg.1, bg.2]
+    let k = c.indices.max { c[$0] < c[$1] }!
+    let range = Double(c[k] - c.indices.filter { $0 != k }.map { c[$0] }.max()!)
+    // A key must dominate. Cream's channels sit within 16 of each other and key nothing.
+    return range > 100 ? (k, range) : nil
+}
+
+/// Fraction of a pixel covered by the cat, 0...1.
+func coverage(_ c: [Int], _ key: (index: Int, range: Double)?) -> Double {
+    guard let key else { return 1 }
+    let spill = Double(c[key.index] - c.indices.filter { $0 != key.index }.map { c[$0] }.max()!)
+    return 1 - min(1, max(0, spill / key.range))
+}
+
+/// Divides the background back out of a blended pixel, returning premultiplied colour.
+/// observed = bg·(1-a) + cat·a, and premultiplied is cat·a, so it is just a subtraction.
+/// That despills the green off his edges for free.
+func unblend(_ c: [Int], _ bg: (Int, Int, Int), _ a: Double) -> [Int] {
+    let inv = 1 - a, b = [bg.0, bg.1, bg.2]
+    return (0..<3).map { max(0, min(255, Int((Double(c[$0]) - Double(b[$0]) * inv).rounded()))) }
+}
+
 let args = CommandLine.arguments
+
+// Every colour on Ogi has to survive the key opaque and unchanged, and every half-covered edge
+// pixel has to come back at roughly half alpha with no background left in it. Run with:
+//   swift Tools/extract-sprites.swift --self-check
+if args.count == 2, args[1] == "--self-check" {
+    let green = (0, 255, 0)
+    let key = keyChannel(for: green)!
+    let palette: [(String, [Int])] = [
+        ("body black", [24, 24, 26]), ("body shading", [58, 54, 56]),
+        ("warm grey", [96, 84, 82]),  ("ear pink", [150, 118, 120]),
+        ("amber eye", [255, 176, 0]), ("eye white", [255, 255, 255]),
+        ("whisker grey", [214, 210, 205]),
+    ]
+    assert(keyChannel(for: (248, 240, 232)) == nil, "cream must not be treated as a key")
+    for (name, cat) in palette {
+        let a = coverage(cat, key)
+        assert(a > 0.99, "\(name): interior came back translucent at \(a)")
+        assert(unblend(cat, green, a) == cat, "\(name): interior colour was altered")
+
+        let half = (0..<3).map { Int((Double([green.0, green.1, green.2][$0]) + Double(cat[$0])) / 2) }
+        let ha = coverage(half, key)
+        assert(abs(ha - 0.5) < 0.2, "\(name): half-covered edge keyed to \(ha)")
+        let straight = unblend(half, green, ha).map { Int(Double($0) / ha) }
+        assert(straight[1] - max(straight[0], straight[2]) <= 4, "\(name): green survived the key")
+    }
+    print("self-check OK — \(palette.count * 2) cases")
+    exit(0)
+}
+
 guard args.count >= 3 else {
     print("usage: extract-sprites <sheet.png> <outDir> [minHeight] [maxHeight]")
+    print("       extract-sprites --self-check")
     exit(1)
 }
 let minH = args.count > 3 ? Int(args[3])! : 40
@@ -58,15 +129,22 @@ let dropWarm = ProcessInfo.processInfo.environment["DROP_WARM"] != nil
     return r - b > 22 && r > 120
 }
 
+@inline(__always) func bgDistance(_ i: Int) -> Int {
+    let (r, g, b) = rgb(i)
+    return abs(r - bg.0) + abs(g - bg.1) + abs(b - bg.2)
+}
+
 @inline(__always) func isInk(_ i: Int) -> Bool {
     if isSkin(i) { return false }
-    let (r, g, b) = rgb(i)
-    let d = abs(r - bg.0) + abs(g - bg.1) + abs(b - bg.2)
-    // 28, not 60. The background is cream (248,240,232) and his eyes are pure white, which
-    // is only 45 away from it — so a threshold of 60 silently DELETED both his eyes and you
-    // saw the wallpaper through the holes. Anything above ~20 still rejects sheet noise.
-    return d > 28
+    // 28, not 60. On a cream sheet his eyes are pure white, only 45 away from the background —
+    // a threshold of 60 silently DELETED both of them and you saw the wallpaper through the
+    // holes. Anything above ~20 still rejects sheet noise, on cream or on a magenta key.
+    return bgDistance(i) > 28
 }
+
+let key = keyChannel(for: bg)
+print(key.map { "key channel \(["R", "G", "B"][$0.index]), range \(Int($0.range))" }
+      ?? "neutral background, opaque edges (halo will survive — see docs/ART-BRIEF.md)")
 
 // Flood fill each connected blob of ink. Iterative: a recursive fill blows the stack on a
 // 1500px sheet.
@@ -153,17 +231,21 @@ for (n, blob) in kept.enumerated() {
         for x in 0..<bw {
             let si = (b.minY + y) * w + (b.minX + x)
             let di = (y * bw + x) * 4
-            if isInk(si) {
-                cropped[di] = px[si * 4]; cropped[di + 1] = px[si * 4 + 1]
-                cropped[di + 2] = px[si * 4 + 2]; cropped[di + 3] = 255
-            }
+            guard isInk(si) else { continue }
+            let (r, g, b) = rgb(si)
+            let a = coverage([r, g, b], key)
+            let premultiplied = unblend([r, g, b], bg, a)
+            cropped[di]     = UInt8(premultiplied[0])
+            cropped[di + 1] = UInt8(premultiplied[1])
+            cropped[di + 2] = UInt8(premultiplied[2])
+            cropped[di + 3] = UInt8(clamping: Int((255 * a).rounded()))
         }
     }
     // Scrub the sheet's ground rule. A few of its pixels touch the paws, so they survive
     // the pre-merge filter and come out as a bright line welded under the cat.
     for y in max(0, bh - 5)..<bh {
         var filled = 0
-        for x in 0..<bw where cropped[(y * bw + x) * 4 + 3] > 0 { filled += 1 }
+        for x in 0..<bw where cropped[(y * bw + x) * 4 + 3] > 128 { filled += 1 }
         if filled > bw * 6 / 10 {
             for x in 0..<bw { cropped[(y * bw + x) * 4 + 3] = 0 }
         }
