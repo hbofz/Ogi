@@ -32,7 +32,7 @@ public enum Sprites {
             case .sleep: 3
             case .idle: 4
             case .held: 3
-            case .alert: 2
+            case .alert: 3
             }
         }
 
