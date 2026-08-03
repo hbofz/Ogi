@@ -31,12 +31,15 @@ There is no account, no network, no telemetry, and no backend.
 
 ---
 
-## Status: v0.7
+## Status: v0.10
 
 He walks your window edges, jumps between them, falls when you close the one he is standing
 on, and **goes behind windows that are in front of him** — which nothing else on any platform
-does. His eyes follow your cursor. He settles when you stop typing, and freezes when your
-microphone goes live.
+does. He settles when you stop typing, and freezes when your microphone goes live.
+
+He is a ginger tabby, drawn across 48 frames in ten animations. Cursor-tracking eyes are built
+and currently switched off: painting a live pupil needs an empty socket in the artwork, and the
+drawn frames have the eye complete. See `docs/ART-BRIEF.md`.
 
 **Idle cost: 0.0% CPU, measured.** Once he is asleep the display link is stopped outright and
 he watches for your return once a second. The battery cost of a desktop pet is processor
