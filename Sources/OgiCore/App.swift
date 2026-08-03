@@ -187,7 +187,9 @@ public final class OgiApp: NSObject, NSApplicationDelegate {
             }
             return
         }
-        cat.repose = Repose.from(idleSeconds: sense.idleSeconds)
+        // Restless mode keeps him awake as well as impatient, or he simply sits down after
+        // 30s of you not touching the machine and there is nothing to watch.
+        cat.repose = Feel.Timing.restless ? .awake : Repose.from(idleSeconds: sense.idleSeconds)
         cat.listening = sense.micLive
         cat.languor = sense.languor
 
@@ -433,7 +435,11 @@ public final class OgiApp: NSObject, NSApplicationDelegate {
     private func logSupportChange(from before: Support) {
         switch (before, cat.support) {
         case (.grounded(let p), .falling):
-            log("FALL — \(p.id) went away under him at y=\(Int(cat.position.y))")
+            // A deliberate jump is also grounded -> falling, so distinguish them or every
+            // launch reads as his window having been closed.
+            log(cat.activity == .airborne
+                ? "JUMP from \(p.id) at y=\(Int(cat.position.y))"
+                : "FALL — \(p.id) went away under him at y=\(Int(cat.position.y))")
         case (.falling, .grounded(let p)):
             log("LAND on \(p.id) at y=\(Int(cat.position.y)) " +
                 "squash=\(String(format: "%.2f", cat.squash))")

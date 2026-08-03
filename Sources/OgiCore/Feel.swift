@@ -16,6 +16,9 @@ public enum Feel {
         public static let slipKick: CGFloat = 40
 
         public static let walkSpeed: CGFloat = 46          // px/s
+        public static let runSpeed: CGFloat = 118
+        /// Beyond this he trots rather than strolls.
+        public static let hurryDistance: CGFloat = 210
         /// He never arrives exactly on the mark.
         public static let arrivalSlop: CGFloat = 3
 
@@ -56,8 +59,11 @@ public enum Feel {
         /// The mid-air twist. Fixed duration, so he is always feet-down before he lands.
         public static let righting: TimeInterval = 0.18
 
-        public static let restMin: TimeInterval = 3.5
-        public static let restJitter: TimeInterval = 9.0
+        /// OGI_RESTLESS=1 collapses these so his behaviour can actually be watched.
+        /// Living with him wants long pauses; testing him does not.
+        public static let restMin: TimeInterval = restless ? 0.4 : 3.5
+        public static let restJitter: TimeInterval = restless ? 0.8 : 9.0
+        static let restless = ProcessInfo.processInfo.environment["OGI_RESTLESS"] != nil
     }
 
     public enum World {

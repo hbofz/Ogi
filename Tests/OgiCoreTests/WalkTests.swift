@@ -251,3 +251,18 @@ private func standing(at x: CGFloat, on s: Surface) -> CatState {
     #expect(abs(cat.velocity.dx) <= Feel.Physics.maxThrow)
     #expect(abs(cat.velocity.dy) <= Feel.Physics.maxThrow)
 }
+
+@Test func landingOnANewSurfaceDoesNotFakeADrift() {
+    // Regression: lastPerchOrigin kept pointing at the PREVIOUS window after a jump, so the
+    // first drift sample was the distance between two unrelated windows and he braced hard
+    // against a perfectly stationary ledge.
+    let here = surface(.window(1), y: 500, from: 0, to: 300)
+    let far = surface(.window(2), y: 520, from: 1200, to: 1600, z: 1)
+    var cat = standing(at: 150, on: here)
+    cat = Cat.step(cat, world: sky([here, far]), dt: dt)
+
+    cat.support = .grounded(Perch(id: .window(2), dx: 100))
+    for _ in 0..<Int(0.5 / dt) { cat = Cat.step(cat, world: sky([here, far]), dt: dt) }
+    #expect(abs(cat.lean) < 0.05, "he braced against a window that never moved")
+    #expect(cat.activity != .brace)
+}

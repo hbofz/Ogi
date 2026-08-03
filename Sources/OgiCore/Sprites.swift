@@ -74,10 +74,10 @@ public enum Sprites {
     }
 
     /// Which animation a given behaviour plays.
-    public static func clip(for activity: Activity, dangling: Bool) -> Clip {
+    public static func clip(for activity: Activity, dangling: Bool, hurrying: Bool = false) -> Clip {
         if dangling { return .held }
         switch activity {
-        case .walk:                 return .walk
+        case .walk:                 return hurrying ? .run : .walk
         case .crouch:               return .jump      // the wind-up frames
         case .airborne, .righting:  return .jump
         case .slip:                 return .fall
@@ -109,6 +109,19 @@ public enum Sprites {
         default:
             let raw = Int(elapsed * clip.fps)
             return clip.loops ? raw % clip.count : min(raw, clip.count - 1)
+        }
+    }
+
+    /// Where his feet are, as a fraction up from the bottom of the frame.
+    ///
+    /// Most sheets were drawn with a ground line, so the bottom of the band IS the floor.
+    /// Two were not: he is mid-air in `fall`, and in `held` he hangs from a hand that has
+    /// been erased, so anchoring those at the bottom would hang him by the tail.
+    static func footAnchor(_ clip: Clip) -> CGFloat {
+        switch clip {
+        case .held: return 0.86     // gripped by the scruff, near the top
+        case .fall: return 0.30     // mid-air, no ground in the sheet
+        default:    return 0
         }
     }
 

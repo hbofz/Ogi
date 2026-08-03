@@ -211,7 +211,6 @@ final class OgiView: NSView {
         let origin = padded.origin   // children are positioned relative to the container
 
         // Anchor at the feet so squash keeps them planted.
-        bodyLayer.anchorPoint = CGPoint(x: 0.5, y: 0)
         bodyLayer.position = CGPoint(x: cat.position.x - origin.x, y: cat.position.y - origin.y)
         // Squash, plus a lean into the motion of whatever he is standing on. Rotating
         // about the feet (the anchor point) is what makes it read as bracing rather than
@@ -221,10 +220,12 @@ final class OgiView: NSView {
         // sliding: his paws stay put and his body tips.
         let s = cat.scale
         let lean = -cat.lean * Feel.Physics.maxLean * cat.facing
-        let clip = Sprites.clip(for: cat.activity, dangling: pose.dangling)
+        let clip = Sprites.clip(for: cat.activity, dangling: pose.dangling,
+                                hurrying: cat.hurrying)
         let idx = Sprites.index(clip, activity: cat.activity,
                                 walkPhase: pose.walkPhase, elapsed: cat.activityElapsed)
         let size = Sprites.size(clip, idx)
+        bodyLayer.anchorPoint = CGPoint(x: 0.5, y: Sprites.footAnchor(clip))
         bodyLayer.contents = Sprites.image(clip, idx)
         // Nearest-neighbour: these are pixel art, and smoothing turns crisp edges to mush.
         bodyLayer.magnificationFilter = .nearest

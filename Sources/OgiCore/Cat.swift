@@ -92,6 +92,10 @@ public struct CatState: Sendable {
     public var drift: CGFloat = 0
     /// Internal to the drift low-pass. Public only because `Cat.step` is a free function.
     public var lastPerchOrigin: CGFloat?
+    /// Which surface `lastPerchOrigin` belongs to. Without this, landing on a new window
+    /// measures drift as the distance between two unrelated windows and he braces hard
+    /// against a perfectly stationary ledge.
+    public var lastPerchID: SurfaceID?
 
     /// -1..1. How hard he is leaning against the motion of his platform.
     public var lean: CGFloat {
@@ -111,6 +115,8 @@ public struct CatState: Sendable {
     public var righting: CGFloat = 1
     /// 0..1. Low battery or Low Power Mode. He moves less and settles sooner.
     public var languor: Double = 0
+    /// Covering a long distance, so he trots instead of strolling.
+    public var hurrying = false
 
     public init(position: CGPoint, velocity: CGVector = .zero) {
         self.position = position
@@ -184,8 +190,11 @@ public enum Cat {
             // drift is zero on most ticks and a big step on the others. Low-pass it hard
             // rather than differentiating, which would produce spikes.
             let origin = surface.extent.lowerBound
-            let step = origin - (s.lastPerchOrigin ?? origin)
+            let sameSurface = s.lastPerchID == perch.id
+            let step = sameSurface ? origin - (s.lastPerchOrigin ?? origin) : 0
+            if !sameSurface { s.drift = 0 }
             s.lastPerchOrigin = origin
+            s.lastPerchID = perch.id
             s.drift += (step - s.drift) * Feel.Physics.driftSmoothing
 
             s.position = CGPoint(x: origin + perch.dx, y: surface.y)
@@ -296,12 +305,17 @@ public enum Cat {
             let dx = targetX - s.position.x
             if abs(dx) < Feel.Physics.arrivalSlop {
                 s.goal = nil
+                s.hurrying = false
                 s.activity = .idle
                 s.activityElapsed = 0
                 s.restLeft = Feel.Timing.restMin + Double.random(in: 0...Feel.Timing.restJitter)
             } else {
                 s.facing = dx > 0 ? 1 : -1
-                let speed = Feel.Physics.walkSpeed * (1 - CGFloat(s.languor) * 0.45)
+                // Long trips are covered at a trot. A cat crossing a room does not stroll,
+                // and it is also the only thing that ever plays the run frames.
+                s.hurrying = abs(dx) > Feel.Physics.hurryDistance && s.languor < 0.5
+                let base = s.hurrying ? Feel.Physics.runSpeed : Feel.Physics.walkSpeed
+                let speed = base * (1 - CGFloat(s.languor) * 0.45)
                 let step = min(abs(dx), speed * CGFloat(dt)) * s.facing
                 perch.dx = clampToSurface(perch.dx + step, surface)
                 s.support = .grounded(perch)
