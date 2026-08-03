@@ -257,14 +257,18 @@ final class OgiView: NSView {
                 let r = CGRect(x: unit.minX * size.width, y: unit.minY * size.height,
                                width: unit.width * size.width, height: unit.height * size.height)
                 // The pupil rides inside its own socket rather than on top of the whole head,
-                // so it stays put when the socket is small or partly hidden.
-                let pr = min(r.width, r.height) * Feel.Eyes.pupilRadius
-                let travelX = max(r.width / 2 - pr, 0), travelY = max(r.height / 2 - pr, 0)
+                // so it stays put when the socket is small or partly hidden. Width and height
+                // are taken from the socket separately: a cat's pupil is a vertical slit, and
+                // one radius off the smaller dimension draws a disc that fills the whole eye.
+                let rx = r.width * Feel.Eyes.pupilWidth / 2
+                let ry = r.height * Feel.Eyes.pupilHeight / 2
+                let travelX = max(r.width / 2 - rx, 0), travelY = max(r.height / 2 - ry, 0)
                 let c = CGPoint(x: r.midX + gaze.offset.x * travelX * cat.facing,
                                 y: r.midY + gaze.offset.y * travelY)
                 // Blink closes the socket vertically, and the pupil closes with it.
-                let ry = pr * max(gaze.lid, 0.05)
-                pupils.addEllipse(in: CGRect(x: c.x - pr, y: c.y - ry, width: pr * 2, height: ry * 2))
+                let lidY = ry * max(gaze.lid, 0.05)
+                pupils.addEllipse(in: CGRect(x: c.x - rx, y: c.y - lidY,
+                                             width: rx * 2, height: lidY * 2))
             }
             pupilLayer.path = pupils
         }

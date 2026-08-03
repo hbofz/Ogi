@@ -139,8 +139,16 @@ extension Feel {
         public static let asymmetry: CGFloat = 0.80
         // Sized against a head radius of H*0.19 (~6pt). Anything larger reads as googly
         // eyes rather than as a cat, which was the first thing wrong with this.
-        /// Pupil size as a fraction of the smaller socket dimension.
-        public static let pupilRadius: CGFloat = 0.34
+        //
+        // Width and height are separate because a cat's pupil is a vertical slit, not a disc.
+        // Measured off the drawn eyes on the original sheets, where the pupil is consistently
+        // about two-fifths of the socket's width and three-fifths of its height. A single
+        // radius made it 0.68 of the width — a fat circle nearly filling the eye, which read
+        // as a googly cartoon rather than as this cat.
+        /// Pupil width as a fraction of the socket's width.
+        public static let pupilWidth: CGFloat = 0.39
+        /// Pupil height as a fraction of the socket's height.
+        public static let pupilHeight: CGFloat = 0.61
         public static let radiusX: CGFloat = 1.9
         public static let radiusY: CGFloat = 2.2
         public static let heightFraction: CGFloat = 0.78   // × body height, for the head
