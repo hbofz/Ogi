@@ -236,48 +236,12 @@ final class OgiView: NSView {
             CATransform3DMakeScale(s.width * cat.facing, s.height, 1),
             CATransform3DMakeRotation(lean, 0, 0, 1))
 
-        // Live pupils, dropped into the empty amber socket the artwork leaves for them.
-        //
-        // This was tried once before and removed, because back then every frame had a pupil
-        // already painted in: the only way to move one was to repaint the whole socket first,
-        // and a drawn-on ellipse never matched a hand-drawn eye. The fix was in the art, not
-        // here. Sheets drawn to docs/ART-BRIEF.md have a flat featureless socket, so there is
-        // nothing to paint over and nothing to mismatch — hence no `eyesLayer` fill at all.
-        //
-        // Clips that predate the brief keep their drawn eyes. Painting a second pupil on top
-        // of an existing one is exactly the failure that got this removed the first time, so
-        // the switch is per clip and each sheet lights up as it is redrawn.
+        // No live pupils. The drawn frames carry their own eyes and that is deliberate for
+        // now: painting a tracking pupil needs an empty socket in the artwork, and the sheets
+        // are drawn with the eye complete. Gaze is still computed and still passed in, so this
+        // is a decision about rendering rather than a capability that was thrown away.
         eyesLayer.path = nil
-        let sockets = Sprites.isCurrentArt(clip) ? Sprites.eyes(clip, idx) : []
-        if sockets.isEmpty || cat.activity == .sleep || cat.activity == .curl {
-            pupilLayer.path = nil        // asleep: the drawn closed eyes are correct
-        } else {
-            let pupils = CGMutablePath()
-            for unit in sockets {
-                let r = CGRect(x: unit.minX * size.width, y: unit.minY * size.height,
-                               width: unit.width * size.width, height: unit.height * size.height)
-                // The pupil rides inside its own socket rather than on top of the whole head,
-                // so it stays put when the socket is small or partly hidden. Width and height
-                // are taken from the socket separately: a cat's pupil is a vertical slit, and
-                // one radius off the smaller dimension draws a disc that fills the whole eye.
-                let rx = r.width * Feel.Eyes.pupilWidth / 2
-                let ry = r.height * Feel.Eyes.pupilHeight / 2
-                let travelX = max(r.width / 2 - rx, 0), travelY = max(r.height / 2 - ry, 0)
-                let c = CGPoint(x: r.midX + gaze.offset.x * travelX * cat.facing,
-                                y: r.midY + gaze.offset.y * travelY)
-                // Blink closes the socket vertically, and the pupil closes with it.
-                let lidY = ry * max(gaze.lid, 0.05)
-                pupils.addEllipse(in: CGRect(x: c.x - rx, y: c.y - lidY,
-                                             width: rx * 2, height: lidY * 2))
-            }
-            pupilLayer.path = pupils
-        }
-        // The pupil layer has to carry the body's exact geometry, or the pupils slide off his
-        // face the moment he squashes, leans or turns around.
-        pupilLayer.anchorPoint = bodyLayer.anchorPoint
-        pupilLayer.bounds = bodyLayer.bounds
-        pupilLayer.position = bodyLayer.position
-        pupilLayer.transform = bodyLayer.transform
+        pupilLayer.path = nil
 
         applyOcclusion(occluders, in: padded)
 

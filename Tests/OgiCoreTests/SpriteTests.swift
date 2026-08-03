@@ -2,6 +2,11 @@ import Testing
 import CoreGraphics
 @testable import OgiCore
 
+/// Clips regenerated against the current `art/character.png`. Add each name as its sheet
+/// lands. Kept by hand on purpose: the old version inferred this from eye colour, which
+/// stopped meaning anything the moment the cat himself became ginger.
+private let redrawnClips: Set<String> = []
+
 /// The drawn frames come from separately-generated sheets that draw him at wildly different
 /// sizes, so `Sprites` rescales each clip to make him one cat. These check that it works,
 /// because when it does not the failure is subtle on any single frame and glaring in motion.
@@ -20,7 +25,7 @@ import CoreGraphics
     // measurement, and the fix is the sheet, not the code. So this covers the art that has
     // been redrawn, and gains teeth with each sheet that lands.
     let clips: [Sprites.Clip] = [.walk, .idle, .jump, .land, .fall, .run, .alert, .sitdown, .sleep]
-        .filter(Sprites.isCurrentArt)
+        .filter { redrawnClips.contains($0.rawValue) }
     guard clips.count > 1 else { return }   // nothing to compare yet
     let heights: [(Sprites.Clip, CGFloat)] = clips.compactMap { clip in
         let sizes = (0..<clip.count).map { Sprites.size(clip, $0).height }
@@ -37,54 +42,6 @@ import CoreGraphics
     let spread = heights.sorted { $0.1 < $1.1 }
         .map { "\($0.0.rawValue) \(Int($0.1))" }.joined(separator: ", ")
     #expect(largest / smallest < 2.0, "he changes size between animations: \(spread)")
-}
-
-@MainActor
-@Test func theArtMigrationIsWhereWeThinkItIs() {
-    // everyClipRendersHimTheSameSize only covers regenerated clips, so if this drifted to
-    // "none of them" that test would pass by checking nothing. Update the list as sheets land.
-    let redrawn: Set<String> = ["walk"]
-    for clip in [Sprites.Clip.walk, .idle, .jump, .land, .fall, .run, .alert, .sitdown, .held, .sleep] {
-        #expect(Sprites.isCurrentArt(clip) == redrawn.contains(clip.rawValue),
-                "\(clip.rawValue): regenerated-art detection disagrees with the list above")
-    }
-}
-
-@MainActor
-@Test func noFrameRendersWithAnOrangeEye() {
-    // The sheets are drawn with amber eyes and Sprites strips the hue on load. This checks the
-    // result rather than the rule, so a future sheet whose amber sits outside the expected
-    // range fails here instead of shipping one orange-eyed animation among nine white ones.
-    for clip in [Sprites.Clip.walk, .idle, .jump, .land, .fall, .run, .alert, .sitdown, .held, .sleep] {
-        for i in 0..<clip.count {
-            guard let img = Sprites.image(clip, i) else { continue }
-            let w = img.width, h = img.height
-            var px = [UInt8](repeating: 0, count: w * h * 4)
-            px.withUnsafeMutableBytes { buf in
-                CGContext(data: buf.baseAddress, width: w, height: h, bitsPerComponent: 8,
-                          bytesPerRow: w * 4, space: CGColorSpaceCreateDeviceRGB(),
-                          bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue)?
-                    .draw(img, in: CGRect(x: 0, y: 0, width: w, height: h))
-            }
-            let orange = (0..<(w * h)).filter {
-                px[$0 * 4 + 3] > 128 && px[$0 * 4] > 180
-                    && Int(px[$0 * 4]) > Int(px[$0 * 4 + 2]) + 60 && px[$0 * 4] > px[$0 * 4 + 1]
-            }
-            #expect(orange.isEmpty, "\(clip.rawValue)\(i): \(orange.count) orange px survived")
-        }
-    }
-}
-
-@MainActor
-@Test func redrawnClipsHaveABrightSocketToPaintAPupilInto() {
-    // Recolouring must leave the socket bright enough for eyes() to find, or the pupil has
-    // nowhere to go and clipScale loses its reference at the same time.
-    for clip in [Sprites.Clip.walk, .idle, .jump, .land, .fall, .run, .alert, .sitdown, .held, .sleep]
-    where Sprites.isCurrentArt(clip) {
-        let framesWithEyes = (0..<clip.count).filter { !Sprites.eyes(clip, $0).isEmpty }
-        #expect(framesWithEyes.count == clip.count,
-                "\(clip.rawValue): only \(framesWithEyes.count)/\(clip.count) frames kept a findable eye")
-    }
 }
 
 @MainActor

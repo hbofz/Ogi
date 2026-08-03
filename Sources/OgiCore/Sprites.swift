@@ -24,7 +24,7 @@ public enum Sprites {
 
         var count: Int {
             switch self {
-            case .walk: 9
+            case .walk: 8
             case .jump, .run: 6
             case .idle, .land, .fall, .sitdown, .sleep: 4
             case .held: 3
@@ -69,56 +69,8 @@ public enum Sprites {
               let src = NSImage(data: data),
               let cg = src.cgImage(forProposedRect: nil, context: nil, hints: nil)
         else { return nil }
-        let out = whitenEyes(cg, key: name)
-        cache[name] = out
-        return out
-    }
-
-    /// Which sheets were drawn to `docs/ART-BRIEF.md`, keyed by frame. Set during load,
-    /// because having an orange eye to strip is exactly what identifies them.
-    private static var redrawn: [String: Bool] = [:]
-
-    /// His eyes are drawn amber, and amber is not what he looks like.
-    ///
-    /// Rather than repaint ten sheets, the hue is stripped once at load: every orange pixel
-    /// becomes a neutral of its own brightness, so the socket keeps its hand-drawn outline
-    /// and its internal shading and loses only the colour. Stamping a white ellipse over the
-    /// top instead is the approach that was already tried and removed, because a drawn-on
-    /// ellipse never matches a hand-drawn shape.
-    private static func whitenEyes(_ img: CGImage, key: String) -> CGImage {
-        let w = img.width, h = img.height
-        var px = [UInt8](repeating: 0, count: w * h * 4)
-        px.withUnsafeMutableBytes { buf in
-            CGContext(data: buf.baseAddress, width: w, height: h, bitsPerComponent: 8,
-                      bytesPerRow: w * 4, space: CGColorSpaceCreateDeviceRGB(),
-                      bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue)?
-                .draw(img, in: CGRect(x: 0, y: 0, width: w, height: h))
-        }
-        // Orange: red clearly leads blue and the channels descend. His warm ear pink and his
-        // grey whiskers both fail the first test, so on a redrawn sheet this finds only the
-        // eye — including the amber's darker rim, which has to shade down with the rest or it
-        // is left behind as an orange outline around a white eye.
-        func isOrange(_ i: Int) -> Bool {
-            px[i * 4 + 3] > 128 && Int(px[i * 4]) > Int(px[i * 4 + 2]) + 60
-                && px[i * 4] > px[i * 4 + 1] && px[i * 4 + 1] > px[i * 4 + 2]
-        }
-        // Decide per frame before touching anything, because "orange" alone is not specific
-        // enough: the `held` sheet was drawn with a human hand holding him, and the skin left
-        // behind after DROP_WARM is orange too. Skin is dark (r≈116) and an amber eye is not
-        // (r≈250), so requiring real brightness separates them — and gating the whole frame on
-        // it means a sheet with no eye to recolour is passed through completely untouched.
-        let hasAmberEye = (0..<(w * h)).contains { isOrange($0) && px[$0 * 4] > 180 }
-        redrawn[key] = hasAmberEye
-        guard hasAmberEye else { return img }
-        for i in 0..<(w * h) where isOrange(i) {
-            px[i * 4 + 1] = px[i * 4]; px[i * 4 + 2] = px[i * 4]
-        }
-        let recoloured = px.withUnsafeMutableBytes { buf in
-            CGContext(data: buf.baseAddress, width: w, height: h, bitsPerComponent: 8,
-                      bytesPerRow: w * 4, space: CGColorSpaceCreateDeviceRGB(),
-                      bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue)?.makeImage()
-        }
-        return recoloured ?? img
+        cache[name] = cg
+        return cg
     }
 
     /// Which animation a given behaviour plays.
@@ -174,17 +126,21 @@ public enum Sprites {
     }
 
     /// Where his eyes are in a given frame, in unit coordinates (0..1 from the bottom-left
-    /// of the sprite), so the renderer can put a live pupil inside the drawn eye.
+    /// of the sprite).
     ///
-    /// Found rather than authored: he is a black cat, so the only bright pixels in any frame
-    /// ARE his eyes. That means this keeps working for frames nobody has annotated, including
-    /// any new sheet dropped in later.
+    /// Found rather than authored, so it keeps working on any sheet dropped in later without
+    /// anyone annotating it. This is load-bearing rather than cosmetic: `clipScale` normalises
+    /// every animation on eye width, so a clip whose eyes are not found renders at the wrong
+    /// size, and it does that silently.
     ///
-    /// Two palettes, because the sheets were not all drawn at once: the original cat has white
-    /// eyes and everything generated against `docs/ART-BRIEF.md` has amber ones. Matching both
-    /// is what lets a new sheet drop in beside the old ones instead of replacing all ten at
-    /// once — and it is load-bearing, not cosmetic. `clipScale` normalises every animation on
-    /// eye width, so a clip whose eyes are not found silently renders at the wrong size.
+    /// The eye is whatever stands furthest from the fur, and which direction that is depends on
+    /// the cat. The original was black with white eyes, so his eyes were the brightest thing on
+    /// him. The ginger tabby in `art/character.png` inverts it: he is a mid-value orange and his
+    /// eyes are near-black, the darkest thing on him. Matching both is what lets the sheets be
+    /// replaced one at a time instead of all ten at once.
+    ///
+    /// Which of the two applies is decided from the fur rather than configured, so a new sheet
+    /// still needs no annotation.
     public static func eyes(_ clip: Clip, _ index: Int) -> [CGRect] {
         let key = "\(clip.rawValue)\(index)"
         if let e = eyeCache[key] { return e }
@@ -198,12 +154,36 @@ public enum Sprites {
                 .draw(img, in: CGRect(x: 0, y: 0, width: w, height: h))
         }
 
-        var seen = [Bool](repeating: false, count: w * h)
-        // One test for both palettes: `image` has already stripped the hue out of an amber
-        // socket, so by the time this runs every eye in every sheet is a bright neutral blob.
-        func isEye(_ i: Int) -> Bool {
+        /// White eyes, as the black cat has.
+        func isPale(_ i: Int) -> Bool {
             px[i * 4 + 3] > 128 && px[i * 4] > 200 && px[i * 4 + 1] > 200 && px[i * 4 + 2] > 200
         }
+        /// Near-black eyes, as the ginger tabby has. Dark *and neutral*: his outline is dark
+        /// too, but warm (r≈128 against g≈48), so requiring the red channel down with the rest
+        /// keeps the outline out. His cream belly and paws stop short of `isPale` for the same
+        /// kind of reason — their blue channel never reaches it.
+        func isInky(_ i: Int) -> Bool {
+            px[i * 4 + 3] > 128 && px[i * 4] < 80 && px[i * 4 + 1] < 80 && px[i * 4 + 2] < 90
+        }
+
+        var ink = 0, inky = 0
+        for i in 0..<(w * h) where px[i * 4 + 3] > 128 {
+            ink += 1
+            if isInky(i) { inky += 1 }
+        }
+
+        // Which test finds the eye depends on the cat, so ask the fur. A black cat is almost
+        // entirely inky (88% of his pixels), which means his eyes cannot be the dark ones; a
+        // ginger tabby is barely inky at all, so his eyes are exactly the dark ones.
+        //
+        // This has to be a choice rather than the union of both tests. Matching either one in
+        // a single flood fill merges a white eye into the black fur it sits against, and the
+        // combined blob is then the whole animal: `walk`, `jump` and `sitdown` found no eyes
+        // at all that way, and `held` found twenty.
+        let eyesAreInky = inky * 2 < ink
+        func isEye(_ i: Int) -> Bool { eyesAreInky ? isInky(i) : isPale(i) }
+
+        var seen = [Bool](repeating: false, count: w * h)
 
         var found: [CGRect] = []
         for start in 0..<(w * h) where !seen[start] && isEye(start) {
@@ -223,18 +203,20 @@ public enum Sprites {
             }
             // Whiskers and highlights are thin; an eye is a chunky blob.
             guard count > 12, maxX - minX > 2, maxY - minY > 2 else { continue }
+            // An eye is a feature, not the animal. Without this the dark test would match the
+            // whole of a black cat as one blob and hand back his entire silhouette as an eye,
+            // which is both wrong and the largest thing on the frame, so it would win.
+            guard count * 6 < ink else { continue }
             // On the white-eyed sheets his paws and chest have white in them too, and they
             // were being drawn as extra eyes on his leg. Eyes live in the head, which is in
             // the upper half of the frame — including when he is upside down mid-fall,
             // because the frames are drawn head-up.
             //
-            // This is a workaround for one palette, so it is scoped to that palette. The
-            // redrawn sheets have nothing white on them except the eye, so they need no
-            // positional test — and must not get one, because it is only ever approximately
-            // true. A leaping cat's head is not in the top half of his own bounding box (his
-            // arched back and tail are above it), so any tighter version of this guard throws
-            // away the real eyes on `jump`.
-            guard redrawn[key] == true || (minY + maxY) / 2 < h / 2 else { continue }
+            // Scoped to that palette, because it is only ever approximately true and the dark
+            // test does not need it: a leaping cat's head is not in the top half of his own
+            // bounding box (his arched back and tail are above it), so any tighter version of
+            // this guard throws away the real eyes on `jump`.
+            guard eyesAreInky || (minY + maxY) / 2 < h / 2 else { continue }
             // CGImage y runs downward; the layer works bottom-up.
             found.append(CGRect(x: CGFloat(minX) / CGFloat(w),
                                 y: 1 - CGFloat(maxY) / CGFloat(h),
@@ -249,22 +231,6 @@ public enum Sprites {
     }
 
     private static var eyeCache: [String: [CGRect]] = [:]
-
-    /// Whether this clip was drawn to `docs/ART-BRIEF.md`, identified by the amber eye that
-    /// `whitenEyes` stripped out of it on the way in.
-    ///
-    /// The brief specifies a flat featureless socket, so these clips have an empty eye the
-    /// renderer can paint a live cursor-tracking pupil into. The older sheets have a pupil
-    /// painted in already; drawing a second one on top of that is exactly what got cursor
-    /// tracking switched off once, so those clips keep their drawn eyes until redrawn.
-    public static func isCurrentArt(_ clip: Clip) -> Bool {
-        for i in 0..<clip.count {
-            let key = "\(clip.rawValue)\(i)"
-            _ = image(clip, i)                       // populates `redrawn` as a side effect
-            if redrawn[key] == true { return true }
-        }
-        return false
-    }
 
     /// How much to scale a clip so he is the same size in all of them.
     ///
