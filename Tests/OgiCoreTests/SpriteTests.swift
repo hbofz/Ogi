@@ -5,7 +5,7 @@ import CoreGraphics
 /// Clips regenerated against the current `art/character.png`. Add each name as its sheet
 /// lands. Kept by hand on purpose: the old version inferred this from eye colour, which
 /// stopped meaning anything the moment the cat himself became ginger.
-private let redrawnClips: Set<String> = ["walk", "fall", "land", "idle", "jump", "run", "sitdown"]
+private let redrawnClips: Set<String> = ["walk", "fall", "land", "idle", "jump", "run", "sitdown", "sleep"]
 
 /// The drawn frames come from separately-generated sheets that draw him at wildly different
 /// sizes, so `Sprites` rescales each clip to make him one cat. These check that it works,

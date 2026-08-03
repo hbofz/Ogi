@@ -29,7 +29,8 @@ public enum Sprites {
             case .fall: 6
             case .land: 3
             case .sitdown: 5
-            case .idle, .sleep: 4
+            case .sleep: 3
+            case .idle: 4
             case .held: 3
             case .alert: 2
             }
