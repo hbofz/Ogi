@@ -63,6 +63,12 @@ public enum Feel {
         /// Living with him wants long pauses; testing him does not.
         public static let restMin: TimeInterval = restless ? 0.4 : 3.5
         public static let restJitter: TimeInterval = restless ? 0.8 : 9.0
+        /// How long one washing bout lasts. Six lick cycles at the clip's 8fps.
+        public static let groomSeconds: TimeInterval = 4.5
+        /// Chance that a bout of boredom becomes a wash rather than a trip somewhere.
+        /// Manifesto §7.1 wants an occasional in-place behaviour roughly every few minutes,
+        /// and washing is currently the only one of those that exists.
+        public static let groomChance: Double = 0.15
         static let restless = ProcessInfo.processInfo.environment["OGI_RESTLESS"] != nil
     }
 

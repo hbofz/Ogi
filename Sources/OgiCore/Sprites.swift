@@ -20,7 +20,7 @@ public enum Sprites {
 
     /// Ordered frames per animation. Names match the files in Resources/Sprites.
     public enum Clip: String {
-        case walk, idle, jump, land, fall, run, alert, sitdown, held, sleep
+        case walk, idle, jump, land, fall, run, alert, sitdown, held, sleep, groom
 
         var count: Int {
             switch self {
@@ -34,6 +34,7 @@ public enum Sprites {
             case .idle: 4
             case .held: 4
             case .alert: 3
+            case .groom: 6
             }
         }
 
@@ -50,12 +51,15 @@ public enum Sprites {
             case .sitdown: 8
             case .held: 4
             case .alert: 1.2
+            case .groom: 8
             }
         }
 
         var loops: Bool {
             switch self {
-            case .walk, .run, .idle, .sleep, .held, .alert: true
+            // groom loops: a cat washing does it for a while, and the sheet's last frame
+            // returns to the sitting pose it started from, so the seam is invisible.
+            case .walk, .run, .idle, .sleep, .held, .alert, .groom: true
             case .jump, .land, .fall, .sitdown: false
             }
         }
@@ -93,6 +97,7 @@ public enum Sprites {
         case .sit:                  return .sitdown
         case .curl, .sleep:         return .sleep
         case .alert, .brace:        return .alert
+        case .groom:                return .groom
         case .idle:                 return .idle
         }
     }

@@ -22,6 +22,7 @@ public enum Support: Sendable, Equatable {
 
 public enum Activity: Sendable, Equatable {
     case idle
+    case groom      // washing, in place, while awake
     case sit        // no input for a while; cats settle when the room goes quiet
     case curl
     case sleep
@@ -299,13 +300,31 @@ public enum Cat {
 
         switch s.goal {
         case nil:
+            // Already washing: keep at it for a few seconds, then settle back. Anything that
+            // actually matters — settling to sleep, the mic going live — is handled above this
+            // and overrides it, which is the right precedence.
+            if s.activity == .groom {
+                if s.activityElapsed > Feel.Timing.groomSeconds {
+                    s.activity = .idle
+                    s.activityElapsed = 0
+                    s.restLeft = Feel.Timing.restMin + Double.random(in: 0...Feel.Timing.restJitter)
+                }
+                break
+            }
             // Nothing to do. Sit still until boredom wins.
             // Low battery makes him idle longer. A sluggish cat means plug in.
             s.restLeft -= dt * (1 - s.languor * 0.6)
-            if s.restLeft <= 0, let goal = pickGoal(from: s, on: surface, world: world) {
-                s.goal = goal
-                s.activity = (goal.isJump ? .crouch : .walk)
-                s.activityElapsed = 0
+            if s.restLeft <= 0 {
+                // Boredom does not always mean going somewhere. Sometimes he just washes,
+                // which is the difference between a creature and a pathfinding demo.
+                if Double.random(in: 0...1) < Feel.Timing.groomChance {
+                    s.activity = .groom
+                    s.activityElapsed = 0
+                } else if let goal = pickGoal(from: s, on: surface, world: world) {
+                    s.goal = goal
+                    s.activity = (goal.isJump ? .crouch : .walk)
+                    s.activityElapsed = 0
+                }
             }
 
         case .walkTo(let targetX):

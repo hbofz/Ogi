@@ -175,3 +175,29 @@ private let dt = Feel.Timing.fixedDT
                 "drew \(Sprites.clip(for: cat.activity, dangling: false)) after being dropped")
     }
 }
+
+@MainActor
+@Test func heSometimesWashesInsteadOfGoingSomewhere() {
+    // Manifesto §7.1 wants an occasional in-place behaviour while awake. The failure this
+    // guards is a wash that never ends: `groom` has no goal, so it sits in the same branch as
+    // resting and would loop forever if the timeout were dropped.
+    let ground = surface(.window(1), y: 500, from: 0, to: 900)
+    var grooming = 0, longest = 0.0
+    for seed in 0..<400 {
+        var cat = CatState(position: CGPoint(x: 400 + CGFloat(seed % 5), y: 500))
+        cat.support = .grounded(Perch(id: .window(1), dx: 400))
+        cat.restLeft = 0
+        var elapsed = 0.0, thisBout = 0.0
+        while elapsed < 20 {
+            cat = Cat.step(cat, world: sky([ground]), dt: dt)
+            elapsed += dt
+            if cat.activity == .groom { thisBout += dt; longest = max(longest, thisBout) }
+            else { thisBout = 0 }
+        }
+        if longest > 0 { grooming += 1 }
+    }
+    #expect(grooming > 0, "he never washed in 400 runs")
+    #expect(longest < Feel.Timing.groomSeconds + 1,
+            "a washing bout ran \(longest)s and should cap at \(Feel.Timing.groomSeconds)s")
+    #expect(Sprites.clip(for: .groom, dangling: false) == .groom)
+}
