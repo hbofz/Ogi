@@ -71,21 +71,61 @@ public final class OgiApp: NSObject, NSApplicationDelegate {
             self.overlay.resume()
         }
 
-        poll(force: true)
-        // Drop him in from above the middle of the screen so the first thing he does is fall.
-        // OGI_START="x,y" overrides it. M0 scaffolding: the fall is the behaviour that
-        // matters most and it needs to be droppable onto a known window to be testable.
-        var start = CGPoint(x: screen.frame.midX, y: screen.frame.maxY - 60)
-        if let env = ProcessInfo.processInfo.environment["OGI_START"] {
-            let parts = env.split(separator: ",").compactMap { Double($0) }
-            if parts.count == 2 { start = CGPoint(x: parts[0], y: parts[1]) }
+        if debug {
+            // Lets the harness exercise the goodbye. A hang on quit would be the worst bug
+            // in the app, and clicking a menu bar item is not automatable without granting
+            // Accessibility, which this app refuses to ask for even in tests.
+            DistributedNotificationCenter.default().addObserver(
+                forName: .init("com.ogi.debug.quit"), object: nil, queue: .main) { [weak self] _ in
+                MainActor.assumeIsolated { self?.goHomeAndQuit() }
+            }
         }
-        cat = CatState(position: start)
+
+        poll(force: true)
+        cat = arrival(on: screen)
         overlay.start()
 
         let g = ScreenGeometry(screen)
         log("screen=\(g.frame) visible=\(g.visibleFrame) notch=\(g.notch.map { "\($0)" } ?? "none")")
     }
+
+    /// First launch: the notch opens and a cat walks out. That is the entire onboarding.
+    ///
+    /// He cannot be *rendered* inside the notch — it is a hardware cutout with no pixels
+    /// behind it — but he does not need to be. He is near-black and the cutout is black, so
+    /// parking him at the notch's centre makes him genuinely invisible, and walking sideways
+    /// brings him out into the lit menu bar strip. A black cat leaving a black doorway,
+    /// achieved by the geometry rather than in spite of it.
+    private func arrival(on screen: NSScreen) -> CatState {
+        // OGI_START="x,y" drops him somewhere specific instead. Test scaffolding.
+        if let env = ProcessInfo.processInfo.environment["OGI_START"] {
+            let parts = env.split(separator: ",").compactMap { Double($0) }
+            if parts.count == 2 {
+                return CatState(position: CGPoint(x: parts[0], y: parts[1]))
+            }
+        }
+
+        let g = ScreenGeometry(screen)
+        guard let notch = g.notch, let bar = skyline.surface(.menuBar) else {
+            // No notch, or no menu bar to walk out onto: he simply drops in.
+            return CatState(position: CGPoint(x: screen.frame.midX, y: screen.frame.maxY - 60))
+        }
+
+        var c = CatState(position: CGPoint(x: notch.midX, y: bar.y))
+        c.support = .grounded(Perch(id: .menuBar, dx: notch.midX - bar.extent.lowerBound))
+        c.activity = .walk
+        // Out the side with more room, and far enough to clear the cutout entirely.
+        let goRight = (screen.frame.maxX - notch.maxX) > notch.minX
+        c.goal = .walkTo(goRight ? notch.maxX + Feel.Shape.width : notch.minX - Feel.Shape.width)
+        c.facing = goRight ? 1 : -1
+        c.restLeft = Feel.Timing.restMin
+        homeX = notch.midX
+        return c
+    }
+
+    /// Where he goes to be gone. Nil on a Mac with no notch.
+    private var homeX: CGFloat?
+    private var leaving = false
 
     private func setupStatusItem() {
         // LSUIElement means no Dock icon, which is the point, but it also means no obvious
@@ -94,8 +134,31 @@ public final class OgiApp: NSObject, NSApplicationDelegate {
         statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
         statusItem.button?.title = "🐈‍⬛"
         let menu = NSMenu()
-        menu.addItem(NSMenuItem(title: "Quit Ogi", action: #selector(NSApplication.terminate(_:)), keyEquivalent: "q"))
+        menu.addItem(NSMenuItem(title: "Quit Ogi", action: #selector(goHomeAndQuit), keyEquivalent: "q"))
+        menu.items.last?.target = self
         statusItem.menu = menu
+    }
+
+    /// A goodbye, not a process termination. He walks back into the notch and it closes
+    /// behind him.
+    @objc private func goHomeAndQuit() {
+        guard let homeX, !leaving, case .grounded = cat.support else {
+            NSApp.terminate(nil)
+            return
+        }
+        leaving = true
+        overlay.resume()
+        leaveSlumber()
+        cat.listening = false
+        cat.repose = .awake
+        cat.goal = .walkTo(homeX)
+        cat.support = .grounded(Perch(id: .menuBar,
+                                      dx: cat.position.x - (skyline.surface(.menuBar)?.extent.lowerBound ?? 0)))
+        cat.position.y = skyline.surface(.menuBar)?.y ?? cat.position.y
+        log("going home")
+        // Never hang on the way out. Generous enough to cover the longest walk home from
+        // anywhere on a wide screen, because quitting must never wait on the animation.
+        DispatchQueue.main.asyncAfter(deadline: .now() + 8) { NSApp.terminate(nil) }
     }
 
     // MARK: - The one clock
@@ -104,6 +167,26 @@ public final class OgiApp: NSObject, NSApplicationDelegate {
         if lastTick == 0 { lastTick = now; return }
 
         sense = signals.sample(now: now)
+
+        // Advance the clock BEFORE any early return, or a path that skips it steps the
+        // physics zero times and he stands frozen while the world moves around him.
+        //
+        // The clamp is NOT optional either: without it the first tick after the display
+        // link resumes from screen lock integrates a multi-hour delta and launches him
+        // into orbit.
+        accumulator += min(now - lastTick, Feel.Timing.maxFrameDelta)
+        lastTick = now
+
+        if leaving {
+            // On the way out he ignores the machine entirely and just walks home.
+            stepPhysics(now)
+            renderNow()
+            if let homeX, abs(cat.position.x - homeX) < Feel.Physics.arrivalSlop * 2 {
+                log("home")
+                NSApp.terminate(nil)
+            }
+            return
+        }
         cat.repose = Repose.from(idleSeconds: sense.idleSeconds)
         cat.listening = sense.micLive
         cat.languor = sense.languor
@@ -137,31 +220,8 @@ public final class OgiApp: NSObject, NSApplicationDelegate {
         guard cat.isMoving || now - lastRender >= interval else { return }
         lastRender = now
 
-        // Clamp is NOT optional: without it the first tick after the link resumes from
-        // screen lock integrates a multi-hour delta and launches him into orbit.
-        accumulator += min(now - lastTick, Feel.Timing.maxFrameDelta)
-        lastTick = now
-
-        var steps = 0
-        while accumulator >= Feel.Timing.fixedDT {
-            steps += 1
-            let before = cat.support
-            cat = Cat.step(cat, world: skyline, dt: Feel.Timing.fixedDT)
-            if before != cat.support { logSupportChange(from: before) }
-            accumulator -= Feel.Timing.fixedDT
-        }
-
-        // He looks at your cursor. The strongest aliveness signal that exists.
-        let head = CGPoint(x: cat.position.x,
-                           y: cat.position.y + Feel.Shape.height * Feel.Eyes.heightFraction)
-        gaze.step(target: lookDirection(from: head, to: NSEvent.mouseLocation),
-                  dt: CGFloat(Feel.Timing.fixedDT * Double(steps)))
-
-        let h = heightAboveGround()
-        overlay.render(cat, pose: buildPose(dt: CGFloat(Feel.Timing.fixedDT * Double(steps))),
-                       gaze: gaze, heightAboveGround: h,
-                       occluders: skyline.occluders(above: perchZ(),
-                                                    intersecting: hitRect().insetBy(dx: -40, dy: -h - 40)))
+        stepPhysics(now)
+        renderNow()
 
         // While he is held the window must keep swallowing events even if the cursor
         // outruns him, or a fast drag drops him the instant it leaves his hit rect.
@@ -247,6 +307,33 @@ public final class OgiApp: NSObject, NSApplicationDelegate {
         tail.step(base: Body.tailBase(pose), dt: dt)
         pose.tail = tail.points
         return pose
+    }
+
+    private var lastSteps = 1
+
+    private func stepPhysics(_ now: CFTimeInterval) {
+        var steps = 0
+        while accumulator >= Feel.Timing.fixedDT {
+            steps += 1
+            let before = cat.support
+            cat = Cat.step(cat, world: skyline, dt: Feel.Timing.fixedDT)
+            if before != cat.support { logSupportChange(from: before) }
+            accumulator -= Feel.Timing.fixedDT
+        }
+        lastSteps = max(steps, 1)
+    }
+
+    private func renderNow() {
+        let dt = CGFloat(Feel.Timing.fixedDT * Double(lastSteps))
+        // He looks at your cursor. The strongest aliveness signal that exists.
+        let head = CGPoint(x: cat.position.x,
+                           y: cat.position.y + Feel.Shape.height * Feel.Eyes.heightFraction)
+        gaze.step(target: lookDirection(from: head, to: NSEvent.mouseLocation), dt: dt)
+
+        let h = heightAboveGround()
+        overlay.render(cat, pose: buildPose(dt: dt), gaze: gaze, heightAboveGround: h,
+                       occluders: skyline.occluders(above: perchZ(),
+                                                    intersecting: hitRect().insetBy(dx: -40, dy: -h - 40)))
     }
 
     /// Where a click counts as touching him. Padded, because a 46x34 cat is a small target.
