@@ -83,3 +83,36 @@ private func run(_ g: inout Gaze, target: CGPoint, seconds: CGFloat, dt: CGFloat
     #expect(abs(far.x - 1) < 0.001, "distant targets should saturate to 'over there'")
     #expect(lookDirection(from: head, to: head) == .zero)
 }
+
+// MARK: - Repose (the idle ladder)
+
+@Test func heSettlesTheLongerYouAreAway() {
+    // Manifesto §7.1. Cats settle when the room goes quiet.
+    #expect(Repose.from(idleSeconds: 5) == .awake)
+    #expect(Repose.from(idleSeconds: 60) == .sitting)
+    #expect(Repose.from(idleSeconds: 240) == .curled)
+    #expect(Repose.from(idleSeconds: 900) == .asleep)
+}
+
+@Test func languorOnlyKicksInOnLowBatteryOrLowPower() {
+    var s = Sensations()
+    s.batteryPercent = 80
+    #expect(s.languor == 0)
+
+    s.batteryPercent = 15
+    #expect(s.languor > 0, "below 20% he should conserve energy")
+
+    s.charging = true
+    #expect(s.languor == 0, "plugged in, he perks back up")
+
+    s = Sensations(); s.lowPower = true
+    #expect(s.languor == 1, "Low Power Mode should match the machine's mood exactly")
+}
+
+@Test func aDesktopMacWithNoBatteryIsNotPermanentlySluggish() {
+    // IOPS returns nothing on a Mac mini or Studio. Treating that as 0% would leave him
+    // permanently exhausted on every desktop Mac.
+    var s = Sensations()
+    s.batteryPercent = nil
+    #expect(s.languor == 0)
+}

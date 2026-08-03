@@ -12,12 +12,18 @@ public final class OgiApp: NSObject, NSApplicationDelegate {
     private var cat = CatState(position: .zero)
     private var gaze = Gaze()
     private var tail = TailSim()
+    private let signals = Signals()
+    private var sense = Sensations()
     private var walkPhase: CGFloat = 0
     private var crouchAmount: CGFloat = 0
 
     private var accumulator: TimeInterval = 0
     private var lastTick: CFTimeInterval = 0
     private var lastPoll: CFTimeInterval = 0
+    private var lastRender: CFTimeInterval = 0
+    /// Ticks once a second while he is deeply asleep, so the display link can be stopped
+    /// outright instead of firing 60 times a second to decide it has nothing to do.
+    private var slumberTimer: DispatchSourceTimer?
     private var flipOrigin: CGFloat = 0
     private var ownPID = getpid()
 
@@ -42,6 +48,26 @@ public final class OgiApp: NSObject, NSApplicationDelegate {
             // With the cursor poll driving ignoresMouseEvents, every click that reaches us
             // should be on him. onCat=false means the hit rect and the poll disagree.
             self?.log("click at \(Int(p.x)),\(Int(p.y)) onCat=\(onCat)")
+        }
+
+        // Waking is the one failure that would be fatal: a cat who never comes back is a
+        // hung app. So the 1Hz idle check is backed up by workspace events — any app
+        // launch, activation or Space change revives him regardless.
+        for name: NSNotification.Name in [NSWorkspace.didActivateApplicationNotification,
+                                          NSWorkspace.didLaunchApplicationNotification,
+                                          NSWorkspace.activeSpaceDidChangeNotification] {
+            NSWorkspace.shared.notificationCenter.addObserver(
+                forName: name, object: nil, queue: .main) { [weak self] _ in
+                MainActor.assumeIsolated { self?.leaveSlumber() }
+            }
+        }
+
+        signals.onWake = { [weak self] in
+            guard let self else { return }
+            // He was asleep too: stretch and shake off before resuming.
+            self.leaveSlumber()
+            self.lastTick = 0
+            self.overlay.resume()
         }
 
         poll(force: true)
@@ -76,10 +102,39 @@ public final class OgiApp: NSObject, NSApplicationDelegate {
     private func tick(_ now: CFTimeInterval) {
         if lastTick == 0 { lastTick = now; return }
 
-        // The world poll is a gate inside the display link, not a Timer. When the link
-        // pauses on screen lock, polling stops for free.
-        let hz = NSEvent.pressedMouseButtons != 0 ? Feel.World.dragPollHz : Feel.World.pollHz
+        sense = signals.sample(now: now)
+        cat.repose = Repose.from(idleSeconds: sense.idleSeconds)
+        cat.listening = sense.micLive
+        cat.languor = sense.languor
+
+        // You locked the screen, so he goes home and everything suspends. This is the
+        // manifesto's "all polling suspends", and it costs one early return.
+        if sense.asleep {
+            overlay.suspend()   // resumed by Signals.onWake, never from in here
+            return
+        }
+
+        // Deep sleep. `preferredFrameRateRange` is honoured on ProMotion and IGNORED on a
+        // fixed-refresh display, where the link keeps firing 60 times a second and we
+        // merely do less per fire. Since the battery cost of a desktop pet is wakeups
+        // rather than pixels, "less work per wakeup" is not the fix — stopping is.
+        if cat.repose == .asleep, !cat.isMoving, cat.goal == nil {
+            enterSlumber()
+            return
+        }
+        overlay.setPreferredRate(renderRate())
+
+        // The world poll is a gate inside the display link, not a Timer.
+        let hz = pollRate()
         if now - lastPoll >= 1.0 / hz { poll(force: false); lastPoll = now }
+
+        // The render-rate ladder. The real battery cost of a desktop pet is processor
+        // wakeups, not pixels: RunCat draws complaints at 4 wakeups/second, and a naive
+        // 60Hz display link is fifteen times worse. So when he is settled and nothing is
+        // moving, we stop doing work entirely rather than redrawing an unchanged cat.
+        let interval = 1.0 / renderRate()
+        guard cat.isMoving || now - lastRender >= interval else { return }
+        lastRender = now
 
         // Clamp is NOT optional: without it the first tick after the link resumes from
         // screen lock integrates a multi-hour delta and launches him into orbit.
@@ -155,6 +210,55 @@ public final class OgiApp: NSObject, NSApplicationDelegate {
     private func hitRect() -> CGRect {
         CGRect(x: cat.position.x - Feel.Shape.width / 2, y: cat.position.y,
                width: Feel.Shape.width, height: Feel.Shape.height).insetBy(dx: -6, dy: -6)
+    }
+
+    /// Stops the clock entirely and watches for your return once a second. One wakeup a
+    /// second is ~600k a week, comfortably under what the Dock itself costs.
+    private func enterSlumber() {
+        guard slumberTimer == nil else { return }
+        overlay.suspend()
+        let t = DispatchSource.makeTimerSource(queue: .main)
+        t.schedule(deadline: .now() + 1, repeating: 1, leeway: .milliseconds(400))
+        t.setEventHandler { [weak self] in
+            guard let self else { return }
+            let idle = CGEventSource.secondsSinceLastEventType(
+                .hidSystemState, eventType: CGEventType(rawValue: ~0)!)
+            guard Repose.from(idleSeconds: idle) != .asleep else { return }
+            self.leaveSlumber()
+        }
+        t.resume()
+        slumberTimer = t
+        log("asleep — display link stopped, watching at 1Hz")
+    }
+
+    private func leaveSlumber() {
+        guard slumberTimer != nil else { return }
+        slumberTimer?.cancel()
+        slumberTimer = nil
+        lastTick = 0            // do not integrate the whole nap in one step
+        overlay.resume()
+        log("awake")
+    }
+
+    /// Burst while a mouse button is down, because a dragged window's position otherwise
+    /// arrives as a 100ms staircase and he strobes along it.
+    private func pollRate() -> Double {
+        if NSEvent.pressedMouseButtons != 0 { return Feel.World.dragPollHz }
+        switch cat.repose {
+        case .awake, .sitting: return Feel.World.pollHz
+        case .curled: return 4
+        case .asleep: return 1
+        }
+    }
+
+    private func renderRate() -> Double {
+        if cat.isMoving { return 60 }
+        switch cat.repose {
+        case .awake: return 30
+        case .sitting: return 12
+        case .curled: return 8
+        case .asleep: return 4
+        }
     }
 
     private func poll(force: Bool) {

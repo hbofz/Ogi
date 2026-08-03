@@ -44,6 +44,19 @@ public final class Overlay {
 
     public func start() { view.startLink() }
 
+    /// You left. Stop the clock entirely rather than ticking at a low rate: a paused
+    /// display link is zero wakeups, and "you lock the screen and all polling suspends" is
+    /// a stated behaviour, not an optimisation.
+    public func suspend() { view.setPaused(true) }
+    public func resume() { view.setPaused(false) }
+
+    /// Asks the system to call us less often when he is settled.
+    ///
+    /// Honest caveat: this genuinely lowers the callback rate on ProMotion, and is ignored
+    /// on a fixed-refresh display, where the link still fires at 60Hz and we simply do less
+    /// per fire. Real zero comes from `suspend()`.
+    public func setPreferredRate(_ hz: Double) { view.setPreferredRate(hz) }
+
     private var interactive = false
 
     /// The whole click-through mechanism: swallow mouse events only while the cursor is
@@ -154,6 +167,20 @@ final class OgiView: NSView {
         // the cat freezes mid-fall when someone opens a menu.
         l.add(to: .main, forMode: .common)
         link = l
+    }
+
+    private var requestedRate: Double = 60
+
+    func setPreferredRate(_ hz: Double) {
+        guard let link, abs(requestedRate - hz) > 0.5 else { return }
+        requestedRate = hz
+        link.preferredFrameRateRange = CAFrameRateRange(
+            minimum: Float(max(hz * 0.5, 1)), maximum: 60, preferred: Float(hz))
+    }
+
+    func setPaused(_ paused: Bool) {
+        guard link?.isPaused != paused else { return }
+        link?.isPaused = paused
     }
 
     @objc private func step(_ l: CADisplayLink) {

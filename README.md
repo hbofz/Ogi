@@ -31,16 +31,20 @@ There is no account, no network, no telemetry, and no backend.
 
 ---
 
-## Status: v0.1, early
+## Status: v0.7
 
-**He falls.** He reads your real windows as terrain, obeys gravity, and drops when the window
-he is standing on closes, landing with a squash proportional to how far he fell.
+He walks your window edges, jumps between them, falls when you close the one he is standing
+on, and **goes behind windows that are in front of him** — which nothing else on any platform
+does. His eyes follow your cursor. He settles when you stop typing, and freezes when your
+microphone goes live.
 
-He is currently a blob with ears. That is on purpose — the real silhouette is v0.6, because if
-the fall is not charming with a blob then the problem is timing, and timing is code, not art.
+**Idle cost: 0.0% CPU, measured.** Once he is asleep the display link is stopped outright and
+he watches for your return once a second. The battery cost of a desktop pet is processor
+wakeups rather than pixels — the best-known offender in this category draws complaints at four
+wakeups a second — so when he has nothing to do he does nothing, rather than redrawing an
+unchanged cat sixty times a second.
 
-Next up is v0.2: he goes *behind* windows that are in front of him. See
-[ROADMAP.md](ROADMAP.md) for the full plan.
+See [ROADMAP.md](ROADMAP.md) for what is left.
 
 ## Build and run
 

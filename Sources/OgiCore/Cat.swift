@@ -20,6 +20,10 @@ public enum Support: Sendable, Equatable {
 
 public enum Activity: Sendable, Equatable {
     case idle
+    case sit        // no input for a while; cats settle when the room goes quiet
+    case curl
+    case sleep
+    case alert      // frozen and listening: the mic went live
     case walk
     case crouch     // the 100ms wind-up before every jump
     case brace      // riding a window that is being dragged
@@ -34,6 +38,36 @@ public enum Goal: Sendable, Equatable {
     case walkTo(CGFloat)
     /// Crouch, then launch at a point on another surface.
     case jumpTo(SurfaceID, CGFloat)
+}
+
+/// How settled he is, from the machine's point of view.
+public enum Repose: Sendable, Equatable {
+    case awake, sitting, curled, asleep
+
+    /// Manifesto §7.1. Cats settle when the room goes quiet.
+    public static func from(idleSeconds: Double, scale: Double = Repose.timeScale) -> Repose {
+        switch idleSeconds {
+        case ..<(30 * scale): return .awake
+        case ..<(180 * scale): return .sitting
+        case ..<(600 * scale): return .curled
+        default: return .asleep
+        }
+    }
+
+    /// OGI_TIME_SCALE compresses the whole idle ladder. Testing "he stops costing anything
+    /// after ten minutes" is otherwise a ten-minute experiment per attempt.
+    public static let timeScale: Double = {
+        ProcessInfo.processInfo.environment["OGI_TIME_SCALE"].flatMap(Double.init) ?? 1
+    }()
+
+    public var activity: Activity? {
+        switch self {
+        case .awake: return nil
+        case .sitting: return .sit
+        case .curled: return .curl
+        case .asleep: return .sleep
+        }
+    }
 }
 
 public struct CatState: Sendable {
@@ -64,15 +98,30 @@ public struct CatState: Sendable {
     /// Seconds of stillness left before he thinks of something to do.
     public var restLeft: TimeInterval = 1.5
 
+    /// Set from the machine each tick. He is a barometer, not a butler: these arrive as
+    /// behaviour, never as UI.
+    public var repose: Repose = .awake
+    /// Frozen and listening because the microphone went live. Also a privacy indicator.
+    public var listening = false
+    /// 0..1. Low battery or Low Power Mode. He moves less and settles sooner.
+    public var languor: Double = 0
+
     public init(position: CGPoint, velocity: CGVector = .zero) {
         self.position = position
         self.velocity = velocity
     }
 
+    /// Drives the render-rate ladder. When this is false he must cost essentially nothing:
+    /// the battery complaint about desktop pets is about wakeups, not pixels.
     public var isMoving: Bool {
         if case .falling = support { return true }
         if goal != nil { return true }
         return squashElapsed < 0.4
+    }
+
+    /// He is settled and nothing is going to change until the world does.
+    public var isResting: Bool {
+        !isMoving && (repose != .awake || listening)
     }
 
     /// Anisotropic scale about the contact point. Vertical squash, horizontal spread.
@@ -171,10 +220,25 @@ public enum Cat {
         var s = state
         guard case .grounded(var perch) = s.support else { return s }
 
+        // Frozen. Ears forward, tail dead still. He hears you, and it doubles as a privacy
+        // indicator: if he has gone rigid, your microphone is hot.
+        if s.listening {
+            s.goal = nil
+            s.activity = .alert
+            return s
+        }
+        // Settled. He asks nothing of you, so nothing here nags: he simply gets sleepier.
+        if let settled = s.repose.activity {
+            s.goal = nil
+            s.activity = settled
+            return s
+        }
+
         switch s.goal {
         case nil:
             // Nothing to do. Sit still until boredom wins.
-            s.restLeft -= dt
+            // Low battery makes him idle longer. A sluggish cat means plug in.
+            s.restLeft -= dt * (1 - s.languor * 0.6)
             if s.restLeft <= 0, let goal = pickGoal(from: s, on: surface, world: world) {
                 s.goal = goal
                 s.activity = (goal.isJump ? .crouch : .walk)
@@ -190,7 +254,8 @@ public enum Cat {
                 s.restLeft = Feel.Timing.restMin + Double.random(in: 0...Feel.Timing.restJitter)
             } else {
                 s.facing = dx > 0 ? 1 : -1
-                let step = min(abs(dx), Feel.Physics.walkSpeed * CGFloat(dt)) * s.facing
+                let speed = Feel.Physics.walkSpeed * (1 - CGFloat(s.languor) * 0.45)
+                let step = min(abs(dx), speed * CGFloat(dt)) * s.facing
                 perch.dx = clampToSurface(perch.dx + step, surface)
                 s.support = .grounded(perch)
                 s.activity = .walk
