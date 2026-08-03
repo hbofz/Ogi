@@ -24,7 +24,7 @@ public enum Sprites {
 
         var count: Int {
             switch self {
-            case .walk: 8
+            case .walk: 6
             case .jump, .run: 6
             case .idle, .land, .fall, .sitdown, .sleep: 4
             case .held: 3

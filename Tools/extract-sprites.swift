@@ -205,10 +205,18 @@ for b in blobs {
     merged.append(b)
 }
 
+// Left to right, and nothing else. This used to sort by `(minY / 60, minX)` to group a sheet
+// into rows, and that silently reordered frames: the bucket is each blob's own ink top, which
+// moves with the pose, so two frames side by side in the same row whose ink happened to
+// straddle a 60px boundary came out swapped. It cost a walk cycle that played 1,2,4,3,5,6.
+//
+// Row grouping was never real support for grids anyway — the shared band below spans the whole
+// sheet, so a second row would be given the first row's vertical extent. One row per sheet is
+// the rule in docs/ART-BRIEF.md, and this now matches it honestly.
 let kept = merged.filter {
     let bh = $0.maxY - $0.minY + 1, bw = $0.maxX - $0.minX + 1
     return bh >= minH && bh <= maxH && bw >= 20 && $0.count > 400
-}.sorted { ($0.minY / 60, $0.minX) < ($1.minY / 60, $1.minX) }
+}.sorted { $0.minX < $1.minX }
 
 // Every frame in a sheet gets the SAME vertical extent, aligned on the sheet's own ground
 // line. Cropping each frame tight to its ink would throw away exactly the information that
