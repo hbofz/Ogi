@@ -26,7 +26,8 @@ public enum Sprites {
             switch self {
             case .walk: 6
             case .jump, .run: 6
-            case .idle, .land, .fall, .sitdown, .sleep: 4
+            case .fall: 6
+            case .idle, .land, .sitdown, .sleep: 4
             case .held: 3
             case .alert: 2
             }
@@ -114,13 +115,19 @@ public enum Sprites {
 
     /// Where his feet are, as a fraction up from the bottom of the frame.
     ///
-    /// Most sheets were drawn with a ground line, so the bottom of the band IS the floor.
-    /// Two were not: he is mid-air in `fall`, and in `held` he hangs from a hand that has
-    /// been erased, so anchoring those at the bottom would hang him by the tail.
+    /// Most sheets are drawn with a ground line, so the bottom of the band IS the floor. The
+    /// exception is `held`, where he hangs from a hand that has been erased: anchoring him at
+    /// the bottom would hang him by the tail.
+    ///
+    /// `fall` used to be listed here at 0.30, because on the old sheet he never reached the
+    /// bottom of his band and anchoring at the floor left him hovering. The redrawn sheet ends
+    /// on a frame braced for impact with his legs at full stretch, and those paws land exactly
+    /// on the last row of the band — so the floor is the right anchor again, and the special
+    /// case is gone. Measure this whenever an airborne clip is redrawn; it is a property of the
+    /// sheet, not of the animation.
     static func footAnchor(_ clip: Clip) -> CGFloat {
         switch clip {
         case .held: return 0.86     // gripped by the scruff, near the top
-        case .fall: return 0.30     // mid-air, no ground in the sheet
         default:    return 0
         }
     }
