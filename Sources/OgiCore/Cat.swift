@@ -231,10 +231,17 @@ public enum Cat {
                 // four paws every single time — by construction, not by luck.
                 if s.righting < 1 {
                     s.righting = min(1, s.righting + CGFloat(dt) / CGFloat(Feel.Timing.righting))
-                    s.activity = s.righting < 1 ? .righting : .airborne
-                } else if s.activityElapsed > 0.12, s.activity == .slip {
-                    s.activity = .airborne
+                    // Falling, not jumping. `.airborne` means he chose to leave the ground and
+                    // draws the jump sheet; being dropped is the fall sheet from the first
+                    // frame to the last. `activityElapsed` deliberately keeps running across
+                    // this handover so the clip continues rather than restarting.
+                    s.activity = s.righting < 1 ? .righting : .slip
                 }
+                // `.slip` used to time out into `.airborne` after 0.12s, which meant a cat
+                // whose window closed played 120ms of the fall and then the jump sheet for the
+                // whole rest of the drop. The fall sheet does not loop: it runs its six frames
+                // and holds the last one, braced for impact, which is exactly what a long
+                // descent wants. So he stays in it until he lands.
             }
         }
 

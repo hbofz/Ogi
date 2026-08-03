@@ -136,3 +136,42 @@ private let dt = Feel.Timing.fixedDT
     guard case .grounded(let perch) = cat.support else { Issue.record("never landed"); return }
     #expect(perch.id == .window(2), "landed on the lower surface, passing through the higher one")
 }
+
+@MainActor
+@Test func heFallsAsAFallingCatForTheWholeDropNotJustTheFirstMoment() {
+    // The fall is the demo, and it was 120ms long. `.slip` timed out into `.airborne` after
+    // 0.12s, and `.airborne` draws the jump sheet — so closing his window played a sliver of
+    // the fall and then a *jumping* cat all the way down. Every existing test passed through
+    // it, because they all assert on physics and this was only ever visible on screen.
+    let ground = surface(.window(1), y: 900, from: 0, to: 400)
+    var cat = CatState(position: CGPoint(x: 200, y: 900))
+    cat.support = .grounded(Perch(id: .window(1), dx: 200))
+    cat = Cat.step(cat, world: sky([ground]), dt: dt)
+
+    cat = Cat.step(cat, world: sky([]), dt: dt)          // close the window
+    #expect(cat.activity == .slip)
+
+    // Two full seconds of falling, far longer than the old 0.12s timeout.
+    for _ in 0..<Int(2.0 / dt) {
+        cat = Cat.step(cat, world: sky([]), dt: dt)
+        guard case .falling = cat.support else { break }
+        #expect(Sprites.clip(for: cat.activity, dangling: false) == .fall,
+                "drew \(Sprites.clip(for: cat.activity, dangling: false)) mid-fall, not .fall")
+    }
+}
+
+@MainActor
+@Test func droppingHimAlsoDrawsTheFallSheet() {
+    // The other way he leaves the ground without choosing to. Righting used to hand over to
+    // `.airborne` once the twist finished, which put him back on the jump sheet in mid-air.
+    var cat = CatState(position: CGPoint(x: 200, y: 900))
+    cat = Cat.release(cat, throwVelocity: CGVector(dx: 0, dy: 0))
+    #expect(cat.activity == .righting)
+
+    for _ in 0..<Int(1.0 / dt) {
+        cat = Cat.step(cat, world: sky([]), dt: dt)
+        guard case .falling = cat.support else { break }
+        #expect(Sprites.clip(for: cat.activity, dangling: false) == .fall,
+                "drew \(Sprites.clip(for: cat.activity, dangling: false)) after being dropped")
+    }
+}

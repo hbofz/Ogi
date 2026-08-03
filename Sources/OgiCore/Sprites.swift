@@ -80,8 +80,10 @@ public enum Sprites {
         switch activity {
         case .walk:                 return hurrying ? .run : .walk
         case .crouch:               return .jump      // the wind-up frames
-        case .airborne, .righting:  return .jump
-        case .slip:                 return .fall
+        case .airborne:             return .jump
+        // Both ways he leaves the ground without choosing to: his platform vanished, or you
+        // dropped him. The fall sheet is the righting reflex, so it covers both.
+        case .slip, .righting:      return .fall
         case .scruffed:             return .held
         case .land, .landHard:      return .land
         case .sit:                  return .sitdown
