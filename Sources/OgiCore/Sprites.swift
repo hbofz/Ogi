@@ -112,6 +112,68 @@ public enum Sprites {
         }
     }
 
+    /// Where his eyes are in a given frame, in unit coordinates (0..1 from the bottom-left
+    /// of the sprite), so the renderer can put a live pupil inside the drawn eye.
+    ///
+    /// Found rather than authored: he is a black cat, so the only near-white pixels in any
+    /// frame ARE his eyes. That means this keeps working for frames nobody has annotated,
+    /// including any new sheet dropped in later.
+    public static func eyes(_ clip: Clip, _ index: Int) -> [CGRect] {
+        let key = "\(clip.rawValue)\(index)"
+        if let e = eyeCache[key] { return e }
+        guard let img = image(clip, index) else { return [] }
+        let w = img.width, h = img.height
+        var px = [UInt8](repeating: 0, count: w * h * 4)
+        px.withUnsafeMutableBytes { buf in
+            CGContext(data: buf.baseAddress, width: w, height: h, bitsPerComponent: 8,
+                      bytesPerRow: w * 4, space: CGColorSpaceCreateDeviceRGB(),
+                      bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue)?
+                .draw(img, in: CGRect(x: 0, y: 0, width: w, height: h))
+        }
+
+        var seen = [Bool](repeating: false, count: w * h)
+        func isWhite(_ i: Int) -> Bool {
+            px[i * 4 + 3] > 128 && px[i * 4] > 200 && px[i * 4 + 1] > 200 && px[i * 4 + 2] > 200
+        }
+
+        var found: [CGRect] = []
+        for start in 0..<(w * h) where !seen[start] && isWhite(start) {
+            var minX = w, maxX = 0, minY = h, maxY = 0, count = 0
+            var stack = [start]; seen[start] = true
+            while let i = stack.popLast() {
+                let x = i % w, y = i / w
+                minX = min(minX, x); maxX = max(maxX, x)
+                minY = min(minY, y); maxY = max(maxY, y)
+                count += 1
+                for (dx, dy) in [(1, 0), (-1, 0), (0, 1), (0, -1)] {
+                    let nx = x + dx, ny = y + dy
+                    guard nx >= 0, nx < w, ny >= 0, ny < h else { continue }
+                    let j = ny * w + nx
+                    if !seen[j] && isWhite(j) { seen[j] = true; stack.append(j) }
+                }
+            }
+            // Whiskers and highlights are thin; an eye is a chunky blob.
+            guard count > 12, maxX - minX > 2, maxY - minY > 2 else { continue }
+            // His paws and chest have white in them too, and they were being drawn as
+            // extra eyes on his leg. Eyes live in the head, which is always in the upper
+            // half of the frame — including when he is upside down mid-fall, because the
+            // frames are drawn head-up.
+            guard (minY + maxY) / 2 < h / 2 else { continue }
+            // CGImage y runs downward; the layer works bottom-up.
+            found.append(CGRect(x: CGFloat(minX) / CGFloat(w),
+                                y: 1 - CGFloat(maxY) / CGFloat(h),
+                                width: CGFloat(maxX - minX + 1) / CGFloat(w),
+                                height: CGFloat(maxY - minY + 1) / CGFloat(h)))
+        }
+        // Biggest first, so the near eye leads when a frame only shows part of the far one.
+        found.sort { $0.width * $0.height > $1.width * $1.height }
+        let result = Array(found.prefix(2))
+        eyeCache[key] = result
+        return result
+    }
+
+    private static var eyeCache: [String: [CGRect]] = [:]
+
     /// Aspect-correct size. Frames within a clip already share a vertical band, so this keeps
     /// him a consistent height across an animation.
     public static func size(_ clip: Clip, _ index: Int) -> CGSize {

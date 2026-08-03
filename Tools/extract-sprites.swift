@@ -62,7 +62,10 @@ let dropWarm = ProcessInfo.processInfo.environment["DROP_WARM"] != nil
     if isSkin(i) { return false }
     let (r, g, b) = rgb(i)
     let d = abs(r - bg.0) + abs(g - bg.1) + abs(b - bg.2)
-    return d > 60
+    // 28, not 60. The background is cream (248,240,232) and his eyes are pure white, which
+    // is only 45 away from it — so a threshold of 60 silently DELETED both his eyes and you
+    // saw the wallpaper through the holes. Anything above ~20 still rejects sheet noise.
+    return d > 28
 }
 
 // Flood fill each connected blob of ink. Iterative: a recursive fill blows the stack on a
