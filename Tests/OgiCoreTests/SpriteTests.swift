@@ -290,6 +290,12 @@ private func eyeToInk(_ clip: Sprites.Clip, _ i: Int) -> Double? {
         }
     }
     #expect(tops.count == Sprites.Clip.climbUp.count)
-    let drift = (tops.max() ?? 0) - (tops.min() ?? 0)
-    #expect(drift <= 8, "his grip slides \(drift)px up and down the wall across the loop")
+    // In POINTS, not source pixels. Sheets are drawn at wildly different sizes and normalised on
+    // eye width, so a pixel bound is a bound on whichever sheet it was written against: the
+    // first climb sheet drifted 2px and a bound of 8 looked generous until the second drifted 22.
+    // What matters is what you can see, and he renders about 47pt tall, so a point of slide is
+    // two percent of him and invisible while three would read as a bob at 12fps.
+    let drift = CGFloat((tops.max() ?? 0) - (tops.min() ?? 0)) * Sprites.clipScale(.climbUp)
+    #expect(drift < 2.5,
+            "his grip slides \(drift)pt up and down the wall across the loop")
 }
