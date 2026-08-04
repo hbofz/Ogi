@@ -675,3 +675,53 @@ private func twoLedges() -> Skyline {
         }
     }
 }
+
+// MARK: - The glance has to be visible
+
+@Test func noticingAWindowIsSomethingYouCanActuallySee() {
+    // Moving his eyes is the whole of a glance in code and almost none of it on screen. He has
+    // to perk up as well, or "he noticed the window you opened" reads as him doing nothing.
+    let bar = surface(.menuBar, y: 1205, from: 0, to: 1920, z: -1)
+    var cat = CatState(position: CGPoint(x: 300, y: 1205))
+    cat.support = .grounded(Perch(id: .menuBar, dx: 300))
+    cat.restLeft = .infinity
+    cat.stimulus = Stimulus(kind: .windowOpened, at: CGPoint(x: 1500, y: 900))
+
+    cat = Cat.step(cat, world: sky([bar]), dt: dt)
+    #expect(cat.activity == .alert, "he noticed it without showing it: \(cat.activity)")
+
+    // ...and it is a beat, not a new resting pose.
+    for _ in 0..<Int(Feel.Mind.glanceSeconds / dt + 4) {
+        cat = Cat.step(cat, world: sky([bar]), dt: dt)
+    }
+    #expect(cat.activity != .alert, "he is still staring; the glance never ended")
+}
+
+@Test func aStaleAlertAfterTheMicGoesQuietStillGetsCleared() {
+    // The exclusion that lets a glance play must not also resurrect the 12s freeze v2a fixed:
+    // the hold-still branch returns early, so an alert left behind when the mic goes off has to
+    // be cleared here. glanceLeft is what tells the two apart.
+    let bar = surface(.menuBar, y: 1205, from: 0, to: 1920, z: -1)
+    var cat = CatState(position: CGPoint(x: 300, y: 1205))
+    cat.support = .grounded(Perch(id: .menuBar, dx: 300))
+    cat.listening = true
+    for _ in 0..<(120 * 2) { cat = Cat.step(cat, world: sky([bar]), dt: dt) }
+    #expect(cat.activity == .alert, "fixture: the mic should have frozen him")
+
+    cat.listening = false
+    cat = Cat.step(cat, world: sky([bar]), dt: dt)
+    #expect(cat.activity != .alert, "he stayed bolt upright after the mic went quiet")
+}
+
+@Test func aGlanceDoesNotInterruptAWalkHeIsAlreadyOn() {
+    let bar = surface(.menuBar, y: 1205, from: 0, to: 1920, z: -1)
+    var cat = CatState(position: CGPoint(x: 300, y: 1205))
+    cat.support = .grounded(Perch(id: .menuBar, dx: 300))
+    cat.intent = Intent(destination: .menuBar, destinationX: 900, move: .walk(900))
+    cat.activity = .walk
+    cat.stimulus = Stimulus(kind: .windowOpened, at: CGPoint(x: 1500, y: 900))
+
+    cat = Cat.step(cat, world: sky([bar]), dt: dt)
+    #expect(cat.activity == .walk, "the glance stopped him mid-walk")
+    #expect(cat.lookingAt != nil, "he should still have looked")
+}

@@ -373,6 +373,20 @@ public enum Cat {
             s.lookingAt = stim.at
             s.glanceLeft = Feel.Mind.glanceSeconds
 
+            // Perk up, visibly. Moving his eyes is the whole of a glance in code and almost
+            // none of it on screen: at his rendered size the gaze is a couple of points of
+            // pupil, so "he noticed the window you opened" read as him doing nothing at all.
+            // Watching him is what found that, and no test would have.
+            //
+            // Only when he is standing around. A cat already walking somewhere just flicks his
+            // eyes, and snapping the pose mid-walk would stop him dead for a beat. `holdingStill`
+            // outranks this for the same reason it outranks everything else.
+            if stim.canTravel, s.intent == nil, !s.holdingStill,
+               case .grounded = s.support {
+                s.activity = .alert
+                s.activityElapsed = 0
+            }
+
             // Home is not a suggestion. It routes to the menu bar directly rather than through
             // the arousal gate, and it is allowed to replace an intent, because whatever he was
             // doing is on furniture that is about to be gone or covered.
@@ -912,6 +926,11 @@ public enum Cat {
             // idea. Only ever swaps one waiting pose for another: a wash or a walk still wins.
             switch s.activity {
             case .groom, .land, .landHard, .brace: break   // busy; each times out on its own
+            // Mid-glance at something that just appeared. `glanceLeft` is what tells this apart
+            // from a STALE alert left over after the mic went quiet, which this branch has to go
+            // on clearing: the hold-still branch returns early, so without that reset he stayed
+            // bolt upright for the whole of his next rest.
+            case .alert where s.glanceLeft > 0: break
             default: s.activity = s.repose.restingActivity
             }
             // Already washing: keep at it for a few seconds, then settle back. Anything that

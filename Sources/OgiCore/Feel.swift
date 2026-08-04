@@ -182,11 +182,18 @@ public enum Feel {
         ///
         /// The tuning below is chosen so that **one thing happening is a look and several
         /// things happening is a decision**: a single window opening reaches 0.30 against a
-        /// 0.45 threshold and can only ever be a glance, while two openings ten seconds apart
-        /// reach 0.30 * 2^(-0.5) + 0.30 = 0.51 and become a trip. If any of these three
-        /// numbers move, that relationship is the thing that has to survive, and
-        /// `oneWindowIsAGlanceAndTwoIsATrip` fails if it does not.
-        public static let arousalHalfLife: Double = 20
+        /// 0.45 threshold and can only ever be a glance, while two openings inside a half-life
+        /// clear it. If any of these three numbers move, that relationship is the thing that
+        /// has to survive, and `oneWindowIsAGlanceAndTwoIsATrip` fails if it does not.
+        ///
+        /// **45 and not the 20 this shipped with.** At 20 the rule was arithmetically true and
+        /// practically invisible: two windows twenty seconds apart landed exactly ON the
+        /// threshold and failed it 60 times out of 60, and opening two windows twenty seconds
+        /// apart is simply what opening two windows looks like. Hamzah opened two and saw
+        /// nothing, which is the failure this whole layer was warned about, a number making a
+        /// correct structure unreachable. At 45 the pair still has to be deliberate, and it now
+        /// survives the pause a person takes between them.
+        public static let arousalHalfLife: Double = 45
         public static let arousalWindowOpened: Double = 0.30
         public static let arousalAppSwitched: Double = 0.12
         /// Above this, a signal that would have earned a glance earns a destination instead.

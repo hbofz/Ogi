@@ -286,7 +286,13 @@ func PROBE_aRousedCatGoesToLook() {
                     opened += 1
                     if wasFree { free += 1 }
                     cat = Cat.step(cat, world: world, dt: dt)
-                    if wasFree, cat.intent?.destination == .window(1) { approached += 1 }
+                    // Matched on the exact destination the promotion computes, not merely on the
+                    // surface. Boredom picks a uniform x on that same window often enough to
+                    // register as a chase otherwise, which showed up as a calm cat "chasing" one
+                    // window in 360 and is a coincidence rather than a behaviour.
+                    let promoted = Cat.nearestSpanX(to: 650, in: world.surface(.window(1))?.spans ?? [])
+                    if wasFree, cat.intent?.destination == .window(1),
+                       cat.intent?.destinationX == promoted { approached += 1 }
                     continue
                 }
                 cat = Cat.step(cat, world: world, dt: dt)
@@ -371,4 +377,47 @@ func PROBE_heComesToYourCursorAndYourClicksStillWork() {
     // settled under the pointer rather than passing through.
     #expect(still.worstSit < 2.5,
             "he sat under the pointer for \(still.worstSit)s rather than moving aside")
+}
+
+/// What actually happens when you open two windows next to each other, the way a person does.
+///
+/// The existing roused-half probe HELD arousal at 1 to isolate the gate. That measures the gate
+/// and not the mechanic: in real use arousal has to be earned by the openings themselves, and
+/// whether it reaches the threshold depends on the gap between them, on how much it decayed,
+/// and on whether he happened to be free at that moment. This measures the whole path.
+@Test(.enabled(if: ProcessInfo.processInfo.environment["OGI_PROBE"] != nil))
+func PROBE_openingTwoWindowsTheWayAPersonDoes() {
+    let dt = Feel.Timing.fixedDT
+    for gap in [2.0, 5.0, 10.0, 20.0] {
+        var went = 0, freeAtSecond = 0
+        for run in 0..<60 {
+            let world = realDesktop()
+            let startX = 300 + CGFloat(run % 10) * 120
+            var cat = CatState(position: CGPoint(x: startX, y: 1205))
+            cat.support = .grounded(Perch(id: .menuBar, dx: startX))
+            // Settle him into ordinary life first, so his state is realistic rather than fresh.
+            for _ in 0..<(120 * 30) { cat = Cat.step(cat, world: world, dt: dt) }
+
+            let first = Int(120 * 5), second = first + Int(120 * gap)
+            for tick in 0..<(120 * 120) {
+                if tick == first {
+                    cat.stimulus = Stimulus(kind: .windowOpened, at: CGPoint(x: 650, y: 1110))
+                }
+                if tick == second {
+                    // Only a cat who was FREE and then set off counts. Counting the end state
+                    // alone credits an ordinary boredom trip that happened to pick window(1),
+                    // which is one surface in four.
+                    let wasFree = cat.intent == nil
+                    if wasFree { freeAtSecond += 1 }
+                    cat.stimulus = Stimulus(kind: .windowOpened, at: CGPoint(x: 650, y: 1110))
+                    cat = Cat.step(cat, world: world, dt: dt)
+                    if wasFree, cat.intent?.destination == .window(1) { went += 1 }
+                    continue
+                }
+                cat = Cat.step(cat, world: world, dt: dt)
+            }
+        }
+        print(String(format: "two windows %.0fs apart: he went over %d/60 (free to act %d/60)",
+                     gap, went, freeAtSecond))
+    }
 }
