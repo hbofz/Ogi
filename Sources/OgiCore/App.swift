@@ -475,7 +475,10 @@ public final class OgiApp: NSObject, NSApplicationDelegate {
         // He looks at your cursor. The strongest aliveness signal that exists.
         let head = CGPoint(x: cat.position.x,
                            y: cat.position.y + Feel.Shape.height * Feel.Eyes.heightFraction)
-        gaze.step(target: lookDirection(from: head, to: NSEvent.mouseLocation), dt: dt)
+        // Normally he watches you. `lookingAt` is set for a beat when something else happens,
+        // and the decision about which lives in `Cat.step` rather than here so it is testable.
+        gaze.step(target: lookDirection(from: head, to: cat.lookingAt ?? NSEvent.mouseLocation),
+                  dt: dt)
 
         let h = heightAboveGround()
         overlay.render(cat, pose: pose, gaze: gaze, frame: frame, heightAboveGround: h,

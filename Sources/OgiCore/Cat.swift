@@ -119,6 +119,35 @@ public struct Intent: Sendable, Equatable {
     }
 }
 
+/// Something the world just did that he might react to.
+///
+/// Written by `App` on the tick it happens, consumed and cleared by `Cat.step`. One-shot on
+/// purpose: a stimulus that survived its tick would fire on every one of the next 120.
+public struct Stimulus: Sendable, Equatable {
+    public enum Kind: Sendable, Equatable {
+        case windowOpened, appSwitched, goHome
+    }
+    public var kind: Kind
+    /// Screen-global, where it happened. This is what his eyes go to.
+    public var at: CGPoint
+
+    public init(kind: Kind, at: CGPoint) {
+        self.kind = kind
+        self.at = at
+    }
+
+    /// How much this stirs him up. `goHome` is an instruction rather than a surprise, so it
+    /// adds nothing: it does not need the dial and must not be able to reach the threshold
+    /// that turns other signals into trips.
+    public var weight: Double {
+        switch kind {
+        case .windowOpened: return Feel.Mind.arousalWindowOpened
+        case .appSwitched: return Feel.Mind.arousalAppSwitched
+        case .goHome: return 0
+        }
+    }
+}
+
 /// How settled he is, from the machine's point of view.
 public enum Repose: Sendable, Equatable {
     case awake, sitting, curled, asleep
@@ -229,6 +258,18 @@ public struct CatState: Sendable {
     /// - at zero he behaves exactly as he did before the mind existed, so every test written
     ///   for v2a is a regression test for v2b
     public var arousal: Double = 0
+
+    /// Something the world just did. Set by `App`, consumed and cleared by `Cat.step`.
+    public var stimulus: Stimulus?
+
+    /// Where he is looking, when it is not at your cursor. `App` renders the gaze at
+    /// `lookingAt ?? NSEvent.mouseLocation`, so nil means "back to watching you".
+    ///
+    /// Here rather than in `App` so that the glance is part of the simulation and can be
+    /// tested. It was the last decision about him still being made outside `Cat.step`.
+    public var lookingAt: CGPoint?
+    /// Seconds of glance left. Internal to the glance; public only because `Cat.step` is free.
+    public var glanceLeft: TimeInterval = 0
     /// Covering a long distance, so he trots instead of strolling.
     public var hurrying = false
 
@@ -282,6 +323,19 @@ public enum Cat {
         s.activityElapsed += dt
         s.squashElapsed += dt
         s.arousal = max(0, min(1, s.arousal * pow(0.5, dt / Feel.Mind.arousalHalfLife)))
+
+        // A glance is a one-shot: consumed here, cleared, and never written back, so it cannot
+        // re-fire on the next 120 ticks. The gaze is `App`'s only read of this.
+        if let stim = s.stimulus {
+            s.stimulus = nil
+            s.arousal = min(1, s.arousal + stim.weight)
+            s.lookingAt = stim.at
+            s.glanceLeft = Feel.Mind.glanceSeconds
+        }
+        if s.glanceLeft > 0 {
+            s.glanceLeft -= dt
+            if s.glanceLeft <= 0 { s.lookingAt = nil }
+        }
         // Never carried across a tick. Cleared here rather than in each of the branches that
         // leaves the ground, because two of them (the vanished platform, the shrunken window)
         // return before the grounded branch ever gets to recompute it, and a cat one tick into

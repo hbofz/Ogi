@@ -168,3 +168,43 @@ private let dt = Feel.Timing.fixedDT
     #expect(cat.intent == nil)
     #expect(cat.isMoving == false, "enterSlumber is unreachable while isMoving is true")
 }
+
+// MARK: - Task 3: the glance
+
+@Test func somethingHappeningMakesHimLookAtIt() {
+    let ground = surface(.floor, y: 90, from: 0, to: 1920, z: .max)
+    var cat = CatState(position: CGPoint(x: 300, y: 90))
+    cat.support = .grounded(Perch(id: .floor, dx: 300))
+    cat.stimulus = Stimulus(kind: .windowOpened, at: CGPoint(x: 1500, y: 700))
+
+    cat = Cat.step(cat, world: sky([ground]), dt: dt)
+    #expect(cat.lookingAt == CGPoint(x: 1500, y: 700))
+    #expect(cat.stimulus == nil, "the stimulus has to be consumed, or it fires every tick")
+    #expect(cat.arousal > 0, "a window opening has to stir him")
+}
+
+@Test func heGoesBackToWatchingYourCursorAfterwards() {
+    let ground = surface(.floor, y: 90, from: 0, to: 1920, z: .max)
+    var cat = CatState(position: CGPoint(x: 300, y: 90))
+    cat.support = .grounded(Perch(id: .floor, dx: 300))
+    cat.stimulus = Stimulus(kind: .windowOpened, at: CGPoint(x: 1500, y: 700))
+    cat = Cat.step(cat, world: sky([ground]), dt: dt)
+    #expect(cat.lookingAt != nil)
+
+    for _ in 0..<Int(Feel.Mind.glanceSeconds / dt + 2) {
+        cat = Cat.step(cat, world: sky([ground]), dt: dt)
+    }
+    #expect(cat.lookingAt == nil, "his eyes never went back to you")
+}
+
+@Test func oneWindowIsAGlanceAndTwoIsATrip() {
+    // The legibility rule, asserted as arithmetic on the constants rather than as behaviour,
+    // so that moving any of the three numbers fails here loudly instead of making him
+    // subtly duller with every test still green.
+    let one = Feel.Mind.arousalWindowOpened
+    #expect(one < Feel.Mind.investigateAbove,
+            "one window opening now earns a trip; he will chase every menu that appears")
+    let two = one * pow(0.5, 10 / Feel.Mind.arousalHalfLife) + one
+    #expect(two > Feel.Mind.investigateAbove,
+            "two windows ten seconds apart no longer earn a trip; the dial does nothing")
+}
