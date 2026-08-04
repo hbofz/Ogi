@@ -116,12 +116,36 @@ public enum Repose: Sendable, Equatable {
         ProcessInfo.processInfo.environment["OGI_TIME_SCALE"].flatMap(Double.init) ?? 1
     }()
 
-    public var activity: Activity? {
+    /// The pose he returns to between behaviours at this level of settledness.
+    public var restingActivity: Activity {
         switch self {
-        case .awake: return nil
+        case .awake: return .idle
         case .sitting: return .sit
         case .curled: return .curl
         case .asleep: return .sleep
+        }
+    }
+
+    /// How much longer he waits between ideas. A settled cat is calmer, not switched off:
+    /// v1 returned early here and he became a statue at 30 seconds of *your* inactivity,
+    /// which is what happens when you sit still and watch him.
+    public var restMultiplier: Double {
+        switch self {
+        case .awake: return 1
+        case .sitting: return Feel.Timing.sittingRest
+        case .curled: return Feel.Timing.curledRest
+        case .asleep: return .infinity
+        }
+    }
+
+    /// Chance a bout of boredom becomes an in-place behaviour (a wash, a look around)
+    /// rather than a trip somewhere.
+    public var inPlaceChance: Double {
+        switch self {
+        case .awake: return Feel.Timing.groomChance
+        case .sitting: return Feel.Timing.sittingInPlace
+        case .curled: return Feel.Timing.curledInPlace
+        case .asleep: return 1
         }
     }
 }
@@ -396,10 +420,14 @@ public enum Cat {
             s.activity = .alert
             return s
         }
-        // Settled. He asks nothing of you, so nothing here nags: he simply gets sleepier.
-        if let settled = s.repose.activity {
+        // Only sleep is a hard stop, and only because the zero-wakeup guarantee lives there.
+        // Sitting and curling *bias* him: longer waits, mostly in-place behaviours. A sitting
+        // cat still shifts, washes and looks around. Before this he froze into a pose, and
+        // `repose` comes from system HID idle, so sitting still and watching him was precisely
+        // what stopped him.
+        if s.repose == .asleep {
             s.intent = nil
-            s.activity = settled
+            s.activity = .sleep
             return s
         }
 
@@ -407,7 +435,7 @@ public enum Cat {
         func settle(_ s: inout CatState) {
             s.intent = nil
             s.hurrying = false
-            s.activity = .idle
+            s.activity = s.repose.restingActivity
             s.activityElapsed = 0
             s.restLeft = Feel.Timing.restMin + Double.random(in: 0...Feel.Timing.restJitter)
         }
@@ -427,12 +455,19 @@ public enum Cat {
         }
 
         guard let intent = s.intent else {
+            // The pose he waits in tracks how settled he is, so a cat who was standing when
+            // the room went quiet sits down rather than only settling into it after his next
+            // idea. Only ever swaps one waiting pose for another: a wash or a walk still wins.
+            switch s.activity {
+            case .groom, .land, .landHard, .brace: break   // busy; each times out on its own
+            default: s.activity = s.repose.restingActivity
+            }
             // Already washing: keep at it for a few seconds, then settle back. Anything that
             // actually matters — settling to sleep, the mic going live — is handled above this
             // and overrides it, which is the right precedence.
             if s.activity == .groom {
                 if s.activityElapsed > Feel.Timing.groomSeconds {
-                    s.activity = .idle
+                    s.activity = s.repose.restingActivity
                     s.activityElapsed = 0
                     s.restLeft = Feel.Timing.restMin + Double.random(in: 0...Feel.Timing.restJitter)
                 }
@@ -440,11 +475,13 @@ public enum Cat {
             }
             // Nothing to do. Sit still until boredom wins.
             // Low battery makes him idle longer. A sluggish cat means plug in.
-            s.restLeft -= dt * (1 - s.languor * 0.6)
+            // Settledness stretches the same timer rather than stopping it.
+            s.restLeft -= dt * (1 - s.languor * 0.6) / s.repose.restMultiplier
             if s.restLeft <= 0 {
                 // Boredom does not always mean going somewhere. Sometimes he just washes,
-                // which is the difference between a creature and a pathfinding demo.
-                if Double.random(in: 0...1) < Feel.Timing.groomChance {
+                // which is the difference between a creature and a pathfinding demo. The more
+                // settled he is, the likelier that is what it turns out to be.
+                if Double.random(in: 0...1) < s.repose.inPlaceChance {
                     s.activity = .groom
                     s.activityElapsed = 0
                 } else if let idea = pickIntent(from: s, on: surface, world: world) {

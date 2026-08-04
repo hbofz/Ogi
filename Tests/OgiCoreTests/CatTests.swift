@@ -483,3 +483,32 @@ private let notched = ScreenGeometry(frame: CGRect(x: 0, y: 0, width: 1920, heig
     for _ in 0..<40 { cat = Cat.step(cat, world: sky([ground]), dt: dt) }
     #expect(cat.activityElapsed > 0.1, "the clock is being reset every tick")
 }
+
+// MARK: - Repose biases rather than gates
+
+@Test func aSittingCatStillDoesThingsOccasionally() {
+    let world = ledgeWorld()
+    var cat = CatState(position: CGPoint(x: 600, y: 600))
+    cat.support = .grounded(Perch(id: .window(1), dx: 200))
+    cat.repose = .sitting
+
+    var sawSomethingOtherThanSitting = false
+    for _ in 0..<(120 * 600) {          // ten simulated minutes
+        cat = Cat.step(cat, world: world, dt: 1.0 / 120)
+        if cat.activity != .sit { sawSomethingOtherThanSitting = true }
+    }
+    #expect(sawSomethingOtherThanSitting)
+}
+
+@Test func aSleepingCatIsAHardStop() {
+    let world = ledgeWorld()
+    var cat = CatState(position: CGPoint(x: 600, y: 600))
+    cat.support = .grounded(Perch(id: .window(1), dx: 200))
+    cat.repose = .asleep
+
+    for _ in 0..<(120 * 600) {
+        cat = Cat.step(cat, world: world, dt: 1.0 / 120)
+        #expect(cat.activity == .sleep)
+        #expect(cat.intent == nil)
+    }
+}

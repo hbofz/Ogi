@@ -102,6 +102,16 @@ public enum Feel {
         /// Manifesto §7.1 wants an occasional in-place behaviour roughly every few minutes,
         /// and washing is currently the only one of those that exists.
         public static let groomChance: Double = 0.15
+
+        /// How much longer he waits between ideas once he has settled. A settled cat is
+        /// calmer, not switched off: these stretch the rest timer, they do not stop it.
+        public static let sittingRest = 4.0
+        public static let curledRest = 12.0
+        /// ...and how much likelier a bout of boredom is to become an in-place behaviour
+        /// (a wash, a look around) rather than a trip somewhere. A curled cat will get up,
+        /// but rarely.
+        public static let sittingInPlace = 0.75
+        public static let curledInPlace = 0.95
         static let restless = ProcessInfo.processInfo.environment["OGI_RESTLESS"] != nil
     }
 
