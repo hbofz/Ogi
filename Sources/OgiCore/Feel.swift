@@ -228,6 +228,11 @@ public enum Feel {
         /// afterwards every known surface is held regardless of misses: two polls of ordinary
         /// hysteresis is nowhere near enough, and without it the turnover reads as every
         /// platform in the world vanishing at once and he falls.
+        ///
+        /// Polls and not seconds, because `WorldTracker` is pure and has no clock. `pollRate()`
+        /// runs anywhere from 1 to 30Hz, so what this buys varies: ~400ms at the usual 10Hz,
+        /// ~130ms if you happen to be mid-drag, and up to 4s if he is asleep — harmless, since
+        /// a sleeping cat is not walking off anything.
         public static let spaceChangeHoldOffPolls = 4
         public static let minStandWidth: CGFloat = 24
         /// Rounded window corners eat the walkable part of the top edge.

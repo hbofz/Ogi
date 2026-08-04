@@ -369,6 +369,33 @@ private let notched = ScreenGeometry(frame: CGRect(x: 0, y: 0, width: 1920, heig
 }
 
 @MainActor
+@Test func heIsNotLeftBelowTheBottomOfTheNewDesktop() {
+    // The same bug on the other axis, and the nastier one. A built-in display arranged BELOW
+    // an external primary has a negative frame origin, so he can be standing at y = -100.
+    // Unplug the external and the built-in becomes the primary at (0, 0): his x is fine, so a
+    // downward-only clamp leaves him untouched, grounded on a perch that no longer exists.
+    // When hysteresis expires it he falls — and `supportBelow` only ever searches DOWNWARD,
+    // so the floor above him can never catch him. Terminal velocity, forever.
+    let visible = CGRect(x: 0, y: 0, width: 1440, height: 800)
+    var cat = CatState(position: CGPoint(x: 700, y: -100))
+    cat.support = .grounded(Perch(id: .window(1), dx: 0))
+
+    let moved = OgiApp.reseat(cat, into: visible)
+    #expect(moved.position.y >= visible.minY, "he is still below the bottom of the world")
+
+    let world = World.build(windows: [], screen: ScreenGeometry(
+        frame: CGRect(x: 0, y: 0, width: 1440, height: 900), visibleFrame: visible, notch: nil),
+                            ownPID: 99)
+    var c = moved
+    var landed = false
+    for _ in 0..<Int(5 / dt) where !landed {
+        c = Cat.step(c, world: world, dt: dt)
+        if case .grounded = c.support { landed = true }
+    }
+    #expect(landed, "he fell out of the bottom of the world, at y=\(Int(c.position.y))")
+}
+
+@MainActor
 @Test func aScreenChangeLeavesHimAloneIfHeIsStillOnIt() {
     // Reconfiguration fires for a brightness change on an external display too. Dropping him
     // off his perch every time one arrives would be a worse bug than the one being fixed.

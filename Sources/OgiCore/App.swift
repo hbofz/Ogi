@@ -34,7 +34,7 @@ public final class OgiApp: NSObject, NSApplicationDelegate {
     /// ...and the same screen by display ID, because AppKit rebuilds the `NSScreen` array on
     /// every reconfiguration. The pinned object survives as a stale husk whose `frame` no
     /// longer describes anything, so it has to be re-resolved rather than retained.
-    private var homeDisplay: CGDirectDisplayID = 0
+    private var homeDisplay: CGDirectDisplayID?
 
     /// OGI_DEBUG=1 narrates what he is doing. Off, he is silent.
     private let debug = ProcessInfo.processInfo.environment["OGI_DEBUG"] != nil
@@ -117,8 +117,11 @@ public final class OgiApp: NSObject, NSApplicationDelegate {
         log("screen=\(g.frame) visible=\(g.visibleFrame) notch=\(g.notch.map { "\($0)" } ?? "none")")
     }
 
-    private static func displayID(_ s: NSScreen) -> CGDirectDisplayID {
-        s.deviceDescription[NSDeviceDescriptionKey("NSScreenNumber")] as? CGDirectDisplayID ?? 0
+    /// Optional, and deliberately not defaulted: a screen whose ID cannot be read must match
+    /// nothing. Falling back to 0 makes every unreadable screen equal to every other one, so
+    /// a single failed bridge silently pins him to whichever unreadable screen comes first.
+    private static func displayID(_ s: NSScreen) -> CGDirectDisplayID? {
+        s.deviceDescription[NSDeviceDescriptionKey("NSScreenNumber")] as? CGDirectDisplayID
     }
 
     /// A display was connected, disconnected, or changed resolution. Every cached piece of
@@ -130,10 +133,12 @@ public final class OgiApp: NSObject, NSApplicationDelegate {
     private func screensChanged() {
         guard overlay != nil, !NSScreen.screens.isEmpty else { return }
         // His display if it is still attached; otherwise he moves in with whatever is left.
-        let screen = NSScreen.screens.first { OgiApp.displayID($0) == homeDisplay }
+        // `homeDisplay` is NOT reassigned to the fallback: a monitor going to sleep, a KVM
+        // flip and an input-source change all arrive as a disconnect followed by a reconnect,
+        // and repinning here would move him to the laptop permanently on the first one.
+        let screen = homeDisplay.flatMap { id in NSScreen.screens.first { OgiApp.displayID($0) == id } }
             ?? NSScreen.main ?? NSScreen.screens[0]
         homeScreen = screen
-        homeDisplay = OgiApp.displayID(screen)
         flipOrigin = NSScreen.screens[0].frame.maxY     // the primary display can be a new one
         overlay.setFrame(screen.frame)
         poll(force: true)
@@ -150,14 +155,20 @@ public final class OgiApp: NSObject, NSApplicationDelegate {
         log("screens changed -> \(screen.frame)")
     }
 
-    /// Where he goes when the desktop shrinks out from under him. Unplug a display and the x
-    /// he is standing at can stop existing: he slips off a perch that got shorter, falls past
-    /// a floor whose `solid` does not contain him, and falls forever off the side of the
-    /// world. Pure and static so the one branch in it is testable without an NSApplication.
+    /// Where he goes when the desktop moves out from under him. Unplug a display and the
+    /// point he is standing at can stop existing: he slips off a perch that got shorter,
+    /// falls past a floor whose `solid` does not contain him, and falls forever off the edge
+    /// of the world. Pure and static so the one branch in it is testable without an
+    /// NSApplication.
+    ///
+    /// Both axes, in both directions. Below is not the harmless side: a built-in display
+    /// arranged *under* an external one has a negative frame origin, so unplugging the
+    /// external leaves him at a y beneath the new desktop — and `Skyline.supportBelow` only
+    /// ever searches downward, so the floor above him can never catch him.
     static func reseat(_ cat: CatState, into visible: CGRect) -> CatState {
         let margin = Feel.Shape.width / 2
         let x = min(max(cat.position.x, visible.minX + margin), visible.maxX - margin)
-        let y = min(cat.position.y, visible.maxY)
+        let y = min(max(cat.position.y, visible.minY), visible.maxY)
         guard x != cat.position.x || y != cat.position.y else { return cat }
         var s = cat
         s.position = CGPoint(x: x, y: y)

@@ -297,7 +297,13 @@ private let screen = ScreenGeometry(
     tracker.holdOff(polls: 2)
     for _ in 0..<2 { _ = tracker.ingest(World.build(windows: [], screen: screen, ownPID: 99)) }
 
+    // The hold must not SPEND the ordinary grace period on its way past. Misses are not
+    // counted while it holds, so the first poll after it is the first miss — count them and
+    // every surface in the world is already at the vanish threshold when the hold lifts, so
+    // the whole thing dies on one poll and the hold-off has bought exactly nothing.
     var last = tracker.ingest(World.build(windows: [], screen: screen, ownPID: 99))
+    #expect(last.surface(.window(1)) != nil, "misses were counted while the hold-off held")
+
     for _ in 1..<Feel.World.vanishConfirmPolls {
         last = tracker.ingest(World.build(windows: [], screen: screen, ownPID: 99))
     }
