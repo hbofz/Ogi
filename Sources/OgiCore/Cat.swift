@@ -295,8 +295,22 @@ public struct CatState: Sendable {
     ///   for v2a is a regression test for v2b
     public var arousal: Double = 0
 
-    /// Something the world just did. Set by `App`, consumed and cleared by `Cat.step`.
+    /// Something the world just did. Written by `App` through `receive`, consumed and
+    /// cleared by `Cat.step`.
     public var stimulus: Stimulus?
+
+    /// Deliver a stimulus without letting it eat a pending retreat.
+    ///
+    /// The slot is one deep, and `goHome` is an instruction rather than a surprise: an app
+    /// activation or a window appearing between the retreat being written and the next tick
+    /// must not replace it, and apps activate precisely when something goes fullscreen or
+    /// the machine sleeps, which is exactly when retreats are written. A lost glance is
+    /// nothing; a lost retreat is the fullscreen retreat or the pre-sleep settle silently
+    /// not happening, the two behaviours hardest to catch not happening.
+    public mutating func receive(_ stim: Stimulus) {
+        guard stimulus?.kind != .goHome || stim.kind == .goHome else { return }
+        stimulus = stim
+    }
 
     /// Where he is looking, when it is not at your cursor. `App` renders the gaze at
     /// `lookingAt ?? NSEvent.mouseLocation`, so nil means "back to watching you".

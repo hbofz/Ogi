@@ -576,6 +576,23 @@ private func twoLedges() -> Skyline {
     #expect(cat.intent?.destinationX == 1000)
 }
 
+@Test func aRetreatCannotBeEatenByALesserStimulus() {
+    // The slot is one deep and App writes it from three places. An app activating between the
+    // fullscreen retreat being written and the next tick would silently replace it — and apps
+    // activate precisely when something goes fullscreen or the machine sleeps. The victims
+    // would be the retreat and the pre-sleep settle, the two behaviours hardest to observe.
+    var cat = CatState(position: CGPoint(x: 300, y: 1205))
+    cat.receive(Stimulus(kind: .goHome, at: CGPoint(x: 1000, y: 1205)))
+    cat.receive(Stimulus(kind: .appSwitched, at: CGPoint(x: 500, y: 900)))
+    #expect(cat.stimulus?.kind == .goHome, "the app switch ate the retreat")
+
+    // The other way round the retreat wins the slot: it is an instruction, not a surprise.
+    var late = CatState(position: CGPoint(x: 300, y: 1205))
+    late.receive(Stimulus(kind: .windowOpened, at: CGPoint(x: 500, y: 900)))
+    late.receive(Stimulus(kind: .goHome, at: CGPoint(x: 1000, y: 1205)))
+    #expect(late.stimulus?.kind == .goHome)
+}
+
 @Test func goingHomeDoesNotStirHimUp() {
     // .goHome is an instruction, not a surprise. If it could raise arousal it could push him
     // over investigateAbove and make the NEXT window that opens a trip, which is a reaction

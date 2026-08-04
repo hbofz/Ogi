@@ -101,8 +101,8 @@ public final class OgiApp: NSObject, NSApplicationDelegate {
                         // of its windows through the last raw snapshot, because `Surface`
                         // deliberately does not carry a pid and adding one would be a second
                         // copy of something the snapshot already knows.
-                        self.cat.stimulus = Stimulus(kind: .appSwitched,
-                                                     at: CGPoint(x: w.rect.midX, y: w.rect.maxY))
+                        self.cat.receive(Stimulus(kind: .appSwitched,
+                                                  at: CGPoint(x: w.rect.midX, y: w.rect.maxY)))
                         self.log("you switched to \(w.owner)")
                     }
                 }
@@ -115,7 +115,7 @@ public final class OgiApp: NSObject, NSApplicationDelegate {
             forName: NSWorkspace.willSleepNotification, object: nil, queue: .main) { [weak self] _ in
             MainActor.assumeIsolated {
                 guard let self, let homeX = self.homeX else { return }
-                self.cat.stimulus = Stimulus(kind: .goHome, at: CGPoint(x: homeX, y: 0))
+                self.cat.receive(Stimulus(kind: .goHome, at: CGPoint(x: homeX, y: 0)))
                 self.log("machine is sleeping, heading home")
             }
         }
@@ -618,7 +618,7 @@ public final class OgiApp: NSObject, NSApplicationDelegate {
         // non-empty report is exactly the launch world and nothing in it can be news.
         if sawLaunchWorld, let id = tracker.justAppeared.first, let s = skyline.surface(id) {
             let x = s.solid.first.map { ($0.lowerBound + $0.upperBound) / 2 } ?? s.extent.lowerBound
-            cat.stimulus = Stimulus(kind: .windowOpened, at: CGPoint(x: x, y: s.y))
+            cat.receive(Stimulus(kind: .windowOpened, at: CGPoint(x: x, y: s.y)))
             log("noticed a window at \(Int(x)),\(Int(s.y))")
         }
         if !tracker.justAppeared.isEmpty { sawLaunchWorld = true }
@@ -636,7 +636,7 @@ public final class OgiApp: NSObject, NSApplicationDelegate {
                 && w.rect.width >= frame.width * 0.98 && w.rect.height >= frame.height * 0.98
         }
         if fullscreen, !wasFullscreen, let homeX {
-            cat.stimulus = Stimulus(kind: .goHome, at: CGPoint(x: homeX, y: 0))
+            cat.receive(Stimulus(kind: .goHome, at: CGPoint(x: homeX, y: 0)))
             log("something went fullscreen, heading home")
         }
         wasFullscreen = fullscreen
