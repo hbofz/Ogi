@@ -1443,6 +1443,18 @@ public enum Cat {
                 ? .stepAcross(destID, far) : .walk(lip)
         }
 
+        // The same line, not another ledge. A fullscreen or maximized window's top edge is
+        // coplanar with the menu bar, and every landing on that shared line grounds him on
+        // the bar (`supportBelow` tie-breaks to the frontmost z), so a jump at the window
+        // can never arrive: he re-plans on every touchdown and leaps against the top of the
+        // screen forever. Ground that is coplanar AND under his own solid is walked, and
+        // being there already is nil — "no route" — which is what lets `advance` settle him
+        // rather than chase an identity he can never hold.
+        if abs(dest.y - surface.y) <= Feel.World.coplanarTolerance,
+           surface.solid.contains(where: { $0.contains(destX) }) {
+            return abs(destX - here.x) > Feel.Physics.arrivalSlop * 3 ? .walk(destX) : nil
+        }
+
         // Straight there in one hop.
         if let x = aimX(on: dest, from: here, toward: destX),
            clears(surface, from: here, to: CGPoint(x: x, y: dest.y)) {
