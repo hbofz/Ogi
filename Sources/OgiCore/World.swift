@@ -32,13 +32,23 @@ public struct Surface: Sendable {
     /// Index into the front-to-back occluder array. menuBar = -1, floor = .max.
     public let z: Int
     public var y: CGFloat
-    /// Full top-edge extent. This is the perch anchor, and it does NOT shrink when
-    /// another window is raised over part of it.
+    /// Full top-edge extent, and the perch anchor space. Does NOT shrink for any reason.
     public var extent: ClosedRange<CGFloat>
-    /// The subspans actually visible right now. Governs where he chooses to walk.
-    /// Never used to decide whether he falls — see `Skyline`.
+    /// Where he can physically stand. **Structural** exclusions only: rounded corners, the
+    /// notch, anything off-screen. A window raised in front of this one never reduces it.
+    ///
+    /// Splitting this from `spans` is the fix for three separate bugs. He used to be able
+    /// to stand on a rounded corner where no window is drawn; a maximized window used to
+    /// delete the floor outright; and the notch was not a hole, so he walked through the
+    /// cutout and vanished.
+    public var solid: [ClosedRange<CGFloat>]
+    /// Where he is currently visible: `solid` minus everything in front. Governs where he
+    /// *prefers* to be. **Never used to decide whether he falls** — see `Skyline`.
     public var spans: [ClosedRange<CGFloat>]
     public var targetable: Bool
+    /// The source window's full rect, for clinging to its face. Nil for the menu bar and
+    /// the floor, which have no face.
+    public var rect: CGRect?
 }
 
 public struct Occluder: Sendable {
@@ -99,11 +109,14 @@ public struct Skyline: Sendable {
 
     /// Swept ground test. At terminal velocity a 120Hz step covers 12px and surfaces are
     /// infinitely thin lines, so a point test tunnels straight through them.
+    ///
+    /// Tests `solid`, not `extent`: he must not land on a rounded corner where nothing is
+    /// drawn, and he must still land on a window that is completely hidden behind another.
     public func supportBelow(x: CGFloat, from y0: CGFloat, to y1: CGFloat) -> Surface? {
         let lo = min(y0, y1), hi = max(y0, y1)
         return surfaces
             .filter { s in
-                s.y >= lo && s.y <= hi && s.extent.contains(x)
+                s.y >= lo && s.y <= hi && s.solid.contains { $0.contains(x) }
             }
             // Highest surface wins; ties break to the frontmost window.
             .max { a, b in (a.y, -a.z) < (b.y, -b.z) }
@@ -168,10 +181,17 @@ public enum World {
 
         var surfaces: [Surface] = []
 
-        // Menu bar. Always present, effectively never occluded.
+        // Menu bar. Always present, effectively never occluded (z = -1), but the notch is a
+        // genuine hole in it: a hardware cutout with no pixels behind it. Cutting it out of
+        // `solid` is what stops him walking through the doorway and disappearing.
         let menuY = screen.visibleFrame.maxY
+        var barSolid = [screenSpan]
+        if let notch = screen.notch {
+            barSolid = subtract(barSolid, notch.minX...notch.maxX)
+        }
+        barSolid = barSolid.filter { $0.length >= Feel.World.minStandWidth }
         surfaces.append(Surface(id: .menuBar, z: -1, y: menuY, extent: screenSpan,
-                                spans: [screenSpan], targetable: true))
+                                solid: barSolid, spans: barSolid, targetable: true, rect: nil))
 
         // Normal windows are the only platform candidates.
         for (i, w) in visible.enumerated() where w.layer == 0 {
@@ -181,10 +201,11 @@ public enum World {
             let start = subtract([(w.rect.minX + inset)...(w.rect.maxX - inset)],
                                  // clip to the visible screen by cutting everything outside it
                                  screen.frame.minX - 1e6 ... screen.visibleFrame.minX)
-            let clipped = subtract(start, screen.visibleFrame.maxX ... screen.frame.maxX + 1e6)
-            let spans = carve(clipped, y: w.rect.maxY, z: i)
-            surfaces.append(Surface(id: .window(w.id), z: i, y: w.rect.maxY,
-                                    extent: extent, spans: spans, targetable: true))
+            let solid = subtract(start, screen.visibleFrame.maxX ... screen.frame.maxX + 1e6)
+                .filter { $0.length >= Feel.World.minStandWidth }
+            surfaces.append(Surface(id: .window(w.id), z: i, y: w.rect.maxY, extent: extent,
+                                    solid: solid, spans: carve(solid, y: w.rect.maxY, z: i),
+                                    targetable: true, rect: w.rect))
         }
 
         // Floor. visibleFrame.minY already sits at the Dock's top edge when the Dock is
@@ -200,8 +221,14 @@ public enum World {
                 && $0.rect.height < screen.frame.height * 0.25          // Dock-shaped, not screen-shaped
         }?.rect.maxY
         let floorY = max(screen.visibleFrame.minY, revealedDock ?? -.greatestFiniteMagnitude)
+        // The floor's `solid` is deliberately NOT carved. A maximized window's rect starts
+        // at visibleFrame.minY, which IS floorY, so carving deleted the entire floor and
+        // left him with a two-node world. The desktop is still under Chrome; you just
+        // cannot see it, which is what `spans` is for.
         surfaces.append(Surface(id: .floor, z: .max, y: floorY, extent: screenSpan,
-                                spans: carve([screenSpan], y: floorY, z: .max), targetable: true))
+                                solid: [screenSpan],
+                                spans: carve([screenSpan], y: floorY, z: .max),
+                                targetable: true, rect: nil))
 
         return Skyline(surfaces: surfaces, occluders: occluders, screen: screen)
     }

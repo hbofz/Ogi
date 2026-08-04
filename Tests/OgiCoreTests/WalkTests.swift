@@ -13,7 +13,8 @@ private func sky(_ surfaces: [Surface]) -> Skyline {
 }
 
 private func surface(_ id: SurfaceID, y: CGFloat, from: CGFloat, to: CGFloat, z: Int = 0) -> Surface {
-    Surface(id: id, z: z, y: y, extent: from...to, spans: [from...to], targetable: true)
+    Surface(id: id, z: z, y: y, extent: from...to,
+            solid: [from...to], spans: [from...to], targetable: true, rect: nil)
 }
 
 private let dt = Feel.Timing.fixedDT

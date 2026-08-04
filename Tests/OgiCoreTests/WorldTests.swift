@@ -130,6 +130,57 @@ private let screen = ScreenGeometry(
     #expect(sky.occluders.count == 1, "but it still occludes")
 }
 
+// MARK: - Walkable is not the same as visible
+
+@Test func maximizedWindowHidesTheFloorButDoesNotDeleteIt() {
+    // A maximized window's rect starts at visibleFrame.minY, which IS floorY, so the old
+    // carve subtracted the entire screen width and the floor stopped existing.
+    let big = win(1, screen.visibleFrame)
+    let sky = World.build(windows: [big], screen: screen, ownPID: 99)
+    let floor = try! #require(sky.surface(.floor))
+
+    #expect(floor.spans.isEmpty)            // correctly invisible
+    #expect(!floor.solid.isEmpty)           // but still there to stand on
+    #expect(floor.solid[0].length > 1900)
+}
+
+@Test func theNotchIsAHoleInTheMenuBar() {
+    let sky = World.build(windows: [], screen: screen, ownPID: 99)
+    let bar = try! #require(sky.surface(.menuBar))
+
+    // Two pieces, one either side of the cutout.
+    #expect(bar.solid.count == 2)
+    #expect(!bar.solid.contains { $0.contains(960) })   // 960 is inside the notch
+    #expect(bar.solid.contains { $0.contains(400) })
+    #expect(bar.solid.contains { $0.contains(1500) })
+    // The anchor space still spans the whole screen, so arrival() can still place him
+    // at the notch's centre and walk him out.
+    #expect(bar.extent.contains(960))
+}
+
+@Test func aWindowsSolidExcludesItsRoundedCorners() {
+    let w = win(1, CGRect(x: 400, y: 600, width: 500, height: 300))
+    let sky = World.build(windows: [w], screen: screen, ownPID: 99)
+    let s = try! #require(sky.surface(.window(1)))
+
+    #expect(s.extent == 400...900)
+    #expect(s.solid.count == 1)
+    #expect(abs(s.solid[0].lowerBound - (400 + Feel.World.cornerInset)) < 0.001)
+    #expect(abs(s.solid[0].upperBound - (900 - Feel.World.cornerInset)) < 0.001)
+    #expect(s.rect == w.rect)
+}
+
+@Test func aWindowInFrontHidesTheSurfaceBehindWithoutRemovingIt() {
+    let back = win(2, CGRect(x: 400, y: 600, width: 500, height: 300))    // top edge y = 900
+    let front = win(1, CGRect(x: 500, y: 400, width: 200, height: 800))   // z=0, straddles it
+    let sky = World.build(windows: [front, back], screen: screen, ownPID: 99)
+    let s = try! #require(sky.surface(.window(2)))
+
+    #expect(s.solid.count == 1)                         // unbroken ground
+    #expect(s.spans.count == 2)                         // visible either side of the front one
+    #expect(!s.spans.contains { $0.contains(600) })     // 600 is behind the front window
+}
+
 // MARK: - Occlusion
 
 @Test func onlyWindowsInFrontOfThePerchOcclude() {
