@@ -632,3 +632,46 @@ private func twoLedges() -> Skyline {
     #expect(cat.activity == .curl, "he ended up \(cat.activity) rather than curled")
     #expect(!sawIdle, "he stood up for a frame on the way out of the landing")
 }
+
+// MARK: - A cursor floating in mid-air, nowhere he can stand
+
+@Test func heIgnoresACursorFloatingWellBelowHisLedge() {
+    // Coming over only ever walks him along the ledge he is already on, so "near him" has to be
+    // a radius. Measured across x alone, a cursor parked in the middle of a small window 600pt
+    // below counted as near, and he shuffled sideways to stand directly above a pointer he was
+    // nowhere close to: aligned with you rather than next to you.
+    let bar = surface(.menuBar, y: 1205, from: 0, to: 1920, z: -1)
+    let mini = win(7, y: 700, from: 800, to: 1100)
+    let floor = surface(.floor, y: 90, from: 0, to: 1920, z: .max)
+    var cat = CatState(position: CGPoint(x: 800, y: 1205))
+    cat.support = .grounded(Perch(id: .menuBar, dx: 800))
+    cat.cursor = CGPoint(x: 900, y: 600)          // inside the mini window's body, 605pt away
+    cat.cursorStill = Feel.Mind.cursorStillSeconds + 1
+    cat.restLeft = .infinity                      // so any intent must be the cursor's doing
+
+    cat = Cat.step(cat, world: sky([bar, mini, floor]), dt: dt)
+    #expect(cat.intent == nil,
+            "he set off for a cursor he cannot get anywhere near: \(String(describing: cat.intent))")
+}
+
+@Test func heNeverLeavesHisLedgeForYourCursor() {
+    // The reassuring half, and it is structural rather than a tuning accident: coming over
+    // emits a walk on the surface he is standing on and nothing else, so it can never become a
+    // climb he falls off. If this ever needs to route across surfaces it belongs with the rest
+    // of the routing, not bolted onto a stroll.
+    let bar = surface(.menuBar, y: 1205, from: 0, to: 1920, z: -1)
+    let mini = win(7, y: 1150, from: 700, to: 1100)
+    var cat = CatState(position: CGPoint(x: 800, y: 1205))
+    cat.support = .grounded(Perch(id: .menuBar, dx: 800))
+    cat.cursor = CGPoint(x: 950, y: 1150)         // on the little window just below him
+    cat.cursorStill = Feel.Mind.cursorStillSeconds + 1
+    cat.restLeft = .infinity
+
+    cat = Cat.step(cat, world: sky([bar, mini]), dt: dt)
+    if let intent = cat.intent {
+        #expect(intent.destination == .menuBar, "coming over routed him off his own ledge")
+        if case .walk = intent.move {} else {
+            Issue.record("coming over produced \(intent.move) rather than a walk")
+        }
+    }
+}

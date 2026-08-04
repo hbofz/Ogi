@@ -207,6 +207,11 @@ public enum Feel {
         public static let typingCalm: Double = 140
 
         /// How long your cursor has to sit still, and how close to him, before he comes over.
+        ///
+        /// `cursorNearby` is a **radius**, not a horizontal gap. Coming over only ever walks him
+        /// along the ledge he is already standing on, so a cursor far below him is not somewhere
+        /// he can get to: measured across x alone he would shuffle sideways to stand above a
+        /// pointer six hundred points down, which is aligned with you rather than next to you.
         public static let cursorStillSeconds: TimeInterval = 60
         public static let cursorNearby: CGFloat = 400
         /// Clearance between his hit rect and your cursor when he settles beside it.

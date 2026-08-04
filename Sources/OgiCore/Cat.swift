@@ -931,9 +931,15 @@ public enum Cat {
             // Cats approach when you go still. Not gated on arousal: this is a condition rather
             // than an event, and an excited cat coming over is not what it is for. Above the
             // boredom timer, so a waiting cursor beats an ordinary idea rather than racing it.
+            //
+            // True distance, not horizontal distance. Measured across only x, a cursor parked
+            // in the middle of a small window six hundred points BELOW him counts as near, and
+            // since this only ever walks him along the ledge he is already on, he would shuffle
+            // sideways to stand directly above a pointer he is nowhere near. Aligned with you
+            // and not next to you, which reads as nothing at all.
             if let cursor = s.cursor,
                s.cursorStill >= Feel.Mind.cursorStillSeconds,
-               abs(cursor.x - s.position.x) <= Feel.Mind.cursorNearby,
+               hypot(cursor.x - s.position.x, cursor.y - s.position.y) <= Feel.Mind.cursorNearby,
                let x = beside(cursor: cursor, on: surface, from: s.position.x),
                abs(x - s.position.x) > Feel.Physics.arrivalSlop * 3 {
                 s.intent = Intent(destination: surface.id, destinationX: x, move: .walk(x))
