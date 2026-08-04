@@ -878,3 +878,143 @@ private func draggedLedge(_ origin: CGFloat) -> Skyline {
     #expect(!popped, "he popped upright out of the brace instead of settling back")
     #expect(cat.activity == .curl)
 }
+
+// MARK: - Climbing as a route
+
+/// A bare desktop with one tall window standing on it. Built through `World.build` so the
+/// spans and the corner insets are the real ones.
+///
+/// Its top edge is 810 points above the floor, against the 190 of rise `jumpImpulse` buys, so
+/// no jump reaches it from down there at any angle. Its bottom edge is 110 up, which IS within
+/// one leap. The face is the only way, which is exactly the world Hamzah watched him get stuck
+/// in: "once he falls all the way at the desktop he does not move to other windows as they are
+/// higher".
+private func curtainWorld(bottom: CGFloat = 200) -> Skyline {
+    World.build(windows: [RawWindow(id: 1, pid: 2, layer: 0,
+                                    rect: CGRect(x: 700, y: bottom,
+                                                 width: 500, height: 900 - bottom),
+                                    alpha: 1, owner: "Xcode")],
+                screen: screen, ownPID: 99)
+}
+
+@Test func theCurtainReallyIsOutOfJumpingReach() {
+    // Guards the fixture. If the top edge were reachable the climb tests below would pass
+    // without a single climb happening.
+    let world = curtainWorld()
+    #expect(!Cat.canReach(from: CGPoint(x: 950, y: 90), to: CGPoint(x: 950, y: 900)))
+    #expect(Cat.canReach(from: CGPoint(x: 950, y: 90), to: CGPoint(x: 950, y: 200)),
+            "the bottom of the face is out of reach too; nothing could ever climb this")
+    #expect(world.surface(.floor)?.spans.first?.contains(950) == true,
+            "the floor under the window is hidden, so Part A's rule would carry this on its own")
+}
+
+@Test func nextMoveClimbsWhenTheOnlyWayUpIsAWindowFace() {
+    let world = curtainWorld()
+    let floor = world.surface(.floor)!
+    let cat = standing(at: 300, on: floor)
+    let m = Cat.nextMove(from: cat, on: floor, toward: .window(1), x: 950, world: world)
+    guard case .climb(let id, let x) = m else {
+        Issue.record("expected a climb, got \(String(describing: m))")
+        return
+    }
+    #expect(id == .window(1))
+    #expect(x >= 700 && x <= 1200, "the launch point is not under the face")
+}
+
+@Test func heGetsOffTheDesktopByClimbing() {
+    // Complaint 2, driven all the way through `Cat.step`. A router that returns `.climb` into
+    // an engine with no way to execute one would pass the unit test above green.
+    let world = curtainWorld()
+    var cat = standing(at: 300, on: world.surface(.floor)!)
+    cat.intent = Intent(destination: .window(1), destinationX: 950, move: .walk(300))
+
+    var clung = false
+    for _ in 0..<Int(60 / dt) {
+        cat = Cat.step(cat, world: world, dt: dt)
+        if case .clinging = cat.support { clung = true }
+        if cat.intent == nil, case .grounded = cat.support { break }
+    }
+    guard case .grounded(let p) = cat.support else {
+        Issue.record("still in the air after a minute, at \(cat.position)")
+        return
+    }
+    #expect(clung, "he got up there without ever touching the face; this proves nothing")
+    #expect(p.id == .window(1), "he never got off the desktop")
+    #expect(abs(cat.position.x - 950) < Feel.Physics.arrivalSlop * 3)
+    #expect(cat.intent == nil, "he arrived and never settled, so `isMoving` is pinned true")
+}
+
+@Test func anOrdinaryJumpThroughAWindowFaceStillDoesNotStick() {
+    // The grab is gated on the INTENT, not on the geometry. An arc that happens to pass
+    // through a face on the way up has to sail straight through it.
+    //
+    // Level ledges 300 apart, and a short curtain planted between them whose face the arc
+    // crosses while it is still rising (apex is 150pt out; the face is at 50-100).
+    let here = surface(.window(1), y: 500, from: 0, to: 120)
+    let there = surface(.window(2), y: 500, from: 380, to: 800, z: 2)
+    let curtain = Surface(id: .window(3), z: 1, y: 560, extent: 150...200,
+                          solid: [150...200], spans: [150...200], targetable: true,
+                          rect: CGRect(x: 150, y: 480, width: 50, height: 80))
+    let world = sky([here, there, curtain, surface(.floor, y: 90, from: 0, to: 1920, z: .max)])
+
+    var cat = standing(at: 100, on: here)
+    cat.intent = Intent(destination: .window(2), destinationX: 400, move: .jump(.window(2), 400))
+    cat.activity = .crouch
+
+    var crossedTheFace = false
+    for _ in 0..<Int(5 / dt) {
+        cat = Cat.step(cat, world: world, dt: dt)
+        if cat.velocity.dy > 0, world.faceContaining(cat.position)?.id == .window(3) {
+            crossedTheFace = true
+        }
+        if case .clinging = cat.support {
+            Issue.record("an ordinary jump stuck to a window face at \(cat.position)")
+            return
+        }
+    }
+    #expect(crossedTheFace, "the arc never rose through the face, so this test proved nothing")
+}
+
+@Test func climbingAlwaysEndsSomewhereRatherThanCycling() {
+    // The real risk in Part B: a route that oscillates between leaping at a face and dropping
+    // back off it would be worse than the stuckness it replaces, because `intent != nil` pins
+    // `isMoving` and with it the render rate, and `enterSlumber` never runs again.
+    //
+    // The wobble on the launch is the thing being soaked: `launch` scatters the push-off by
+    // +/-6% of the speed, so whether he is still RISING when he reaches the bottom of the face
+    // is a fresh draw every attempt. `climbBite` is the margin that has to survive all of them.
+    var worstAirborne = 0.0, worstRun = 0.0, launches = 0, stranded = 0
+    for seed in 0..<240 {
+        // Vary where he starts and how high the face begins, across the whole band the gate
+        // admits (a bottom edge 150pt up is the last one `climbBite` lets him try).
+        let world = curtainWorld(bottom: 90 + CGFloat(seed % 16) * 10)
+        var cat = standing(at: 120 + CGFloat(seed / 16) * 30, on: world.surface(.floor)!)
+        cat.intent = Intent(destination: .window(1), destinationX: 950,
+                            move: .walk(cat.position.x))
+
+        var airborne = 0, ticks = 0, ups = 0
+        var finished = false
+        for t in 0..<Int(90 / dt) {
+            let wasGrounded = { if case .grounded = cat.support { return true } else { return false } }()
+            cat = Cat.step(cat, world: world, dt: dt)
+            if case .grounded = cat.support { airborne = 0 } else { airborne += 1 }
+            if wasGrounded, case .falling = cat.support { ups += 1 }
+            worstAirborne = max(worstAirborne, Double(airborne) * dt)
+            ticks = t
+            if cat.intent == nil, case .grounded = cat.support { finished = true; break }
+        }
+        worstRun = max(worstRun, Double(ticks) * dt)
+        launches = max(launches, ups)
+        guard finished else {
+            Issue.record("run \(seed) never settled; ended \(cat.support) at \(cat.position)")
+            return
+        }
+        if case .grounded(let p) = cat.support, p.id != .window(1) { stranded += 1 }
+    }
+    #expect(stranded == 0, "\(stranded)/240 runs never got up the curtain")
+    // A climb is one launch. More than a couple means he is dropping back and trying again,
+    // which is the cycle this test exists to refuse.
+    #expect(launches <= 2, "some run left the ground \(launches) times to make one climb")
+    #expect(worstAirborne < 12, "longest unsupported stretch was \(worstAirborne)s")
+    #expect(worstRun < 30, "slowest run took \(worstRun)s")
+}

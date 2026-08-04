@@ -154,6 +154,18 @@ public enum Feel {
         /// How gently he has to be put down to catch the face at all, px/s on either axis.
         /// Above it he was thrown rather than placed, and a thrown cat does not grab.
         public static let clingGrabSpeed: CGFloat = 200
+        /// How far INTO a face he has to be able to leap before he will try to climb it, and
+        /// how much extra height he asks of that leap. One number doing both jobs, because
+        /// they are the same job: it is the margin that stops a leap which merely GRAZES the
+        /// bottom edge — arriving at its apex with no upward speed left, so the grab never
+        /// fires and he drops back to try again — from being a thing that can happen.
+        ///
+        /// The margin has to survive `aimError`, which scatters the push-off by ±6% of the
+        /// speed and so the rise by (1±0.06)². Worst case is the deepest leap he will attempt
+        /// (the full 190pt of rise): a −6% draw still clears the bottom edge by 18pt, which is
+        /// eight ticks of face at the speed he is doing when he gets there. Raising this
+        /// shrinks the set of windows he will climb; lowering it eats that margin.
+        public static let climbBite: CGFloat = 40
 
         /// Per-tick drift at which he leans as far as he ever will (~480 px/s of drag).
         public static let driftReference: CGFloat = 4.0

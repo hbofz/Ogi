@@ -808,6 +808,31 @@ private func landing(fromHeight h: CGFloat, routing: Bool = false) -> (Activity,
     #expect(crossedTheFace, "the fall never entered the face, so this test proved nothing")
 }
 
+@Test func aDescendingPassCannotGrabEvenWhileHeMeansToClimb() {
+    // The same fall, with a live climb intent naming the very window he is passing. This is
+    // the load-bearing half of why the climb grab is safe to add at all: it is gated on
+    // `velocity.dy > 0`, and a fall is always descending. Nothing about wanting to climb
+    // a window can turn a descent past it into a grab.
+    let world = ledgeWorld()
+    var cat = CatState(position: CGPoint(x: 300, y: 560))
+    cat.support = .falling
+    cat.velocity = CGVector(dx: 260, dy: 0)
+    cat.intent = Intent(destination: .window(1), destinationX: 650,
+                        move: .climb(.window(1), 650))
+
+    var crossedTheFace = false
+    for _ in 0..<1200 {
+        cat = Cat.step(cat, world: world, dt: 1.0 / 120)
+        if world.faceContaining(cat.position) != nil { crossedTheFace = true }
+        if case .clinging = cat.support {
+            Issue.record("a descent grabbed the face at \(cat.position)")
+            return
+        }
+        if case .grounded = cat.support { break }
+    }
+    #expect(crossedTheFace, "the fall never entered the face, so this test proved nothing")
+}
+
 @Test func clingingCarriesHimWhenTheWindowMoves() {
     var world = ledgeWorld()
     var cat = CatState(position: CGPoint(x: 650, y: 420))

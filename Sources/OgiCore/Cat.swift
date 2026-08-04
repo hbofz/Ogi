@@ -91,6 +91,10 @@ public enum Move: Sendable, Equatable {
     /// A gap small enough to stride over. No crouch, no arc — a full ballistic leap over a
     /// six-point crack between two tiled windows reads as a comedy pratfall.
     case stepAcross(SurfaceID, CGFloat)
+    /// Walk under a window's face at this x, then leap at it, grab on the way up and climb.
+    /// Cats go up curtains, and this is the only route out of the desktop: `jumpImpulse` buys
+    /// 190pt of rise against windows that are routinely five times that tall.
+    case climb(SurfaceID, CGFloat)
 }
 
 /// Where he is ultimately going, and the current step toward it. Nil means he is content
@@ -300,7 +304,12 @@ public enum Cat {
 
             if s.activityElapsed > Feel.Timing.clingHold {
                 let at = CGPoint(x: rect.minX + grip.dx, y: surface.y - grip.dy)
-                if grip.dy <= Feel.Physics.mantleReach || !landsInView(at, world: world) {
+                // He grabbed this face on purpose, so he goes up it whatever is underneath.
+                // Without this the whole route is a cycle: he leaps at a window from the
+                // desktop, grips it near the bottom, sees perfectly visible floor below him
+                // and slides straight back down to start again.
+                if grip.dy <= Feel.Physics.mantleReach || climbing(s, grip.id)
+                    || !landsInView(at, world: world) {
                     // Close enough to the top, or letting go would put him down somewhere
                     // nobody could see him. Either way the only way is up: he climbs and
                     // mantles onto the ledge.
@@ -323,6 +332,17 @@ public enum Cat {
                         s.position = CGPoint(x: x, y: surface.y)
                         s.activity = .land
                         s.activityElapsed = 0
+                        // Re-plan from the ledge he just pulled himself onto, exactly as a
+                        // landing does. A deliberate climb keeps its intent all the way up the
+                        // face — that is what tells the branch above to climb rather than slide
+                        // — so without this he arrives on the window he was climbing with
+                        // `.climb` still on the intent and immediately throws himself at it
+                        // again.
+                        if let intent = s.intent {
+                            let next = nextMove(from: s, on: surface, toward: intent.destination,
+                                                x: intent.destinationX, world: world)
+                            s.intent?.move = next ?? .walk(s.position.x)
+                        }
                         return s
                     }
                 } else {
@@ -443,6 +463,32 @@ public enum Cat {
             // back is untouched, because there is always something below one.
             let bounds = world.screen.visibleFrame
             let x = min(max(s.position.x + s.velocity.dx * dt, bounds.minX), bounds.maxX)
+
+            // The second way into `.clinging`, and the only one that is not a release.
+            //
+            // `velocity.dy > 0` is the whole of why it is safe. This branch's hard rule is that
+            // cling entry is on release only and never on a general fall, because sticking to
+            // the first window a descent passes would break the fall, and the fall is this
+            // app's entire demo. **A fall is always descending.** A grab gated on rising cannot
+            // touch one, at any speed, from any height, with any intent live.
+            //
+            // Gated on the INTENT as well, not on the geometry alone: an ordinary jump whose
+            // arc happens to rise through a window's face has to sail straight through it. He
+            // must have set out to climb this particular window.
+            //
+            // The intent is deliberately NOT cleared. It is what tells the `.clinging` branch
+            // he is here on purpose and should climb rather than slide, and it is what he
+            // re-plans from once he mantles over the top.
+            if s.velocity.dy > 0, case .climb(let id, _)? = s.intent?.move,
+               let face = world.surface(id), let rect = face.rect,
+               rect.contains(CGPoint(x: x, y: y1)) {
+                s.support = .clinging(Grip(id: id, dx: x - rect.minX, dy: face.y - y1))
+                s.position = CGPoint(x: x, y: y1)
+                s.velocity = .zero
+                s.activity = .cling
+                s.activityElapsed = 0
+                return s
+            }
 
             if s.velocity.dy < 0, let hit = world.supportBelow(x: x, from: y0, to: y1) {
                 let impact = abs(s.velocity.dy)
@@ -720,6 +766,15 @@ public enum Cat {
         // nothing under it, so he can only ever hesitate at a real drop — never at a wall, and
         // never at the interior gap, which he must not so much as consider.
         var move = intent.move
+        // A climb starts with a walk to the spot under the face. Resolved into one here, the
+        // way a step-off is, so the walking code stays in one place — and deliberately NOT
+        // written back to the intent, because `intent.move` staying `.climb` is the only thing
+        // arming the grab on the way up. The walk's own arrival re-plans through `nextMove`,
+        // which hands back the same `.climb` with the same x (nothing in choosing it depends
+        // on where he is standing), so this settles rather than chasing itself.
+        if case .climb(_, let x) = move, abs(x - s.position.x) > Feel.Physics.arrivalSlop * 2 {
+            move = .walk(x)
+        }
         if case .stepOff = move {
             guard let lip = stepOffLip(from: s, on: surface, toward: intent.destinationX,
                                        world: world) else {
@@ -943,6 +998,32 @@ public enum Cat {
             s.activity = .walk
             advance(&s, on: far)
 
+        case .climb(let destID, _):
+            // In position under the face. Same crouch as a jump — the wind-up is the whole
+            // difference between a cat and a teleporting rectangle — and the same reason for
+            // requiring he is ALREADY crouching: the clock left over from the walk that got
+            // him here would otherwise count as the anticipation.
+            guard s.activity == .crouch, s.activityElapsed >= Feel.Timing.anticipation else {
+                s.activity = .crouch
+                break
+            }
+            guard let target = world.surface(destID), let rect = target.rect,
+                  rect.minX <= s.position.x, s.position.x <= rect.maxX,
+                  let v = launch(dx: 0, dy: climbLift(to: rect, from: s.position)) else {
+                // The window moved out from over him while he was winding up.
+                settle(&s)
+                break
+            }
+            // Straight up at the face; he is not aiming to land on anything. The grab in the
+            // falling branch catches him on the way past, and if it does not — the window went
+            // away mid-flight — he simply comes back down onto the ledge he left.
+            s.velocity = v
+            s.support = .falling
+            s.activity = .airborne
+            s.activityElapsed = 0
+            s.drift = 0
+            s.lastPerchOrigin = nil
+
         case .stepOff:
             break   // resolved into a walk above; unreachable
         }
@@ -1079,6 +1160,19 @@ public enum Cat {
             return .jump(hop.id, hop.x)
         }
 
+        // Nothing in the air and the destination is above him — but there may be a curtain.
+        // A window's FACE is a route and not just an obstacle, and it is the only way off the
+        // desktop: `jumpImpulse` buys 190pt of rise against windows that are routinely five
+        // times that tall, which is why he used to look stranded down there for the session.
+        //
+        // Below the hop deliberately. A climb is slower and more committing than a leap, so it
+        // is what he does when leaping will not do.
+        if dest.y > surface.y,
+           let climb = climbTarget(from: here, on: surface, toward: destX,
+                                   target: target, current: current, world: world) {
+            return .climb(climb.id, climb.x)
+        }
+
         // Nothing in the air, and the destination is below him. Walk to the lip and step off.
         // Gravity was always there; v1 simply had no way to ask for it.
         if dest.y < surface.y { return .stepOff }
@@ -1095,6 +1189,60 @@ public enum Cat {
             return .walk(x)
         }
         return nil
+    }
+
+    /// Did he set out to climb this particular face?
+    ///
+    /// Read off the intent rather than stored on the `Grip`, because the intent already knows
+    /// and a second copy of the answer is a second copy that can disagree with the first.
+    static func climbing(_ s: CatState, _ id: SurfaceID) -> Bool {
+        if case .climb(let target, _)? = s.intent?.move { return target == id }
+        return false
+    }
+
+    /// How high he throws himself at a face: enough to be INSIDE it with upward speed left
+    /// over, since the grab only fires while he is rising. See `Feel.Physics.climbBite`.
+    ///
+    /// One function because two callers have to agree exactly: the router uses it to decide
+    /// whether a face is climbable at all (`launch` returning nil IS the reachability test),
+    /// and the launch uses it to decide how hard to push. A gate that admitted a face the
+    /// leap then could not reach is precisely the jump-and-fall-back cycle.
+    static func climbLift(to rect: CGRect, from p: CGPoint) -> CGFloat {
+        max(0, rect.minY - p.y) + Feel.Physics.climbBite
+    }
+
+    /// The window face he can get up that leaves him closest to where he is going, or nil.
+    ///
+    /// Four conditions, all physical rather than arbitrary:
+    /// - its top edge is meaningfully above the ledge he is on, or the climb is not a climb
+    ///   (and a face he would cross in one tick is one the grab could miss);
+    /// - the bottom of the face is within one leap, which is `launch` answering, not a table;
+    /// - the leap starts from a point on his own `solid` that lies inside the window's width,
+    ///   since he goes up vertically and has to already be under it;
+    /// - and getting up there is progress, the same bar the hop has to clear, without which
+    ///   he would climb something that takes him further away and then climb back.
+    ///
+    /// The chosen x does not depend on where he is standing, only on the destination and the
+    /// two rects. That is what makes walking to it and then re-planning terminate: he gets the
+    /// same answer when he arrives as the one that sent him.
+    private static func climbTarget(from here: CGPoint, on surface: Surface, toward destX: CGFloat,
+                                    target: CGPoint, current: CGFloat,
+                                    world: Skyline) -> (id: SurfaceID, x: CGFloat)? {
+        world.surfaces
+            .filter { $0.targetable && !$0.spans.isEmpty }
+            .compactMap { other -> (id: SurfaceID, x: CGFloat, d: CGFloat)? in
+                guard let rect = other.rect,
+                      rect.maxY > surface.y + Feel.Physics.climbBite,
+                      launch(dx: 0, dy: climbLift(to: rect, from: here), jitter: 0) != nil,
+                      let x = nearestSpanX(to: min(max(destX, rect.minX + Feel.World.cornerInset),
+                                                   rect.maxX - Feel.World.cornerInset),
+                                           in: surface.solid),
+                      rect.minX <= x, x <= rect.maxX else { return nil }
+                return (other.id, x, hypot(x - target.x, other.y - target.y))
+            }
+            .filter { $0.d < current - Feel.Physics.arrivalSlop }
+            .min { $0.d < $1.d }
+            .map { ($0.id, $0.x) }
     }
 
     /// Does the arc to `to` get out from over the ledge he is launching from?
