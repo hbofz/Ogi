@@ -612,3 +612,23 @@ private func twoLedges() -> Skyline {
     cat = Cat.step(cat, world: sky([bar, floor]), dt: dt)
     #expect(cat.intent?.destination != .menuBar, "he set out for a menu bar he cannot reach")
 }
+
+// MARK: - Task 11: the stale pose
+
+@Test func aCurledCatDoesNotStandUpForOneFrameAfterALanding() {
+    // Deferred from v2a Task 8: the landing timeout hard-codes .idle instead of the pose that
+    // matches how settled he is, so a curled cat renders exactly one frame standing before the
+    // next tick corrects him. Watched frame by frame rather than at the end, because a
+    // one-frame defect is invisible to an assertion about where he finishes.
+    let ground = surface(.floor, y: 90, from: 0, to: 1920, z: .max)
+    var cat = CatState(position: CGPoint(x: 300, y: 400))
+    cat.repose = .curled
+
+    var sawIdle = false
+    for _ in 0..<(120 * 10) {
+        cat = Cat.step(cat, world: sky([ground]), dt: dt)
+        if cat.activity == .idle { sawIdle = true }
+    }
+    #expect(cat.activity == .curl, "he ended up \(cat.activity) rather than curled")
+    #expect(!sawIdle, "he stood up for a frame on the way out of the landing")
+}

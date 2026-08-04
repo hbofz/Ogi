@@ -681,9 +681,11 @@ public enum Cat {
             }
         }
 
-        // Settle out of landing back to idle.
+        // Settle out of landing back into whatever pose matches how settled he is. Hard-coding
+        // `.idle` here made a curled cat render exactly one frame standing before the next tick
+        // corrected him.
         if let hold = landingHold(s.activity), s.activityElapsed > hold {
-            s.activity = .idle
+            s.activity = s.repose.restingActivity
             s.activityElapsed = 0
         }
         return s

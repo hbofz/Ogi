@@ -7,7 +7,7 @@
 // not freeze him or skip a clip; it will just make him dull, and nothing anywhere will fail.
 // So every v2b behaviour gets an assertion here, over a simulated run, on top of its unit test.
 //
-// OGI_PROBE=1 swift test --filter PROBE     — it takes ~30s, so it is off by default.
+// OGI_PROBE=1 swift test --filter PROBE     (it takes ~30s, so it is off by default)
 import Testing
 import Foundation
 import CoreGraphics
@@ -109,7 +109,7 @@ private func simulate(_ world: Skyline, seconds: Double, startAt: CGPoint,
 }
 
 private func report(_ title: String, _ world: Skyline, runs: Int, seconds: Double) {
-    print("\n=== \(title) — \(runs) runs x \(Int(seconds))s ===")
+    print("\n=== \(title): \(runs) runs x \(Int(seconds))s ===")
     for s in world.surfaces {
         print(String(format: "  surface %-12@ y=%6.0f spans=%d solidLen=%.0f",
                      name(s.id) as NSString, s.y, s.spans.count,
