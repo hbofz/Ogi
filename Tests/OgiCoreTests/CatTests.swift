@@ -614,9 +614,8 @@ private func landing(fromHeight h: CGFloat, routing: Bool = false) -> (Activity,
     // point rather than a dead end), and the walk branch ends by setting `.walk`. Both landing
     // sheets rendered their first frame for 1/120s and were never seen.
     //
-    // Not a corner case either way round. At `gravity` 2000 the hard-landing threshold of
-    // 600px/s is a 90pt drop, which is an ordinary step down from one window onto another, so
-    // the majority of hard landings arrive exactly like this.
+    // Not a corner case either way round: he re-plans on every touchdown, so a landing
+    // mid-route is how most landings arrive.
     let (hard, hardHeld) = landing(fromHeight: 600, routing: true)
     #expect(hard == .landHard, "a 600pt drop has to be the hard landing")
     #expect(hardHeld >= Feel.Timing.landHardSeconds - 2 * dt,
@@ -643,6 +642,15 @@ private func landing(fromHeight h: CGFloat, routing: Bool = false) -> (Activity,
     }
     #expect(cat.intent == nil, "he never finished the walk; the landing hold stranded him")
     #expect(abs(cat.position.x - 450) < Feel.Physics.brakingDistance + Feel.Physics.arrivalSlop)
+}
+
+@Test func theShakeIsBeyondHisOwnJump() {
+    // A landing he could have chosen is not a hard one. His deliberate leaps land at up to
+    // jumpImpulse of speed (plus the aim wobble), so a threshold inside that rattles him at
+    // the end of his own jumps — which is how the shake became every landing and stopped
+    // being a tell. And it must stay under terminal velocity, or no fall could ever qualify.
+    #expect(Feel.Physics.hardLanding > Feel.Physics.jumpImpulse * (1 + Feel.Physics.aimError))
+    #expect(Feel.Physics.hardLanding < Feel.Physics.terminalVelocity)
 }
 
 @Test @MainActor func theShakeOutlastsItsOwnSheet() {

@@ -12,10 +12,17 @@ public enum Feel {
         public static let gravity: CGFloat = 2000
         /// Capped so long falls stay readable rather than becoming a blur.
         public static let terminalVelocity: CGFloat = 1400
-        /// Impact speed above which a landing is a hard one and he shakes himself off rather
-        /// than simply arriving. Against `gravity` that is a 90pt drop, which is an ordinary
-        /// step down between two windows — so most landings are hard ones, deliberately.
-        public static let hardLanding: CGFloat = 600
+        /// Impact speed above which a landing rattles him and he shakes himself off rather
+        /// than simply arriving. Against `gravity` that is a 250pt drop.
+        ///
+        /// Bracketed on both sides, and `theShakeIsBeyondHisOwnJump` holds the bracket:
+        /// above `jumpImpulse * (1 + aimError)`, because a landing he could have chosen is
+        /// not a hard one and his own deliberate leaps must never rattle him; below
+        /// `terminalVelocity`, or no fall could ever qualify. It shipped at 600 — a 90pt
+        /// drop, an ordinary step down between windows — and across 24,000 simulated seconds
+        /// *every* landing was hard, which dilutes the shake exactly the way a tell that
+        /// always fires stops being a tell.
+        public static let hardLanding: CGFloat = 1000
         /// Sideways nudge when the ground vanishes underfoot, so he doesn't drop straight down.
         public static let slipKick: CGFloat = 40
         /// How far past the lip he is placed at the instant he steps off, so the fall starts

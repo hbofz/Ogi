@@ -788,7 +788,7 @@ private func draggedLedge(_ origin: CGFloat) -> Skyline {
     // on screen stops existing.
     var origin: CGFloat = 0
     var tick = 0
-    var cat = CatState(position: CGPoint(x: 400, y: 700))     // 200pt up: a hard landing
+    var cat = CatState(position: CGPoint(x: 400, y: 900))     // 400pt up: past hardLanding's 250
     cat.restLeft = .greatestFiniteMagnitude
 
     func advance() {
