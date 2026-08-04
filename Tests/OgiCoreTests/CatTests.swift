@@ -439,10 +439,15 @@ private let notched = ScreenGeometry(frame: CGRect(x: 0, y: 0, width: 1920, heig
 
 /// Falls from `h` and returns him on the tick he touches down, plus how long he then spends in
 /// whatever landing he ended up in.
-private func landing(fromHeight h: CGFloat) -> (Activity, TimeInterval) {
+private func landing(fromHeight h: CGFloat, routing: Bool = false) -> (Activity, TimeInterval) {
     let ground = surface(.window(1), y: 100, from: 0, to: 500)
     let world = sky([ground])
     var cat = CatState(position: CGPoint(x: 250, y: 100 + h))
+    // `routing` is the common case, not the exotic one: the intent survives a fall by design,
+    // so anything he lands from mid-route arrives with one.
+    if routing {
+        cat.intent = Intent(destination: .window(1), destinationX: 450, move: .walk(450))
+    }
     cat.restLeft = .greatestFiniteMagnitude       // no new ideas while this is being measured
     while cat.support == .falling { cat = Cat.step(cat, world: world, dt: dt) }
     let landed = cat.activity
@@ -475,6 +480,44 @@ private func landing(fromHeight h: CGFloat) -> (Activity, TimeInterval) {
             "he shrugs off a \(hardHeld)s bone-rattling drop as fast as a \(softHeld)s step down")
     #expect(hardHeld >= Feel.Timing.landHardSeconds - 2 * dt,
             "he was back to idle after \(hardHeld)s, before the shake had played out")
+}
+
+@Test func aLandingHeIsRoutingThroughStillPlaysAllTheWayOut() {
+    // The one that matters, and the one the two tests above miss because neither gives him an
+    // intent. A landing mid-route was overwritten by the walk on the very NEXT tick: he
+    // re-plans on the tick he touches down (that is what makes a fluffed hop a new starting
+    // point rather than a dead end), and the walk branch ends by setting `.walk`. Both landing
+    // sheets rendered their first frame for 1/120s and were never seen.
+    //
+    // Not a corner case either way round. At `gravity` 2000 the hard-landing threshold of
+    // 600px/s is a 90pt drop, which is an ordinary step down from one window onto another, so
+    // the majority of hard landings arrive exactly like this.
+    let (hard, hardHeld) = landing(fromHeight: 600, routing: true)
+    #expect(hard == .landHard, "a 600pt drop has to be the hard landing")
+    #expect(hardHeld >= Feel.Timing.landHardSeconds - 2 * dt,
+            "the walk overwrote the shake after \(hardHeld)s")
+
+    let (soft, softHeld) = landing(fromHeight: 40, routing: true)
+    #expect(soft == .land, "a 40pt step down has to be the ordinary landing")
+    #expect(softHeld >= Feel.Timing.landSeconds - 2 * dt,
+            "the walk overwrote the landing after \(softHeld)s")
+}
+
+@Test func aLandingDoesNotStrandHimMidRoute() {
+    // The other half: a hold that blocks the walk must hand back to it. What ends the hold is
+    // the timeout in `step`, which runs after `ground` and is gated on nothing.
+    let ground = surface(.window(1), y: 100, from: 0, to: 500)
+    let world = sky([ground])
+    var cat = CatState(position: CGPoint(x: 250, y: 700))
+    cat.intent = Intent(destination: .window(1), destinationX: 450, move: .walk(450))
+    cat.restLeft = .greatestFiniteMagnitude
+
+    for _ in 0..<Int(20 / dt) {
+        cat = Cat.step(cat, world: world, dt: dt)
+        if cat.intent == nil { break }
+    }
+    #expect(cat.intent == nil, "he never finished the walk; the landing hold stranded him")
+    #expect(abs(cat.position.x - 450) < Feel.Physics.brakingDistance + Feel.Physics.arrivalSlop)
 }
 
 @Test @MainActor func theShakeOutlastsItsOwnSheet() {

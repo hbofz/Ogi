@@ -459,12 +459,8 @@ public enum Cat {
             }
         }
 
-        // Settle out of landing back to idle. Two clocks, because the two landings are now two
-        // different animations: the hard one shakes himself off and that takes the length of
-        // the sheet plus a beat holding the settled frame.
-        let landingHold = s.activity == .landHard ? Feel.Timing.landHardSeconds
-                                                  : Feel.Timing.landSeconds
-        if s.activity == .land || s.activity == .landHard, s.activityElapsed > landingHold {
+        // Settle out of landing back to idle.
+        if let hold = landingHold(s.activity), s.activityElapsed > hold {
             s.activity = .idle
             s.activityElapsed = 0
         }
@@ -530,6 +526,11 @@ public enum Cat {
         var s = standing(state, on: surface, world: world, dt: dt)
         if s.facing != state.facing, case .grounded = s.support {
             s.activity = .turn
+            // Reset here rather than leaning on `step`'s change-detect, which only fires when
+            // the activity DIFFERS from the one this tick started with. A flip landing on a tick
+            // that was already `.turn` (the expiry tick) would otherwise start the new pivot
+            // with the old one's clock already spent, and it would flip instantly.
+            s.activityElapsed = 0
             s.perchSpeed = 0
         }
         return s
@@ -583,6 +584,21 @@ public enum Cat {
         // set it has no reason to set it again, and the walk that resumes is now travelling the
         // way he is pointing. That is what makes it terminate rather than re-arm itself.
         if s.activity == .turn, s.activityElapsed < Feel.Timing.turnSeconds {
+            s.perchSpeed = 0
+            return s
+        }
+
+        // Still landing. Same shape again, and this one is what makes the two landing sheets
+        // exist at all: the intent SURVIVES a fall by design, so he re-plans on the tick he
+        // touches down and the walk overwrote `.land`/`.landHard` on the very next one. Both
+        // clips rendered their first frame for a single tick and were never seen. And at
+        // `gravity` 2000 the hard threshold is a 90pt drop, which is an ordinary step down
+        // between two windows, so that was most landings rather than an edge case.
+        //
+        // Above the intent handling for the same reason the peek and the pivot are: the beat IS
+        // the animation. It cannot deadlock, because what ends it is the timeout in `step`,
+        // which runs after this and is not gated on anything.
+        if let hold = landingHold(s.activity), s.activityElapsed < hold {
             s.perchSpeed = 0
             return s
         }
@@ -843,9 +859,8 @@ public enum Cat {
             s.activity = .walk
 
         case .jump(let destID, let destX):
-            // He is allowed to arrive before he leaves again: a chained hop still plays the
-            // landing before it winds up for the next one.
-            if s.activity == .land || s.activity == .landHard { break }
+            // (A chained hop plays its landing before winding up for the next one. That used to
+            // be a guard here; it is the landing hold above now, which covers the walk too.)
             // The 100ms crouch, from scratch every time. Non-negotiable: it is the entire
             // difference between a cat and a teleporting rectangle. Requiring that he is
             // ALREADY crouching is what makes it survive a jump planned mid-route — the clock
@@ -886,6 +901,21 @@ public enum Cat {
             break   // resolved into a walk above; unreachable
         }
         return s
+    }
+
+    /// How long a landing reads for before he is a cat again, or nil if he is not landing.
+    ///
+    /// Two clocks, because the two landings are two different animations: the hard one shakes
+    /// himself off, and that takes the length of the `shake` sheet plus a beat holding its
+    /// settled last frame. One function because two callers have to agree (the hold in
+    /// `standing` and the timeout in `step`), and a hold that outlasted its own timeout would
+    /// freeze him on the spot.
+    static func landingHold(_ activity: Activity) -> TimeInterval? {
+        switch activity {
+        case .land: return Feel.Timing.landSeconds
+        case .landHard: return Feel.Timing.landHardSeconds
+        default: return nil
+        }
     }
 
     /// What he asks of himself over a walk of `dx`. Long trips are covered at a trot — a cat

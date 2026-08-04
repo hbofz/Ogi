@@ -237,10 +237,13 @@ final class OgiView: NSView {
         // Rotating about the feet is what makes the lean read as bracing rather than
         // sliding: his paws stay put and his body tips.
         let s = cat.scale
-        // Not `cat.facing` directly: `turn` is drawn as the transition right -> left, so its
-        // mirror is inverted from every other clip. See `Sprites.mirror`.
+        // The flip only. `turn` is drawn as the transition right -> left, so its mirror is
+        // inverted from every other clip. See `Sprites.mirror`.
         let mirror = Sprites.mirror(frame.clip, facing: cat.facing)
-        let lean = -cat.lean * Feel.Physics.maxLean * mirror
+        // The lean is NOT the mirror. The rotation is concatenated after the flip, so it is in
+        // screen space: which way he braces against a moving platform depends on which way he
+        // is pointing, and nothing about how his sheet happens to be drawn.
+        let lean = -cat.lean * Feel.Physics.maxLean * cat.facing
         bodyLayer.anchorPoint = CGPoint(x: 0.5, y: frame.anchor)
         bodyLayer.contents = Sprites.image(frame.clip, frame.index)
         // Nearest-neighbour: these are pixel art, and smoothing turns crisp edges to mush.

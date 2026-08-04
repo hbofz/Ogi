@@ -140,11 +140,17 @@ private func ledgeWorld() -> Skyline {
 
     // Reversing him no longer happens on the tick it is asked for: he pivots, which takes the
     // length of the `turn` sheet, and `facing` leads the pivot rather than following it. So the
-    // second half of this is a couple of hundred milliseconds later than the first, and the
+    // second half of this is a few hundred milliseconds later than the first, and the
     // interesting claim moved to `heTurnsRatherThanFlipping`.
+    //
+    // Run to the resumed walk rather than for a fixed count. He is ALREADY pivoting when this
+    // starts (the step above reversed him too), so a fixed budget here has to cover two of
+    // them back to back, and one written to cover only one passed for a while by landing on a
+    // zero-length second pivot.
     cat.intent = strolling(to: 700, on: ledge)
-    for _ in 0..<Int((Feel.Timing.turnSeconds + 0.1) / dt) {
+    for _ in 0..<Int(5 / dt) {
         cat = Cat.step(cat, world: sky([ledge]), dt: dt)
+        if cat.activity == .walk { break }
     }
     #expect(cat.facing == 1)
     #expect(cat.activity == .walk, "he is still pivoting; the walk never resumed")
