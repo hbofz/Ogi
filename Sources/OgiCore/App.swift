@@ -340,6 +340,11 @@ public final class OgiApp: NSObject, NSApplicationDelegate {
         // 30s of you not touching the machine and there is nothing to watch.
         cat.repose = Feel.Timing.restless ? .awake : Repose.from(idleSeconds: sense.idleSeconds)
         cat.listening = sense.micLive
+        // Typing hard enough that the kind thing is to stay out of your way. Two thresholds, or
+        // he flickers in and out of the pose at every pause for breath.
+        cat.typingHard = cat.typingHard
+            ? sense.typingRate > Feel.Mind.typingCalm
+            : sense.typingRate > Feel.Mind.typingAlert
         cat.languor = sense.languor
 
         // You locked the screen, so he goes home and everything suspends. This is the

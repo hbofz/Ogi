@@ -258,8 +258,22 @@ public struct CatState: Sendable {
     /// Set from the machine each tick. He is a barometer, not a butler: these arrive as
     /// behaviour, never as UI.
     public var repose: Repose = .awake
-    /// Frozen and listening because the microphone went live. Also a privacy indicator.
+    /// Frozen and listening because the microphone went live. Also a privacy indicator: if he
+    /// has gone rigid, your mic is hot.
     public var listening = false
+    /// You are typing hard enough that he stays out of your way. Set by `App` with hysteresis
+    /// (`Feel.Mind.typingAlert` to enter, `typingCalm` to leave) or he flickers at the boundary.
+    public var typingHard = false
+
+    /// He holds completely still, for either reason.
+    ///
+    /// One condition rather than two parallel branches, because the behaviour is identical:
+    /// freeze, stay alert, keep the trip you were on. The two are still distinguishable to
+    /// watch, by how they end. A mic freeze holds for the length of the call; a typing freeze
+    /// relaxes the moment you pause. They do share the `alert` drawing, which slightly dilutes
+    /// the mic's value as a privacy indicator, and a second sheet is the fix if that ever
+    /// matters more than the sheet costs.
+    public var holdingStill: Bool { listening || typingHard }
     /// How far through the righting reflex he is, 0..1.
     public var righting: CGFloat = 1
     /// 0..1. Low battery or Low Power Mode. He moves less and settles sooner.
@@ -300,13 +314,19 @@ public struct CatState: Sendable {
         // He scrabbles, then slides. Always a bounded state — he mantles onto the ledge or
         // runs out of wall — so this cannot hold the render rate up indefinitely.
         if case .clinging = support { return true }
+        // The intent SURVIVES a freeze by design, so that a hot mic at launch no longer destroys
+        // the walk out of the notch. Without this clause that same design would pin the display
+        // link at 60Hz for the length of every call, which is a far worse bug than the one it
+        // fixes. Deliberately below the two airborne cases: a frozen cat in mid-air is still
+        // falling and still has to be drawn.
+        if holdingStill { return false }
         if intent != nil { return true }
         return squashElapsed < 0.4
     }
 
     /// He is settled and nothing is going to change until the world does.
     public var isResting: Bool {
-        !isMoving && (repose != .awake || listening)
+        !isMoving && (repose != .awake || holdingStill)
     }
 
     /// Anisotropic scale about the contact point. Vertical squash, horizontal spread.
@@ -750,10 +770,21 @@ public enum Cat {
         // speed the last one ended at, in whatever direction that happened to be.
         if s.intent == nil { s.perchSpeed = 0 }
 
-        // Frozen. Ears forward, tail dead still. He hears you, and it doubles as a privacy
-        // indicator: if he has gone rigid, your microphone is hot.
-        if s.listening {
-            s.intent = nil
+        // Frozen. Ears forward, tail dead still. He hears you, or you are typing hard enough
+        // that the kind thing is to stay out of the way, and it doubles as a privacy indicator:
+        // if he has gone rigid, your microphone is hot.
+        //
+        // The intent is SUSPENDED, not cleared. Clearing it was a real bug with a real victim:
+        // `arrival()` sets the walk out of the notch at launch, and this branch ran moments
+        // later and destroyed it, so the app's single best first impression was silently
+        // conditional on whether you happened to be on a call. Nothing restored it afterwards
+        // either, so he simply picked somewhere new. `perchSpeed` still has to go to zero or he
+        // coasts through the freeze.
+        //
+        // `isMoving` knows about this, and has to: an intent that survives would otherwise pin
+        // the display link at 60Hz for the length of every call.
+        if s.holdingStill {
+            s.perchSpeed = 0
             s.activity = .alert
             return s
         }

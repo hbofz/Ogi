@@ -373,3 +373,77 @@ private func twoLedges() -> Skyline {
     #expect(went(afterSwitches: 0) == false, "one window into a quiet room should be a glance")
     #expect(went(afterSwitches: 2), "a window opening after you had been busy should be worth a trip")
 }
+
+// MARK: - Task 7: holding still
+
+@Test func typingFastFreezesHim() {
+    let ground = surface(.floor, y: 90, from: 0, to: 1920, z: .max)
+    var cat = CatState(position: CGPoint(x: 300, y: 90))
+    cat.support = .grounded(Perch(id: .floor, dx: 300))
+    cat.typingHard = true
+    cat.restLeft = 0                     // he would otherwise be about to have an idea
+
+    for _ in 0..<(120 * 30) { cat = Cat.step(cat, world: sky([ground]), dt: dt) }
+    #expect(cat.activity == .alert, "he did not snap alert while you were typing")
+    #expect(cat.intent == nil, "he set off somewhere while you were typing")
+}
+
+@Test func aHotMicDoesNotDestroyWhereHeWasGoing() {
+    // The bug: ground()'s listening branch did `intent = nil`, and arrival() sets the
+    // walk-out-of-the-notch intent moments earlier. Launching with a live mic silently
+    // destroyed the app's first impression and nothing restored it.
+    let bar = surface(.menuBar, y: 1205, from: 0, to: 1920, z: -1)
+    var cat = CatState(position: CGPoint(x: 900, y: 1205))
+    cat.support = .grounded(Perch(id: .menuBar, dx: 900))
+    cat.intent = Intent(destination: .menuBar, destinationX: 804, move: .walk(804))
+    cat.listening = true
+
+    for _ in 0..<(120 * 5) { cat = Cat.step(cat, world: sky([bar]), dt: dt) }
+    #expect(cat.activity == .alert)
+    #expect(cat.intent?.destinationX == 804, "the mic ate where he was going")
+    #expect(abs(cat.position.x - 900) < 1, "he moved while frozen")
+
+    // Mic goes quiet: he picks the trip back up rather than picking somewhere new.
+    //
+    // Asked as "does he ever get there", not "where is he in twenty seconds". He arrives in
+    // about two, settles, and then has a fresh idea like any other cat, so a snapshot taken
+    // later measures the next trip rather than this one.
+    cat.listening = false
+    var resumed = false
+    for _ in 0..<(120 * 10) {
+        cat = Cat.step(cat, world: sky([bar]), dt: dt)
+        if abs(cat.position.x - 804) < Feel.Physics.arrivalSlop * 3 { resumed = true; break }
+    }
+    #expect(resumed, "he never resumed the walk; he stopped at \(cat.position.x)")
+}
+
+@Test func aFrozenCatCostsNothingToRender() {
+    // The regression this task could easily cause. isMoving drives the render-rate ladder, and
+    // it returns true whenever intent != nil. Now that a held intent survives the freeze, a
+    // live mic would otherwise pin the display link at 60Hz for the whole call.
+    var cat = CatState(position: CGPoint(x: 900, y: 1205))
+    cat.support = .grounded(Perch(id: .menuBar, dx: 900))
+    cat.intent = Intent(destination: .menuBar, destinationX: 804, move: .walk(804))
+    cat.listening = true
+    #expect(cat.isMoving == false, "a frozen cat is pinning the display link at 60Hz")
+    #expect(cat.isResting == true)
+
+    // ...but a frozen cat in mid-air is still falling, and that has to render.
+    cat.support = .falling
+    #expect(cat.isMoving == true, "he stopped rendering mid-fall because your mic was live")
+}
+
+@Test func holdingStillIsEitherReason() {
+    var cat = CatState(position: .zero)
+    #expect(cat.holdingStill == false)
+    cat.listening = true
+    #expect(cat.holdingStill)
+    cat.listening = false
+    cat.typingHard = true
+    #expect(cat.holdingStill)
+}
+
+@Test func theTypingThresholdsCannotFlicker() {
+    #expect(Feel.Mind.typingCalm < Feel.Mind.typingAlert,
+            "without hysteresis he flickers in and out of the pose at every pause for breath")
+}

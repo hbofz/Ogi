@@ -1205,7 +1205,11 @@ private func steppingOff() -> CatState {
     cat.listening = true
     cat = Cat.step(cat, world: world, dt: dt)
     #expect(cat.activity == .alert)
-    #expect(cat.intent == nil)
+    // The trip SURVIVES the freeze now, and this line used to assert the opposite. That was the
+    // hot-mic bug written down as a requirement: clearing the intent here is exactly what
+    // destroyed the walk out of the notch when the app launched during a call. What this test is
+    // named for, that the mic beats the hold at the lip, is the assertion above and is untouched.
+    #expect(cat.intent != nil, "the freeze ate his trip again")
 
     var asleep = steppingOff()
     for _ in 0..<1800 {
