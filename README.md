@@ -91,4 +91,4 @@ Notes from building this, since most of it is either undocumented or widely misr
 
 ## License
 
-MIT
+Not yet decided. No licence is granted until one is added here.
