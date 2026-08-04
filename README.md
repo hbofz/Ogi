@@ -31,23 +31,39 @@ There is no account, no network, no telemetry, and no backend.
 
 ---
 
-## Status: v0.10
+## Status: built, and not yet watched
 
-He walks your window edges, jumps between them, falls when you close the one he is standing
-on, and **goes behind windows that are in front of him** — which nothing else on any platform
-does. He settles when you stop typing, and freezes when your microphone goes live.
+He walks your window edges and he walks *off* them. Given a desktop with windows on it he
+works his way down: stepping across a gap that is small enough, jumping one he can reach,
+stepping off a ledge onto whatever is below, and deciding again the moment he lands. At a drop
+he stops at the lip, leans over it, looks down, holds there, and then either commits or backs
+off and goes somewhere else instead. Set him down on the face of a window and he clings to it,
+holds, then climbs onto the ledge above him or slides down it. He comes out of the notch at
+launch and goes back into it when you quit. He turns on the spot instead of flipping, and
+shakes himself off after a hard landing.
 
-He is a ginger tabby, drawn across 59 frames in twelve animations. Cursor-tracking eyes are built
-and currently switched off: painting a live pupil needs an empty socket in the artwork, and the
-drawn frames have the eye complete. See `docs/ART-BRIEF.md`.
+He still **goes behind windows that are in front of him**, which nothing else on any platform
+does. He still falls when you close the window under him. He settles when you stop typing, and
+freezes when your microphone goes live.
+
+**None of the new behaviour has been seen on a screen yet.** It is covered by 152 unit tests
+and by simulation (the descent was soaked at 400 runs of 600 seconds, and he was stranded in
+none of them), but every timing was tuned against that simulation rather than against watching
+him, so some of it will read wrong and need retuning. He also still lives on one display: he
+survives a monitor being plugged in, unplugged, or rearranged, and he survives a Space change,
+but he does not cross to another screen.
+
+He is a ginger tabby, drawn across 79 frames in seventeen animations. Cursor-tracking eyes are
+built and currently switched off: painting a live pupil needs an empty socket in the artwork,
+and the drawn frames have the eye complete. See `docs/ART-BRIEF.md`.
 
 **Idle cost: 0.0% CPU, measured.** Once he is asleep the display link is stopped outright and
 he watches for your return once a second. The battery cost of a desktop pet is processor
-wakeups rather than pixels — the best-known offender in this category draws complaints at four
-wakeups a second — so when he has nothing to do he does nothing, rather than redrawing an
+wakeups rather than pixels (the best-known offender in this category draws complaints at four
+wakeups a second), so when he has nothing to do he does nothing, rather than redrawing an
 unchanged cat sixty times a second.
 
-See [ROADMAP.md](ROADMAP.md) for what is left.
+See [ROADMAP.md](ROADMAP.md) for what is left, and for what did not land.
 
 ## Build and run
 
