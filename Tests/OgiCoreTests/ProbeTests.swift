@@ -370,13 +370,17 @@ func PROBE_heComesToYourCursorAndYourClicksStillWork() {
     #expect(still.near > moving.near * 2,
             "a cursor going still barely changes where he spends his time; the behaviour is not firing")
 
-    // He gets off within a beat rather than instantly, and that is the yield rule walking rather
-    // than teleporting: the step aside is Shape.width/2 + cursorGap minus his overshoot, about
-    // 31pt, which at walkSpeed 46 through accel 220 is roughly a second, plus the tick he takes
-    // to notice. Two and a half seconds is that with room, and anything beyond it means he has
-    // settled under the pointer rather than passing through.
-    #expect(still.worstSit < 2.5,
-            "he sat under the pointer for \(still.worstSit)s rather than moving aside")
+    // He gets off within a beat rather than instantly, and the budget is derived rather than
+    // picked so it cannot go stale the way the first version did: `yieldPatience` before he
+    // decides you meant it, then the walk itself. That step is Shape.width/2 + cursorGap less
+    // his overshoot, about 31pt, which at walkSpeed 46 through accel 220 is a shade under a
+    // second. A second and a half of walking budget covers it with room, and anything past that
+    // means he settled under the pointer rather than passing through.
+    let budget = Feel.Mind.yieldPatience + 1.5
+    #expect(still.worstSit < budget,
+            "he sat under the pointer for \(still.worstSit)s against a budget of \(budget)")
+    #expect(moving.worstSit < budget,
+            "a moving pointer never got him to move: \(moving.worstSit)s")
 }
 
 /// What actually happens when you open two windows next to each other, the way a person does.

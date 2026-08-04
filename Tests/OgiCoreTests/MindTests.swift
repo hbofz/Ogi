@@ -855,6 +855,78 @@ private func partlyCoveredLedge() -> Surface {
 
     cat = Cat.step(cat, world: world, dt: dt)
     guard let intent = cat.intent else { Issue.record("he did nothing at all"); return }
-    #expect(intent.destinationX == 300 || intent.destinationX == 700,
-            "he picked \(intent.destinationX) rather than the nearest visible edge")
+    // Somewhere visible, and not standing on the lip of it: the destination is inset from the
+    // span's ends so he does not arrive already deciding whether to step off.
+    let visible = ledge.spans.first { $0.contains(intent.destinationX) }
+    guard let span = visible else {
+        Issue.record("he headed for \(intent.destinationX), which is still behind the window")
+        return
+    }
+    #expect(intent.destinationX - span.lowerBound >= Feel.Physics.edgeApproach - 0.01)
+    #expect(span.upperBound - intent.destinationX >= Feel.Physics.edgeApproach - 0.01)
+}
+
+// MARK: - Deliberate destinations stay off the lip
+
+@Test func aDeliberateDestinationIsNeverOnTheVeryEndOfALedge() {
+    // v2a judged the menu bar's outer ends unreachable because destinations were uniform points
+    // inside a span. Every destination the mind layer picks goes through nearestSpanX, which
+    // CLAMPS to the boundary, so the ends went from never to routine. Hamzah's log caught it:
+    // a walk to x=5 followed by a step off the left end and a drop to the desktop.
+    let spans = [CGFloat(0)...CGFloat(1920)]
+    for want in [CGFloat(-500), -1, 0, 5, 960, 1919, 1921, 5000] {
+        guard let x = Cat.standingRoom(near: want, in: spans) else {
+            Issue.record("no standing room at all for \(want)"); continue
+        }
+        #expect(x >= Feel.Physics.edgeApproach,
+                "want \(want) put him at \(x), on the left lip")
+        #expect(x <= 1920 - Feel.Physics.edgeApproach,
+                "want \(want) put him at \(x), on the right lip")
+    }
+}
+
+@Test func aShortLedgeGivesHimItsMiddle() {
+    // Narrower than two insets there is nowhere that is not near an end, so the honest answer is
+    // the middle rather than nothing.
+    let narrow = [CGFloat(500)...CGFloat(530)]
+    #expect(Cat.standingRoom(near: 500, in: narrow) == 515)
+    #expect(Cat.standingRoom(near: 900, in: narrow) == 515)
+}
+
+@Test func comingToYourCursorDoesNotParkHimOnALip() {
+    // The specific path Hamzah's log caught: cursor near the far left of the menu bar.
+    let bar = surface(.menuBar, y: 1205, from: 0, to: 1920, z: -1)
+    guard let x = Cat.beside(cursor: CGPoint(x: 12, y: 1205), on: bar, from: 800) else {
+        Issue.record("no spot beside a cursor at the left end"); return
+    }
+    #expect(x >= Feel.Physics.edgeApproach, "he settles at \(x), on the lip")
+}
+
+@Test func stepOffTargetsAreUnaffected() {
+    // nearestSpanX still exists and the router still uses it. Insetting THAT would move where he
+    // steps off a ledge, which is v2a's business and not this layer's.
+    let spans = [CGFloat(0)...CGFloat(1920)]
+    #expect(Cat.nearestSpanX(to: -50, in: spans) == 0, "the router's clamp must stay exact")
+    #expect(Cat.nearestSpanX(to: 5000, in: spans) == 1920)
+}
+
+@Test func aJigglingCursorStillGetsHimToMove() {
+    // The yield used to hang off cursorStill, which a pointer moving slightly in place resets
+    // for ever. He sat under it eating clicks for fourteen seconds. The question is how long it
+    // has been ON him, not how long it has been still.
+    let bar = surface(.menuBar, y: 1205, from: 0, to: 1920, z: -1)
+    var cat = CatState(position: CGPoint(x: 900, y: 1205))
+    cat.support = .grounded(Perch(id: .menuBar, dx: 900))
+    cat.restLeft = .infinity
+
+    var jiggle: CGFloat = 0
+    for _ in 0..<(120 * 20) {
+        jiggle = jiggle > 1 ? 0 : jiggle + 0.4     // never still, always on him
+        cat.cursor = CGPoint(x: 900 + jiggle, y: 1215)
+        cat.cursorStill = 0                        // exactly what a moving pointer does
+        cat = Cat.step(cat, world: sky([bar]), dt: dt)
+    }
+    let clear = Feel.Shape.width / 2 + Feel.Mind.cursorGap
+    #expect(abs(cat.position.x - 900) >= clear - Feel.Physics.arrivalSlop * 3,
+            "he stayed under a jiggling pointer at \(cat.position.x), eating every click")
 }

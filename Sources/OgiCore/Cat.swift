@@ -309,6 +309,12 @@ public struct CatState: Sendable {
     /// How long he has been somewhere you cannot see him. He wants to be seen: a cat behind a
     /// window is a cat doing nothing, however good the thing he is doing.
     public var hiddenFor: TimeInterval = 0
+
+    /// How long your cursor has been ON him, which is not the same question as how long it has
+    /// been still. Reusing `cursorStill` for this looked free and was wrong: a pointer jiggling
+    /// in place resets it for ever, so he would sit under it swallowing clicks and never decide
+    /// he was in the way. Measured at fourteen seconds before this existed.
+    public var cursorOnHimFor: TimeInterval = 0
     /// Covering a long distance, so he trots instead of strolling.
     public var hurrying = false
 
@@ -371,6 +377,8 @@ public enum Cat {
         // How long you have not been able to see him. Counted here rather than in the branch
         // that acts on it, so that time spent hidden while walking somewhere still counts.
         s.hiddenFor = isHidden(s, world: world) ? s.hiddenFor + dt : 0
+        s.cursorOnHimFor = s.cursor.map { hisBox(s).contains($0) } == true
+            ? s.cursorOnHimFor + dt : 0
 
         // A glance is a one-shot: consumed here, cleared, and never written back, so it cannot
         // re-fire on the next 120 ticks. The gaze is `App`'s only read of this.
@@ -426,7 +434,7 @@ public enum Cat {
                case .grounded(let perch) = s.support,
                let here = world.surface(perch.id),
                let dest = surfaceAt(stim.at, in: world),
-               let x = nearestSpanX(to: stim.at.x, in: dest.spans),
+               let x = standingRoom(near: stim.at.x, in: dest.spans),
                let move = nextMove(from: s, on: here, toward: dest.id, x: x, world: world) {
                 s.intent = Intent(destination: dest.id, destinationX: x, move: move)
                 if case .jump = move { s.activity = .crouch } else { s.activity = .walk }
@@ -845,15 +853,18 @@ public enum Cat {
         // sleep gate, which has better reasons not to move him. Being held puts the cursor on
         // him by definition, and `standing` is only reachable while grounded, so the drag is
         // safe by structure rather than by a check.
-        // Both axes, and only once you have SETTLED there. Measured across x alone it fired for
-        // a cursor anywhere vertically, and firing on arrival meant that pointing at him made
-        // him scoot: the approach needs a full minute of stillness and the yield needed none, so
-        // "mouse near cat" always lost the race and always read as the cat avoiding you. He
-        // tolerates you pointing at him and moves only if you park there, which is also what a
-        // cat does. `cursorStill` already resets the moment you move, so this costs no new state.
+        // Both axes, and only once your cursor has been ON him for a beat. Measured across x
+        // alone it fired for a cursor anywhere vertically, and firing on arrival meant that
+        // pointing at him made him scoot: coming over needs a full minute of stillness and the
+        // yield needed none, so "mouse near cat" always lost the race and always read as the cat
+        // avoiding you. He tolerates you pointing at him and moves only if you stay there.
+        //
+        // `cursorOnHimFor` and not `cursorStill`, which is a different question and was the
+        // first thing I reached for: a pointer jiggling in place keeps resetting stillness, so
+        // he sat under it swallowing clicks for fourteen seconds and never decided he was in
+        // the way.
         if s.intent == nil, let cursor = s.cursor,
-           s.cursorStill >= Feel.Mind.yieldPatience,
-           hisBox(s).contains(cursor),
+           s.cursorOnHimFor >= Feel.Mind.yieldPatience,
            let x = beside(cursor: cursor, on: surface, from: s.position.x),
            abs(x - s.position.x) > Feel.Physics.arrivalSlop {
             s.intent = Intent(destination: surface.id, destinationX: x, move: .walk(x))
@@ -969,7 +980,7 @@ public enum Cat {
             // decide what to clip. He steps out along his own ledge if any of it is still
             // showing, and only leaves the ledge entirely when the whole thing is covered.
             if s.hiddenFor >= Feel.Mind.hiddenPatience {
-                if let x = nearestSpanX(to: s.position.x, in: surface.spans),
+                if let x = standingRoom(near: s.position.x, in: surface.spans),
                    abs(x - s.position.x) > Feel.Physics.arrivalSlop * 3 {
                     s.intent = Intent(destination: surface.id, destinationX: x, move: .walk(x))
                     s.activity = .walk
@@ -1697,7 +1708,7 @@ public enum Cat {
         // The near side first, then the far one, so a cursor at the very end of a ledge still
         // gets him beside it rather than nowhere.
         for want in [near, far] {
-            guard let x = nearestSpanX(to: want, in: surface.spans) else { continue }
+            guard let x = standingRoom(near: want, in: surface.spans) else { continue }
             if abs(x - cursor.x) >= clear { return x }
         }
         return nil
@@ -1718,6 +1729,27 @@ public enum Cat {
             .filter { $0.targetable && !$0.spans.isEmpty }
             .min { abs($0.y - p.y) < abs($1.y - p.y) }
             .flatMap { abs($0.y - p.y) <= Feel.World.coplanarTolerance ? $0 : nil }
+    }
+
+    /// The point on these spans closest to `x`, kept back from their outer ends so he does not
+    /// arrive standing on a lip.
+    ///
+    /// Every deliberate destination in the mind layer goes through here, and `nearestSpanX`
+    /// clamps to the boundary exactly. v2a knew the menu bar's outer ends were cliffs and judged
+    /// them unreachable, correctly: destinations were uniform points inside a span, so hitting
+    /// the end had essentially zero probability. Clamping made it routine, and Hamzah's log
+    /// caught the result, a walk to x=5 followed by a step off the left end of the menu bar and
+    /// a drop to the desktop he cannot climb back from.
+    ///
+    /// Inset by `edgeApproach`, which is the distance a step-off aims past a lip and so the
+    /// distance at which `isAtEdge` stops being true. Spans shorter than twice that get their
+    /// midpoint, since there is nowhere in them that is not near an end.
+    static func standingRoom(near x: CGFloat, in spans: [ClosedRange<CGFloat>]) -> CGFloat? {
+        let inset = Feel.Physics.edgeApproach
+        return spans.map { span -> CGFloat in
+            guard span.length > inset * 2 else { return (span.lowerBound + span.upperBound) / 2 }
+            return min(max(x, span.lowerBound + inset), span.upperBound - inset)
+        }.min { abs($0 - x) < abs($1 - x) }
     }
 
     /// The point on these spans closest to `x`. Deterministic, unlike `landingX`: the router
