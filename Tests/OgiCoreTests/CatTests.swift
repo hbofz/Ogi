@@ -319,6 +319,19 @@ private let notched = ScreenGeometry(frame: CGRect(x: 0, y: 0, width: 1920, heig
 }
 
 @MainActor
+@Test func aNotchlessMacStillHasADoorway() {
+    // homeX used to be nil without a notch, so desktop Macs got no fullscreen retreat, no
+    // pre-sleep settle, and an instant quit with no goodbye. Home falls back to under his own
+    // menu bar item — where you click to quit — and doorway() must hand a mid-run home back
+    // untouched rather than "the edge ahead": on an unbroken bar the edge ahead is the screen
+    // corner, which is a lip he must not be sent to.
+    let world = World.build(windows: [], screen: screen, ownPID: 99)
+    let bar = world.surface(.menuBar)!
+    #expect(OgiApp.doorway(from: 400, toward: 1700, on: bar) == 1700)
+    #expect(OgiApp.doorway(from: 1900, toward: 1700, on: bar) == 1700)
+}
+
+@MainActor
 @Test func fullscreenSomewhereElseIsNotFullscreenHere() {
     // The raw snapshot is the GLOBAL window list. Judged on a window's own size, a
     // fullscreen video on the external display — or any window merely bigger than his

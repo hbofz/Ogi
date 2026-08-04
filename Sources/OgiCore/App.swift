@@ -268,19 +268,37 @@ public final class OgiApp: NSObject, NSApplicationDelegate {
         return c
     }
 
-    /// Where he goes to be gone. Nil on a Mac with no notch.
+    /// The notch doorway he came out of. Nil on a Mac with no notch — `effectiveHomeX` is
+    /// what the retreats and the goodbye actually use.
     private var homeX: CGFloat?
     private var leaving = false
 
-    /// The edge of the cutout on *his* side of it. `homeX` is fixed at launch to the one he
-    /// came out of, and the two are only the same while he stays on that side.
+    /// Where he goes to be gone. The notch doorway when he came out of one; under his own
+    /// menu bar item otherwise, because that is the one piece of him always in the bar and
+    /// it is where you click to quit. Nil only when there is no bar at all, in which case
+    /// retreats do nothing and quitting is instant, same as before.
+    private var effectiveHomeX: CGFloat? {
+        if let homeX { return homeX }
+        guard let bar = skyline.surface(.menuBar) else { return nil }
+        let icon = statusItem?.button?.window?.frame.midX
+        // Clamped to standing room, so the walk home never aims at a lip.
+        return Cat.standingRoom(near: icon ?? bar.extent.upperBound, in: bar.spans)
+    }
+
+    /// The edge of the cutout on *his* side of it, or `homeX` itself when no lip lies on the
+    /// way — which is every notchless Mac, where home is mid-run and the edge ahead is the
+    /// screen corner. `homeX` is fixed at launch to the doorway he came out of, and the two
+    /// are only the same while he stays on that side.
     static func doorway(from x: CGFloat, toward homeX: CGFloat, on bar: Surface) -> CGFloat {
         // Already standing on it. Not a formality: the lip is where the wall branch parks him
         // after every bump, and the runs either side of the cutout are closed, so asking which
         // way to walk from a boundary he already occupies picks the run *behind* him and sends
         // him to the far end of the screen.
         guard x != homeX else { return homeX }
-        return Cat.edgeAhead(from: x, facing: x < homeX ? 1 : -1, on: bar) ?? homeX
+        guard let edge = Cat.edgeAhead(from: x, facing: x < homeX ? 1 : -1, on: bar),
+              x < homeX ? edge < homeX : edge > homeX
+        else { return homeX }
+        return edge
     }
 
     private func setupStatusItem() {
@@ -298,7 +316,7 @@ public final class OgiApp: NSObject, NSApplicationDelegate {
     /// A goodbye, not a process termination. He walks back into the notch and it closes
     /// behind him.
     @objc private func goHomeAndQuit() {
-        guard let homeX, !leaving, case .grounded = cat.support else {
+        guard let home = effectiveHomeX, !leaving, case .grounded = cat.support else {
             NSApp.terminate(nil)
             return
         }
@@ -311,13 +329,13 @@ public final class OgiApp: NSObject, NSApplicationDelegate {
         // He steps onto the bar wherever he happens to be — unless that is under the notch,
         // which is a hole in it. From there there is nothing to step onto, so he is already
         // at the doorway as far as the walk home is concerned.
-        let startX = bar?.solid.contains { $0.contains(cat.position.x) } == true ? cat.position.x : homeX
+        let startX = bar?.solid.contains { $0.contains(cat.position.x) } == true ? cat.position.x : home
         cat.support = .grounded(Perch(id: .menuBar, dx: startX - (bar?.extent.lowerBound ?? 0)))
         cat.position = CGPoint(x: startX, y: bar?.y ?? cat.position.y)
         // He goes in the near side of the doorway, not the side he came out of. Sending him
         // to the far one routes him across the cutout, which is a wall: he would stop at the
         // lip and quitting would sit there for the whole eight seconds below.
-        let goingTo = bar.map { OgiApp.doorway(from: startX, toward: homeX, on: $0) } ?? homeX
+        let goingTo = bar.map { OgiApp.doorway(from: startX, toward: home, on: $0) } ?? home
         self.homeX = goingTo        // the arrival check in `tick` has to match where he went
         cat.intent = Intent(destination: .menuBar, destinationX: goingTo, move: .walk(goingTo))
         log("going home")
@@ -646,9 +664,9 @@ public final class OgiApp: NSObject, NSApplicationDelegate {
     /// cat glancing at the floor the day they return. One helper because the two retreats
     /// (fullscreen, machine sleep) are the same act with a different prompt.
     private func headHome(because reason: String) {
-        guard let homeX else { return }
+        guard let home = effectiveHomeX else { return }
         cat.receive(Stimulus(kind: .goHome,
-                             at: CGPoint(x: homeX, y: skyline.screen.visibleFrame.maxY)))
+                             at: CGPoint(x: home, y: skyline.screen.visibleFrame.maxY)))
         log(reason)
     }
 
