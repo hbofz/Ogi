@@ -20,7 +20,7 @@ public enum Sprites {
 
     /// Ordered frames per animation. Names match the files in Resources/Sprites.
     public enum Clip: String, Sendable {
-        case walk, idle, jump, land, fall, run, alert, sitdown, held, sleep, groom, curl
+        case walk, idle, jump, land, fall, run, alert, sitdown, held, sleep, groom, curl, cling
 
         var count: Int {
             switch self {
@@ -36,6 +36,7 @@ public enum Sprites {
             case .alert: 3
             case .groom: 6
             case .curl: 5
+            case .cling: 4
             }
         }
 
@@ -54,6 +55,7 @@ public enum Sprites {
             case .alert: 1.2
             case .groom: 8
             case .curl: 6
+            case .cling: 4      // a slow scrabble, not a flail
             }
         }
 
@@ -61,7 +63,8 @@ public enum Sprites {
             switch self {
             // groom loops: a cat washing does it for a while, and the sheet's last frame
             // returns to the sitting pose it started from, so the seam is invisible.
-            case .walk, .run, .idle, .sleep, .held, .alert, .groom: true
+            // cling loops: he holds on until he lets go.
+            case .walk, .run, .idle, .sleep, .held, .alert, .groom, .cling: true
             // curl settles into the sleep pose and holds it until sleep takes over.
             case .jump, .land, .fall, .sitdown, .curl: false
             }
@@ -173,6 +176,15 @@ public enum Sprites {
     static func footAnchor(_ clip: Clip) -> CGFloat {
         switch clip {
         case .held: return 0.95     // gripped by the scruff, near the top
+        // Same situation as `held`: nothing touches the ground, so the point held fixed at
+        // `cat.position` is his grip on the wall — his raised front paws, near the top. Every
+        // automatic bottom-of-ink reading finds his HANGING TAIL instead and would dangle him
+        // upside down off the window, which is exactly the mistake that once shipped on `fall`.
+        //
+        // Set BY EYE off the four frames, whose paws sit somewhere around 0.80-0.90 of the way
+        // up the 628px band, and never visually confirmed. Look at him on a real window and
+        // adjust; do not "correct" it from a measured ink box.
+        case .cling: return 0.85
         default:    return 0
         }
     }
