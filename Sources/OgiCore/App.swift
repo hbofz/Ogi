@@ -445,20 +445,38 @@ public final class OgiApp: NSObject, NSApplicationDelegate {
     // MARK: - Being handled
 
     private var dragSamples: [(t: CFTimeInterval, p: CGPoint)] = []
+    /// Where the press started, while it is still a press. Nil once it becomes a grab.
+    private var pressStart: CGPoint?
 
     private func handleDrag(_ phase: DragPhase, _ point: CGPoint) {
         switch phase {
         case .began:
             guard hitRect().contains(point) else { return }
-            cat = Cat.grab(cat, at: point)
+            // Not a grab yet. A click is a pet: the scruffing waits until your hand actually
+            // moves, so a tap never reads as rough handling.
+            pressStart = point
             dragSamples = [(CACurrentMediaTime(), point)]
-            log("scruffed")
         case .moved:
+            if let start = pressStart {
+                guard hypot(point.x - start.x, point.y - start.y) > Feel.Mind.grabSlop else {
+                    return
+                }
+                pressStart = nil
+                cat = Cat.grab(cat, at: point)
+                log("scruffed")
+            }
             guard case .held = cat.support else { return }
             cat.support = .held(point)
             dragSamples.append((CACurrentMediaTime(), point))
             if dragSamples.count > 6 { dragSamples.removeFirst() }
         case .ended:
+            if pressStart != nil {
+                pressStart = nil
+                dragSamples = []
+                cat = Cat.pet(cat, at: point)
+                log("petted")
+                return
+            }
             guard case .held = cat.support else { return }
             // Throw velocity from the last few samples, not from the final pair: a single
             // frame of jitter at release otherwise launches him across the screen.

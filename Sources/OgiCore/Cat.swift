@@ -792,6 +792,28 @@ public enum Cat {
         return below.spans.contains { $0.contains(p.x) }
     }
 
+    /// A tap, not a grab. He responds — manifesto §7.7's first line, "he has to respond or
+    /// he is scenery" — with the two things his body can already do: a small press-down
+    /// through the same squash a landing uses, and the alert perk held for a glance's beat,
+    /// eyes to your hand. He stays exactly where he is: a pet must never move him, or
+    /// clicking him becomes a way to lose him.
+    ///
+    /// Mid-air and mid-carry are untouched, and a pet mid-walk is just the press: snapping
+    /// the pose would stop him dead, the same reason the glance does not interrupt a walk.
+    public static func pet(_ state: CatState, at point: CGPoint) -> CatState {
+        guard case .grounded = state.support else { return state }
+        var s = state
+        s.squash = Feel.Mind.petSquash
+        s.squashElapsed = 0
+        s.lookingAt = point
+        s.glanceLeft = Feel.Mind.glanceSeconds
+        if !s.holdingStill, s.intent == nil {
+            s.activity = .alert
+            s.activityElapsed = 0
+        }
+        return s
+    }
+
     /// Picked up. He goes limp rather than struggling, because that is what cats do.
     public static func grab(_ state: CatState, at point: CGPoint) -> CatState {
         var s = state

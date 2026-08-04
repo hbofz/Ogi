@@ -255,6 +255,14 @@ public enum Feel {
         /// short enough that you do not lose him.
         public static let hiddenPatience: TimeInterval = 10
 
+        /// How far your hand has to move before a press becomes a grab. Below it, releasing
+        /// is a pet: the most basic interaction there is, and it must not read as a
+        /// scruffing. A real drag starts this many points late, which is imperceptible.
+        public static let grabSlop: CGFloat = 4
+        /// How hard a pet presses him down, through the same squash a landing uses. Well
+        /// under a hard landing's 0.30: a hand is not a floor.
+        public static let petSquash: CGFloat = 0.12
+
         /// `restLeft` drains at `1 + arousal * this`, so a fully roused cat has an idea about
         /// two and a half times sooner.
         public static let restUrgency: Double = 1.5

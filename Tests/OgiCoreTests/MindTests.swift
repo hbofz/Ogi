@@ -576,6 +576,26 @@ private func twoLedges() -> Skyline {
     #expect(cat.intent?.destinationX == 1000)
 }
 
+@Test func aTapIsAPetNotAScruffing() {
+    // Manifesto §7.7's first line: click him and he responds. mouseDown used to go straight
+    // to the grab, so the most basic interaction there is read as rough handling. A pet
+    // presses him down through the same squash a landing uses, perks him for a glance's
+    // beat, and never moves him.
+    var cat = CatState(position: CGPoint(x: 900, y: 1205))
+    cat.support = .grounded(Perch(id: .menuBar, dx: 900))
+
+    let petted = Cat.pet(cat, at: CGPoint(x: 900, y: 1215))
+    #expect(petted.position == cat.position, "a pet moved him")
+    if case .held = petted.support { Issue.record("a pet picked him up") }
+    #expect(petted.squash > 0, "no press, no response")
+    #expect(petted.activity == .alert, "he did not react at all")
+    #expect(petted.lookingAt != nil, "his eyes should go to your hand")
+
+    // Mid-air he is not pettable, he is falling.
+    cat.support = .falling
+    #expect(Cat.pet(cat, at: .zero).squash == 0)
+}
+
 @Test func aCoveredScreenGetsNoStrolls() {
     // After the retreat the world is still there — the fullscreen window's top edge, the menu
     // bar, the floor — and ordinary boredom would put him back on top of the movie within a
