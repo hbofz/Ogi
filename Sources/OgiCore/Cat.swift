@@ -303,7 +303,17 @@ public enum Cat {
             s.perchSpeed = 0
 
             if s.activityElapsed > Feel.Timing.clingHold {
-                let at = CGPoint(x: rect.minX + grip.dx, y: surface.y - grip.dy)
+                // Where the slide would actually put him down: the BOTTOM of the face, not
+                // wherever he happens to be hanging. It carries him all the way there and lets
+                // go, straight past anything in between, because a clinging cat is never
+                // tested against the ground.
+                //
+                // Asking at his live grip point instead is not merely imprecise, it does not
+                // terminate: the answer flips at every intervening window's top edge, and the
+                // two branches move him in opposite directions across it, so he saws inside a
+                // one-point band for ever. Measured from the bottom edge the question does not
+                // depend on `grip.dy` at all, so no such band can exist.
+                let at = CGPoint(x: rect.minX + grip.dx, y: rect.minY)
                 // He grabbed this face on purpose, so he goes up it whatever is underneath.
                 // Without this the whole route is a cycle: he leaps at a window from the
                 // desktop, grips it near the bottom, sees perfectly visible floor below him
@@ -1007,8 +1017,12 @@ public enum Cat {
                 s.activity = .crouch
                 break
             }
+            // Half-open on the right, matching `CGRect.contains`, which is the test the grab on
+            // the way up actually applies. Zero-width exposure, but the two are meant to be the
+            // same question and a launch admitted at exactly `maxX` would rise through a face
+            // that then refused to hold him.
             guard let target = world.surface(destID), let rect = target.rect,
-                  rect.minX <= s.position.x, s.position.x <= rect.maxX,
+                  rect.minX <= s.position.x, s.position.x < rect.maxX,
                   let v = launch(dx: 0, dy: climbLift(to: rect, from: s.position)) else {
                 // The window moved out from over him while he was winding up.
                 settle(&s)
@@ -1168,8 +1182,7 @@ public enum Cat {
         // Below the hop deliberately. A climb is slower and more committing than a leap, so it
         // is what he does when leaping will not do.
         if dest.y > surface.y,
-           let climb = climbTarget(from: here, on: surface, toward: destX,
-                                   target: target, current: current, world: world) {
+           let climb = climbTarget(on: surface, toward: destX, target: target, world: world) {
             return .climb(climb.id, climb.x)
         }
 
@@ -1222,25 +1235,36 @@ public enum Cat {
     /// - and getting up there is progress, the same bar the hop has to clear, without which
     ///   he would climb something that takes him further away and then climb back.
     ///
-    /// The chosen x does not depend on where he is standing, only on the destination and the
-    /// two rects. That is what makes walking to it and then re-planning terminate: he gets the
-    /// same answer when he arrives as the one that sent him.
-    private static func climbTarget(from here: CGPoint, on surface: Surface, toward destX: CGFloat,
-                                    target: CGPoint, current: CGFloat,
+    /// **Nothing in here depends on where he is standing** — only on the destination, his
+    /// surface, and the candidate rects. That is what makes "walk to it, then re-plan on
+    /// arrival" terminate: he gets the same answer when he arrives as the one that sent him.
+    /// Which is why progress is measured from the LAUNCH point rather than from his feet: the
+    /// same trade, asked at the place the trade is actually made, and it reduces to the honest
+    /// question, does going up leave me vertically nearer than staying on this ledge. Measured
+    /// from his feet it would admit a climb from across the room and refuse the identical climb
+    /// once he had walked under it, which is a wasted trip rather than a cycle but is still not
+    /// the router meaning what it says.
+    private static func climbTarget(on surface: Surface, toward destX: CGFloat,
+                                    target: CGPoint,
                                     world: Skyline) -> (id: SurfaceID, x: CGFloat)? {
         world.surfaces
             .filter { $0.targetable && !$0.spans.isEmpty }
             .compactMap { other -> (id: SurfaceID, x: CGFloat, d: CGFloat)? in
                 guard let rect = other.rect,
                       rect.maxY > surface.y + Feel.Physics.climbBite,
-                      launch(dx: 0, dy: climbLift(to: rect, from: here), jitter: 0) != nil,
                       let x = nearestSpanX(to: min(max(destX, rect.minX + Feel.World.cornerInset),
                                                    rect.maxX - Feel.World.cornerInset),
                                            in: surface.solid),
-                      rect.minX <= x, x <= rect.maxX else { return nil }
-                return (other.id, x, hypot(x - target.x, other.y - target.y))
+                      // Half-open on the right, because `CGRect.contains` is — and the grab on
+                      // the way up is exactly that test, so a launch this admitted at maxX
+                      // would rise through a face that refused to hold him.
+                      rect.minX <= x, x < rect.maxX,
+                      launch(dx: 0, dy: climbLift(to: rect, from: CGPoint(x: x, y: surface.y)),
+                             jitter: 0) != nil else { return nil }
+                let from = hypot(x - target.x, surface.y - target.y)
+                let d = hypot(x - target.x, other.y - target.y)
+                return d < from - Feel.Physics.arrivalSlop ? (other.id, x, d) : nil
             }
-            .filter { $0.d < current - Feel.Physics.arrivalSlop }
             .min { $0.d < $1.d }
             .map { ($0.id, $0.x) }
     }

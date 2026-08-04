@@ -992,6 +992,52 @@ private func desktop(with w: CGRect) -> Skyline {
     #expect(slider.position.y < 1200 - 505, "he let go without ever sliding down")
 }
 
+@Test func aWindowInFrontOfTheFaceCannotTrapHimSawingAtIt() {
+    // The slide does not release him where he is hanging. It carries him to the BOTTOM of the
+    // face and lets go there, straight past anything in between, because a clinging cat is
+    // never tested against the ground. So "where would letting go put him" has to be asked
+    // about the bottom of the face — and asking it at his live grip point instead is not
+    // merely imprecise, it OSCILLATES: the answer flips at every intervening window's top
+    // edge, and the two branches move him in opposite directions across it.
+    //
+    // A maximized window with its bottom edge on the floor (so the floor is carved away at
+    // every x), and a smaller one in front of it. Above the small window's top edge, letting
+    // go looks like it would land him on something visible; below it, on the invisible floor.
+    // He saws back and forth across y = 700 for ever inside a one-point band — and `.clinging`
+    // means `isMoving`, so `enterSlumber` becomes unreachable and the display link is pinned at
+    // 60Hz for the rest of the session. Exactly what the comment on `isMoving` promises cannot
+    // happen.
+    let world = World.build(
+        windows: [RawWindow(id: 1, pid: 2, layer: 0,
+                            rect: CGRect(x: 700, y: 400, width: 500, height: 300),
+                            alpha: 1, owner: "Front"),
+                  RawWindow(id: 2, pid: 2, layer: 0,
+                            rect: CGRect(x: 0, y: 90, width: 1920, height: 1115),
+                            alpha: 1, owner: "Maximized")],
+        screen: screen, ownPID: 99)
+    #expect(world.surface(.floor)?.spans.isEmpty == true,
+            "fixture: the floor is still visible, so there is nothing to flip against")
+    #expect(world.surface(.window(1))?.spans.first?.contains(950) == true,
+            "fixture: the window in front is not visible at his x, so there is no flip")
+
+    // On the maximized window's face at x=950, a hundred points above the other's top edge and
+    // far past `mantleReach`. No intent: this is a release, not a deliberate climb.
+    var cat = CatState(position: CGPoint(x: 950, y: 800))
+    cat.support = .clinging(Grip(id: .window(2), dx: 950, dy: 405))
+
+    for _ in 0..<(120 * 30) {
+        cat = Cat.step(cat, world: world, dt: dt)
+        if case .clinging = cat.support { continue }
+        break
+    }
+    guard case .grounded(let p) = cat.support else {
+        Issue.record("he never got off the face in 30s, got \(cat.support)")
+        return
+    }
+    #expect(p.id == .window(2), "he mantled onto the wrong thing")
+    #expect(abs(cat.position.y - 1205) < 0.001)
+}
+
 // MARK: - The tell
 
 /// He is on the ledge at 700 with a reason to be on the floor. `stepOffLip` picks the right-hand
