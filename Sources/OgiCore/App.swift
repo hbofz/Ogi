@@ -144,7 +144,12 @@ public final class OgiApp: NSObject, NSApplicationDelegate {
     /// The edge of the cutout on *his* side of it. `homeX` is fixed at launch to the one he
     /// came out of, and the two are only the same while he stays on that side.
     static func doorway(from x: CGFloat, toward homeX: CGFloat, on bar: Surface) -> CGFloat {
-        Cat.edgeAhead(from: x, facing: x < homeX ? 1 : -1, on: bar) ?? homeX
+        // Already standing on it. Not a formality: the lip is where the wall branch parks him
+        // after every bump, and the runs either side of the cutout are closed, so asking which
+        // way to walk from a boundary he already occupies picks the run *behind* him and sends
+        // him to the far end of the screen.
+        guard x != homeX else { return homeX }
+        return Cat.edgeAhead(from: x, facing: x < homeX ? 1 : -1, on: bar) ?? homeX
     }
 
     private func setupStatusItem() {

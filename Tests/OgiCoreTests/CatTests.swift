@@ -188,6 +188,16 @@ private let notched = ScreenGeometry(frame: CGRect(x: 0, y: 0, width: 1920, heig
     #expect(OgiApp.doorway(from: 400, toward: notch.minX, on: bar) == notch.minX)
     #expect(OgiApp.doorway(from: 1500, toward: notch.minX, on: bar) == notch.maxX)
 
+    // Standing exactly on a lip, which is the common case rather than a corner: it is where
+    // the wall branch parks him after every bump, and where the under-the-notch guard puts
+    // him. The runs either side of the cutout are closed, so asking which way to walk from a
+    // boundary he already occupies picks the run *behind* him — from the left lip that is the
+    // whole left half of the bar, a 9.7s walk the wrong way, past the 8s quit failsafe.
+    #expect(OgiApp.doorway(from: notch.minX, toward: notch.minX, on: bar) == notch.minX)
+    #expect(OgiApp.doorway(from: notch.maxX, toward: notch.maxX, on: bar) == notch.maxX)
+    // On a centred notch homeX is the left lip, so this is what a bump on the RIGHT one gives.
+    #expect(OgiApp.doorway(from: notch.maxX, toward: notch.minX, on: bar) == notch.maxX)
+
     // He actually reaches it, and `tick`'s arrival check fires.
     let home = OgiApp.doorway(from: 400, toward: notch.maxX, on: bar)
     var cat = CatState(position: CGPoint(x: 400, y: bar.y))
