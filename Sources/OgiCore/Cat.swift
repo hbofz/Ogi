@@ -265,6 +265,11 @@ public enum Cat {
             s.position = CGPoint(x: origin + perch.dx, y: surface.y)
             s.velocity = .zero
             s = ground(s, on: surface, world: world, dt: dt)
+            // The other two ways off the ground. `ground` decides to walk off a cliff or to
+            // launch a jump, and both leave through here rather than through the branch above,
+            // so the ledge he was measuring against a moment ago is gone and the reading with
+            // it. Clearing after the decision keeps the pre-decision ground the router reads.
+            if case .falling = s.support { s.footing = Footing() }
 
             // Braced against the motion. He is standing on a moving object.
             if abs(s.lean) > Feel.Physics.braceThreshold, s.goal == nil {

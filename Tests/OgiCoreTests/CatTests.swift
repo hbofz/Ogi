@@ -58,6 +58,9 @@ private let dt = Feel.Timing.fixedDT
     cat = Cat.step(cat, world: sky([]), dt: dt)
     #expect(cat.support == .falling)
     #expect(cat.activity == .slip)
+    // This branch returns before the grounded branch can recompute it, so the reading has to
+    // be cleared on the way in rather than at each exit.
+    #expect(cat.footing.edgeAhead == .infinity)
 }
 
 @Test func draggingHisWindowCarriesHim() {
@@ -117,6 +120,7 @@ private func ledgeWorld() -> Skyline {
         Issue.record("still grounded at x=\(Int(cat.position.x)); clampToSurface is still pinning him")
         return
     }
+    #expect(cat.footing.edgeAhead == .infinity, "airborne, still reporting the ledge he left")
 }
 
 @Test func heTurnsAroundAtAWallInsteadOfStopping() {
@@ -176,6 +180,31 @@ private func ledgeWorld() -> Skyline {
     #expect(!cat.footing.isCliff)
     #expect(!cat.footing.gapAhead, "the end of the world is not a hole")
     #expect(cat.footing.isAtEdge)                     // 20 <= edgeApproach
+}
+
+@Test func footingIsClearedOnTheTickHeCommitsToAJump() {
+    // The fourth way off the ground, and the one with no `.falling` branch in front of it:
+    // `ground` decides to launch *after* footing has been computed, so the launch tick ended
+    // with him airborne and still reporting a 50pt edge and a 500pt drop under it. That is
+    // exactly the frame a hesitation tell reads, and it would play one over a cat already in
+    // the air.
+    let world = ledgeWorld()
+    var cat = CatState(position: CGPoint(x: 850, y: 600))
+    cat.support = .grounded(Perch(id: .window(1), dx: 450))
+    cat.facing = 1
+    cat.goal = .jumpTo(.floor, 1200)
+    cat.activity = .crouch          // already past the decision; only the wind-up is left
+
+    cat = Cat.step(cat, world: world, dt: dt)
+    #expect(cat.footing.dropAhead != nil, "he was never measuring an edge, so this proves nothing")
+
+    for _ in 0..<Int(1 / dt) {
+        cat = Cat.step(cat, world: world, dt: dt)
+        if case .falling = cat.support { break }
+    }
+    guard case .falling = cat.support else { Issue.record("he never left the ground"); return }
+    #expect(cat.footing.edgeAhead == .infinity, "airborne, still standing next to a drop")
+    #expect(cat.footing.dropAhead == nil)
 }
 
 @Test func footingIsInfiniteWhileAirborne() {
