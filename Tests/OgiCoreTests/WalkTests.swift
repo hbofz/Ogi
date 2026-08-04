@@ -19,7 +19,7 @@ private func surface(_ id: SurfaceID, y: CGFloat, from: CGFloat, to: CGFloat, z:
 
 private let dt = Feel.Timing.fixedDT
 
-/// Parked on a wide surface with an explicit goal, so nothing is left to chance.
+/// Parked on a wide surface with an explicit intent, so nothing is left to chance.
 private func standing(at x: CGFloat, on s: Surface) -> CatState {
     var cat = CatState(position: CGPoint(x: x, y: s.y))
     cat.support = .grounded(Perch(id: s.id, dx: x - s.extent.lowerBound))
@@ -27,14 +27,19 @@ private func standing(at x: CGFloat, on s: Surface) -> CatState {
     return cat
 }
 
+/// A single hop on the surface he is already standing on: what `Goal.walkTo` used to mean.
+private func strolling(to x: CGFloat, on s: Surface) -> Intent {
+    Intent(destination: s.id, destinationX: x, move: .walk(x))
+}
+
 @Test func heWalksToHisDestinationAndStops() {
     let ledge = surface(.window(1), y: 500, from: 0, to: 800)
     var cat = standing(at: 100, on: ledge)
-    cat.goal = .walkTo(400)
+    cat.intent = strolling(to: 400, on: ledge)
 
     for _ in 0..<Int(20 / dt) {
         cat = Cat.step(cat, world: sky([ledge]), dt: dt)
-        if cat.goal == nil { break }
+        if cat.intent == nil { break }
     }
     #expect(abs(cat.position.x - 400) < Feel.Physics.arrivalSlop + 1)
     #expect(cat.activity == .idle, "he should settle once he arrives")
@@ -43,11 +48,11 @@ private func standing(at x: CGFloat, on s: Surface) -> CatState {
 @Test func heFacesTheDirectionHeWalks() {
     let ledge = surface(.window(1), y: 500, from: 0, to: 800)
     var cat = standing(at: 400, on: ledge)
-    cat.goal = .walkTo(100)
+    cat.intent = strolling(to: 100, on: ledge)
     cat = Cat.step(cat, world: sky([ledge]), dt: dt)
     #expect(cat.facing == -1)
 
-    cat.goal = .walkTo(700)
+    cat.intent = strolling(to: 700, on: ledge)
     cat = Cat.step(cat, world: sky([ledge]), dt: dt)
     #expect(cat.facing == 1)
 }
@@ -58,7 +63,7 @@ private func standing(at x: CGFloat, on s: Surface) -> CatState {
     // stays inside it for the whole half-minute of wandering that follows.
     let ledge = surface(.window(1), y: 500, from: 100, to: 300)
     var cat = standing(at: 200, on: ledge)
-    cat.goal = .walkTo(9999)
+    cat.intent = strolling(to: 9999, on: ledge)
 
     for _ in 0..<Int(30 / dt) { cat = Cat.step(cat, world: sky([ledge]), dt: dt) }
     guard case .grounded(let perch) = cat.support else {
@@ -75,7 +80,7 @@ private func standing(at x: CGFloat, on s: Surface) -> CatState {
     let here = surface(.window(1), y: 500, from: 0, to: 400)
     let there = surface(.window(2), y: 560, from: 500, to: 900, z: 1)
     var cat = standing(at: 300, on: here)
-    cat.goal = .jumpTo(.window(2), 600)
+    cat.intent = Intent(destination: .window(2), destinationX: 600, move: .jump(.window(2), 600))
 
     var crouchTime: TimeInterval = 0
     for _ in 0..<Int(1.0 / dt) {
@@ -93,7 +98,7 @@ private func standing(at x: CGFloat, on s: Surface) -> CatState {
     var cat = standing(at: 300, on: here)
     // 300pt across and 60 up. His whole impulse is 380pt flat, and a 60pt rise costs some of
     // that, so this sits near the edge of what he can do without being outside it.
-    cat.goal = .jumpTo(.window(2), 600)
+    cat.intent = Intent(destination: .window(2), destinationX: 600, move: .jump(.window(2), 600))
 
     for _ in 0..<Int(6 / dt) {
         cat = Cat.step(cat, world: sky([here, there]), dt: dt)
@@ -111,12 +116,13 @@ private func standing(at x: CGFloat, on s: Surface) -> CatState {
 @Test func aJumpToAVanishedSurfaceDoesNotStrandHim() {
     let here = surface(.window(1), y: 500, from: 0, to: 400)
     var cat = standing(at: 300, on: here)
-    cat.goal = .jumpTo(.window(99), 700)   // target closed during the crouch
+    // Target closed during the crouch.
+    cat.intent = Intent(destination: .window(99), destinationX: 700, move: .jump(.window(99), 700))
 
     // Past the crouch, but before he has had time to think of something else to do.
     for _ in 0..<Int(0.3 / dt) { cat = Cat.step(cat, world: sky([here]), dt: dt) }
 
-    if case .jumpTo = cat.goal { Issue.record("still aiming at a window that no longer exists") }
+    if case .jump = cat.intent?.move { Issue.record("still aiming at a window that no longer exists") }
     guard case .grounded = cat.support else {
         Issue.record("he launched at nothing")
         return
@@ -130,15 +136,219 @@ private func standing(at x: CGFloat, on s: Surface) -> CatState {
     let ledge = surface(.window(1), y: 500, from: 0, to: 800)
     var cat = standing(at: 400, on: ledge)
     cat.restLeft = Feel.Timing.restMin
-    cat.goal = nil
+    cat.intent = nil
 
     var moved = false
     for _ in 0..<Int((Feel.Timing.restMin - 0.2) / dt) {
         cat = Cat.step(cat, world: sky([ledge]), dt: dt)
-        if cat.goal != nil { moved = true; break }
+        if cat.intent != nil { moved = true; break }
     }
     #expect(!moved, "he started moving before his rest was up")
     #expect(Feel.Timing.restMin >= 3, "resting less than a few seconds would be exhausting to sit next to")
+}
+
+// MARK: - Intent: a destination, re-planned on every landing
+
+/// A staircase going UP. Each ledge is one comfortable hop above the last and the next-but-one
+/// is out of reach at any angle, because a 120pt rise leaves him nothing to spend sideways.
+///
+/// Upward on purpose. A *descending* staircase is not a two-hop problem at all: a drop is
+/// nearly free under a minimum-energy launch, so the bottom step is reachable from the top one
+/// in a single leap and the router would be right to take it.
+private func stairsWorld() -> Skyline {
+    func ledge(_ id: CGWindowID, _ z: Int, _ y: CGFloat, _ r: ClosedRange<CGFloat>) -> Surface {
+        Surface(id: .window(id), z: z, y: y, extent: r, solid: [r], spans: [r],
+                targetable: true, rect: CGRect(x: r.lowerBound, y: y - 200,
+                                               width: r.length, height: 200))
+    }
+    return sky([ledge(1, 0, 250, 100...400),
+                ledge(2, 1, 310, 500...800),
+                ledge(3, 2, 370, 1000...1300),
+                surface(.floor, y: 100, from: 0, to: 1920, z: .max)])
+}
+
+/// A bare desktop: a full-width menu bar eleven hundred points above a full-width floor, with
+/// nothing in between. The world at launch on a Mac with no windows open.
+private func bareDesktop() -> Skyline {
+    sky([surface(.menuBar, y: 1205, from: 0, to: 1920, z: -1),
+         surface(.floor, y: 90, from: 0, to: 1920, z: .max)])
+}
+
+@Test func theStaircaseReallyIsTwoHops() {
+    // Guards the fixture. If ledge 3 were reachable from ledge 1 the routing tests below would
+    // pass without any routing happening at all.
+    #expect(Cat.canReach(from: CGPoint(x: 400, y: 250), to: CGPoint(x: 500, y: 310)))
+    #expect(!Cat.canReach(from: CGPoint(x: 400, y: 250), to: CGPoint(x: 1000, y: 370)))
+}
+
+@Test func nextMoveWalksWhenTheDestinationIsUnderfoot() {
+    let world = stairsWorld()
+    var cat = CatState(position: CGPoint(x: 150, y: 250))
+    cat.support = .grounded(Perch(id: .window(1), dx: 50))
+    let m = Cat.nextMove(from: cat, on: world.surface(.window(1))!,
+                         toward: .window(1), x: 280, world: world)
+    #expect(m == .walk(280))
+}
+
+@Test func nextMoveHopsToAnIntermediateLedge() {
+    let world = stairsWorld()
+    var cat = CatState(position: CGPoint(x: 380, y: 250))
+    cat.support = .grounded(Perch(id: .window(1), dx: 280))
+    // Ledge 3 is two hops away. He should aim at ledge 2, not give up and not teleport.
+    let m = Cat.nextMove(from: cat, on: world.surface(.window(1))!,
+                         toward: .window(3), x: 1150, world: world)
+    guard case .jump(let id, _) = m else {
+        Issue.record("expected a jump, got \(String(describing: m))")
+        return
+    }
+    #expect(id == .window(2))
+}
+
+@Test func nextMoveWalksToABetterLaunchPointWhenNothingIsInReach() {
+    // Standing at the wrong end of his own ledge is not a dead end, it is a walk. Without this
+    // he lands mid-ledge, finds the next step out of reach from exactly there, and gives up.
+    let world = stairsWorld()
+    var cat = CatState(position: CGPoint(x: 600, y: 310))
+    cat.support = .grounded(Perch(id: .window(2), dx: 100))
+    let m = Cat.nextMove(from: cat, on: world.surface(.window(2))!,
+                         toward: .window(3), x: 1150, world: world)
+    #expect(m == .walk(800), "got \(String(describing: m))")
+}
+
+@Test func heActuallyGetsThereInTwoHops() {
+    let world = stairsWorld()
+    var cat = CatState(position: CGPoint(x: 150, y: 250))
+    cat.support = .grounded(Perch(id: .window(1), dx: 50))
+    cat.intent = Intent(destination: .window(3), destinationX: 1150, move: .walk(400))
+
+    for _ in 0..<3600 {
+        cat = Cat.step(cat, world: world, dt: dt)
+        // Stop the moment he has arrived and settled, or he thinks of something else to do
+        // with the twenty seconds left on the clock.
+        if cat.intent == nil, case .grounded(let p) = cat.support, p.id == .window(3) { break }
+    }
+
+    guard case .grounded(let p) = cat.support else {
+        Issue.record("not grounded, ended at \(cat.position)")
+        return
+    }
+    #expect(p.id == .window(3))
+    #expect(abs(cat.position.x - 1150) < Feel.Physics.arrivalSlop * 3)
+}
+
+@Test func nextMoveStepsOffWhenTheOnlyWayIsDown() {
+    let world = stairsWorld()
+    var cat = CatState(position: CGPoint(x: 150, y: 250))
+    cat.support = .grounded(Perch(id: .window(1), dx: 50))
+    cat.facing = -1
+    // He could physically throw himself at the floor — a drop is nearly free — but the arc
+    // comes back down through his own ledge before it ever clears it.
+    let m = Cat.nextMove(from: cat, on: world.surface(.window(1))!,
+                         toward: .floor, x: 60, world: world)
+    #expect(m == .stepOff)
+}
+
+@Test func heGetsFromTheMenuBarToTheFloorBySteppingOff() {
+    // The headline acceptance, and the reason the below-surface guard had to move out of the
+    // destination chooser and into the router: on a bare desktop the menu bar runs the full
+    // width of the screen above the floor, so every arc he can throw re-crosses the bar he
+    // launched from and drops him back onto it. The only route down is to walk to the end and
+    // step off.
+    //
+    // Driven through `Cat.step` rather than `nextMove`, deliberately. A router that returns
+    // `.stepOff` into an engine with no way to execute one would pass a unit test green.
+    let world = bareDesktop()
+    let bar = world.surface(.menuBar)!
+    var cat = standing(at: 960, on: bar)
+    // A move that is already finished, so the router has to produce the first real one itself.
+    cat.intent = Intent(destination: .floor, destinationX: 200, move: .walk(960))
+
+    var sawStepOff = false, launched = false
+    var landedOn: SurfaceID?
+    for _ in 0..<Int(60 / dt) {
+        cat = Cat.step(cat, world: world, dt: dt)
+        if cat.intent?.move == .stepOff { sawStepOff = true }
+        if cat.velocity.dy > 0 { launched = true }
+        if case .grounded(let p) = cat.support, p.id != .menuBar { landedOn = p.id; break }
+    }
+    #expect(sawStepOff, "he never chose to step off, so Move.stepOff is dead code")
+    #expect(!launched, "he tried to jump down instead of stepping off")
+    #expect(landedOn == .floor, "he never got off the menu bar")
+}
+
+@Test func heDoesNotPlanAJumpThatLandsHimBackWhereHeStarted() {
+    // `supportBelow` is inclusive at both ends and does not know which surface he left, so a
+    // downward arc re-grounds him wherever it re-crosses his own y over his own solid. The
+    // minimum-energy launch made this worse rather than better: menu-bar-to-desktop at 500pt
+    // across re-crosses 44pt out, where the old fixed-speed solve crossed at 268.
+    let world = bareDesktop()
+    let bar = world.surface(.menuBar)!
+    var forced = standing(at: 960, on: bar)
+    forced.intent = Intent(destination: .floor, destinationX: 1460, move: .jump(.floor, 1460))
+    for _ in 0..<Int(10 / dt) {
+        forced = Cat.step(forced, world: world, dt: dt)
+        if case .grounded(let p) = forced.support, p.id == .floor { break }
+    }
+    guard case .grounded(let p) = forced.support else {
+        Issue.record("still in the air after ten seconds")
+        return
+    }
+    #expect(p.id == .menuBar, "the arc cleared his own surface, so this proves nothing")
+
+    // ...which is precisely why the router refuses to plan it, and steps off instead.
+    #expect(Cat.nextMove(from: standing(at: 960, on: bar), on: bar,
+                         toward: .floor, x: 1460, world: world) == .stepOff)
+}
+
+@Test func heStridesOverACrackRatherThanLeapingIt() {
+    // Two tiled windows sharing a top edge are one shelf. A full ballistic arc over the ten
+    // points between them reads as a comedy pratfall.
+    let left = surface(.window(1), y: 500, from: 0, to: 300)
+    let right = surface(.window(2), y: 500, from: 310, to: 600, z: 1)
+    let world = sky([left, right])
+
+    // From the middle of his own window he walks to the lip first...
+    #expect(Cat.nextMove(from: standing(at: 200, on: left), on: left,
+                         toward: .window(2), x: 500, world: world) == .walk(300))
+    // ...and from the lip he steps across.
+    #expect(Cat.nextMove(from: standing(at: 300, on: left), on: left,
+                         toward: .window(2), x: 500, world: world) == .stepAcross(.window(2), 310))
+
+    var cat = standing(at: 300, on: left)
+    cat.intent = Intent(destination: .window(2), destinationX: 500,
+                        move: .stepAcross(.window(2), 310))
+    var fell = false
+    for _ in 0..<Int(20 / dt) {
+        cat = Cat.step(cat, world: world, dt: dt)
+        if case .falling = cat.support { fell = true; break }
+        if cat.intent == nil { break }
+    }
+    #expect(!fell, "he fell into a ten-point crack")
+    guard case .grounded(let p) = cat.support else { Issue.record("not grounded"); return }
+    #expect(p.id == .window(2))
+    #expect(abs(cat.position.x - 500) < Feel.Physics.arrivalSlop + 1)
+}
+
+@Test func steppingOffTheEndOfTheScreenStillLandsOnTheFloor() {
+    // The menu bar and the desktop share a span exactly, so the two-point nudge that starts
+    // the fall clear of the lip took him two points past the floor as well — and the slip kick
+    // carried him further out with every tick. He fell out of the world and never came back.
+    // Unreachable before `stepOff` existed, because nothing ever walked him to the screen edge.
+    let world = bareDesktop()
+    let bar = world.surface(.menuBar)!
+    var cat = standing(at: 30, on: bar)
+    cat.intent = Intent(destination: .menuBar, destinationX: -200, move: .walk(-200))
+
+    for _ in 0..<Int(20 / dt) {
+        cat = Cat.step(cat, world: world, dt: dt)
+        if case .grounded(let p) = cat.support, p.id == .floor { break }
+    }
+    guard case .grounded(let p) = cat.support else {
+        Issue.record("he fell past the floor at x=\(Int(cat.position.x))")
+        return
+    }
+    #expect(p.id == .floor)
+    #expect(cat.position.x >= 0)
 }
 
 // MARK: - Surfing a dragged window
@@ -194,7 +404,7 @@ private func standing(at x: CGFloat, on s: Surface) -> CatState {
     cat = Cat.grab(cat, at: CGPoint(x: 410, y: 600))
     #expect(cat.support == .held(CGPoint(x: 410, y: 600)))
     #expect(cat.activity == .scruffed)
-    #expect(cat.goal == nil, "he should stop whatever he was doing")
+    #expect(cat.intent == nil, "he should stop whatever he was doing")
 }
 
 @Test func heIsNotAffectedByGravityWhileHeld() {

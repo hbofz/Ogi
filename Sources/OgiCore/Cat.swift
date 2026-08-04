@@ -60,11 +60,40 @@ public enum Activity: Sendable, Equatable {
     case landHard
 }
 
-/// What he is currently trying to do. Nil means he is content where he is.
-public enum Goal: Sendable, Equatable {
-    case walkTo(CGFloat)
+/// One step. Deliberately small: the router picks a new one every time he lands.
+public enum Move: Sendable, Equatable {
+    /// A world x on the surface he is already standing on.
+    case walk(CGFloat)
     /// Crouch, then launch at a point on another surface.
-    case jumpTo(SurfaceID, CGFloat)
+    case jump(SurfaceID, CGFloat)
+    /// Walk to the edge ahead and keep going. This is how he descends: gravity was always
+    /// there, and v1 simply had no way to ask for it.
+    case stepOff
+    /// A gap small enough to stride over. No crouch, no arc — a full ballistic leap over a
+    /// six-point crack between two tiled windows reads as a comedy pratfall.
+    case stepAcross(SurfaceID, CGFloat)
+}
+
+/// Where he is ultimately going, and the current step toward it. Nil means he is content
+/// where he is.
+///
+/// Storing the destination rather than a single hop is what gives multi-hop routing without a
+/// pathfinder: he re-picks `move` every time he lands, hill-climbing toward `destination`, and
+/// occasionally gets it wrong. The manifesto asks for exactly that — "pathfinding is
+/// deliberately dumb ... preserve the failure cases; they are where the charm lives."
+///
+/// **This is the seam the mind layer plugs into.** v2b replaces only the code that chooses a
+/// destination. `Cat.nextMove` is final.
+public struct Intent: Sendable, Equatable {
+    public var destination: SurfaceID
+    public var destinationX: CGFloat
+    public var move: Move
+
+    public init(destination: SurfaceID, destinationX: CGFloat, move: Move) {
+        self.destination = destination
+        self.destinationX = destinationX
+        self.move = move
+    }
 }
 
 /// How settled he is, from the machine's point of view.
@@ -128,7 +157,7 @@ public struct CatState: Sendable {
         max(-1, min(1, drift / Feel.Physics.driftReference))
     }
 
-    public var goal: Goal?
+    public var intent: Intent?
     /// Seconds of stillness left before he thinks of something to do.
     public var restLeft: TimeInterval = 1.5
 
@@ -153,7 +182,7 @@ public struct CatState: Sendable {
     /// the battery complaint about desktop pets is about wakeups, not pixels.
     public var isMoving: Bool {
         if case .falling = support { return true }
-        if goal != nil { return true }
+        if intent != nil { return true }
         return squashElapsed < 0.4
     }
 
@@ -202,7 +231,7 @@ public enum Cat {
             s.position = point
             s.velocity = .zero
             s.activity = .scruffed
-            s.goal = nil
+            s.intent = nil
             s.drift = 0
             s.lastPerchOrigin = nil
             return s
@@ -272,7 +301,7 @@ public enum Cat {
             if case .falling = s.support { s.footing = Footing() }
 
             // Braced against the motion. He is standing on a moving object.
-            if abs(s.lean) > Feel.Physics.braceThreshold, s.goal == nil {
+            if abs(s.lean) > Feel.Physics.braceThreshold, s.intent == nil {
                 s.activity = .brace
             } else if s.activity == .brace {
                 s.activity = .idle
@@ -295,6 +324,15 @@ public enum Cat {
                 s.activity = impact > 600 ? .landHard : .land
                 s.activityElapsed = 0
                 s.righting = 1
+                // Re-plan from where he actually landed, not from where he meant to. Asking
+                // again on every landing is the entire routing mechanism: one hop of lookahead,
+                // repeated, hill-climbs toward a destination without a pathfinder — and a hop
+                // he fluffed simply becomes the new starting point rather than a dead end.
+                if let intent = s.intent, let surface = world.surface(hit.id) {
+                    let next = nextMove(from: s, on: surface, toward: intent.destination,
+                                        x: intent.destinationX, world: world)
+                    s.intent?.move = next ?? .walk(s.position.x)
+                }
             } else {
                 s.position = CGPoint(x: x, y: y1)
                 // The righting reflex. He twists, gets his feet under him, and lands on
@@ -327,7 +365,7 @@ public enum Cat {
         s.support = .held(point)
         s.activity = .scruffed
         s.activityElapsed = 0
-        s.goal = nil
+        s.intent = nil
         return s
     }
 
@@ -354,19 +392,41 @@ public enum Cat {
         // Frozen. Ears forward, tail dead still. He hears you, and it doubles as a privacy
         // indicator: if he has gone rigid, your microphone is hot.
         if s.listening {
-            s.goal = nil
+            s.intent = nil
             s.activity = .alert
             return s
         }
         // Settled. He asks nothing of you, so nothing here nags: he simply gets sleepier.
         if let settled = s.repose.activity {
-            s.goal = nil
+            s.intent = nil
             s.activity = settled
             return s
         }
 
-        switch s.goal {
-        case nil:
+        /// Nothing left to do. He stops where he is and waits before wanting anything else.
+        func settle(_ s: inout CatState) {
+            s.intent = nil
+            s.hurrying = false
+            s.activity = .idle
+            s.activityElapsed = 0
+            s.restLeft = Feel.Timing.restMin + Double.random(in: 0...Feel.Timing.restJitter)
+        }
+
+        /// One step of the plan is finished. Re-plan toward the same destination rather than
+        /// clearing, or settle if he has arrived.
+        func advance(_ s: inout CatState, on surface: Surface) {
+            guard let intent = s.intent else { return }
+            let arrived = intent.destination == surface.id
+                && abs(intent.destinationX - s.position.x) < Feel.Physics.arrivalSlop * 3
+            if !arrived, let next = nextMove(from: s, on: surface, toward: intent.destination,
+                                            x: intent.destinationX, world: world) {
+                s.intent?.move = next
+            } else {
+                settle(&s)
+            }
+        }
+
+        guard let intent = s.intent else {
             // Already washing: keep at it for a few seconds, then settle back. Anything that
             // actually matters — settling to sleep, the mic going live — is handled above this
             // and overrides it, which is the right precedence.
@@ -376,7 +436,7 @@ public enum Cat {
                     s.activityElapsed = 0
                     s.restLeft = Feel.Timing.restMin + Double.random(in: 0...Feel.Timing.restJitter)
                 }
-                break
+                return s
             }
             // Nothing to do. Sit still until boredom wins.
             // Low battery makes him idle longer. A sluggish cat means plug in.
@@ -387,9 +447,9 @@ public enum Cat {
                 if Double.random(in: 0...1) < Feel.Timing.groomChance {
                     s.activity = .groom
                     s.activityElapsed = 0
-                } else if let goal = pickGoal(from: s, on: surface, world: world) {
-                    s.goal = goal
-                    s.activity = (goal.isJump ? .crouch : .walk)
+                } else if let idea = pickIntent(from: s, on: surface, world: world) {
+                    s.intent = idea
+                    if case .jump = idea.move { s.activity = .crouch } else { s.activity = .walk }
                     s.activityElapsed = 0
                 } else {
                     // Nothing worth doing. Wait before asking again rather than re-rolling
@@ -398,15 +458,30 @@ public enum Cat {
                     s.restLeft = Feel.Timing.restMin
                 }
             }
+            return s
+        }
 
-        case .walkTo(let targetX):
+        // A step-off is a walk that does not stop, so it is resolved into one here and the
+        // walking code stays in one place. Resolved fresh each tick rather than written back,
+        // so a lip that stops being a lip — the window under it closing, say — is noticed.
+        var move = intent.move
+        if case .stepOff = move {
+            guard let lip = stepOffLip(from: s, on: surface, toward: intent.destinationX,
+                                       world: world) else {
+                settle(&s)      // walls both ways: there is no way down from here after all
+                return s
+            }
+            // Aimed past the lip rather than at it, by more than `arrivalSlop`: aim AT it and
+            // the arrival check fires first, he re-plans, gets `.stepOff` back, and stands
+            // there deciding to step off for ever.
+            move = .walk(lip.x + lip.dir * Feel.Physics.edgeApproach)
+        }
+
+        switch move {
+        case .walk(let targetX):
             let dx = targetX - s.position.x
             if abs(dx) < Feel.Physics.arrivalSlop {
-                s.goal = nil
-                s.hurrying = false
-                s.activity = .idle
-                s.activityElapsed = 0
-                s.restLeft = Feel.Timing.restMin + Double.random(in: 0...Feel.Timing.restJitter)
+                advance(&s, on: surface)
                 break
             }
             s.facing = dx > 0 ? 1 : -1
@@ -421,15 +496,26 @@ public enum Cat {
             let nextX = worldX + step
             if let edge = edgeAhead(from: worldX, facing: s.facing, on: surface),
                (s.facing > 0 ? nextX > edge : nextX < edge) {
-                if isCliff(at: edge, facing: s.facing, on: surface, world: world) {
+                if let below = landing(past: edge, facing: s.facing, on: surface, world: world) {
                     // He walked off. Gravity was always there; nothing was ever allowed
-                    // to reach it.
+                    // to reach it. The intent SURVIVES: he re-plans from wherever he lands,
+                    // which is what makes a step off a route rather than an accident.
                     s.support = .falling
                     s.activity = .slip
                     s.activityElapsed = 0
-                    s.velocity = CGVector(dx: s.facing * Feel.Physics.slipKick, dy: 0)
-                    s.position.x = edge + s.facing * Feel.Physics.edgeTolerance
-                    s.goal = nil
+                    // Clear of the lip so the fall does not scrape down it — but never past
+                    // the far side of what he is stepping ONTO. The menu bar and the desktop
+                    // share a span exactly, so at the ends of the screen two points past the
+                    // one is two points past the other, and the nudge and the kick together
+                    // threw him out of the world for good.
+                    let over = edge + s.facing * Feel.Physics.edgeTolerance
+                    let clear = below.solid.contains { $0.contains(over) }
+                    s.position.x = clear ? over : edge
+                    // And half a point below it, so a cat left exactly level with the surface
+                    // he just stepped off does not re-ground on it: `supportBelow` sweeps an
+                    // inclusive range and has no idea which one he left.
+                    s.position.y = surface.y - Feel.World.coplanarEpsilon
+                    s.velocity = CGVector(dx: clear ? s.facing * Feel.Physics.slipKick : 0, dy: 0)
                     s.drift = 0
                     s.lastPerchOrigin = nil
                 } else {
@@ -437,10 +523,7 @@ public enum Cat {
                     perch.dx = edge - surface.extent.lowerBound
                     s.support = .grounded(perch)
                     s.facing = -s.facing
-                    s.goal = nil
-                    s.activity = .idle
-                    s.activityElapsed = 0
-                    s.restLeft = Feel.Timing.restMin
+                    settle(&s)
                 }
                 break
             }
@@ -448,21 +531,23 @@ public enum Cat {
             s.support = .grounded(perch)
             s.activity = .walk
 
-        case .jumpTo(let destID, let destX):
-            // The 100ms crouch. Non-negotiable: it is the entire difference between a cat
-            // and a teleporting rectangle. Only after it does the impulse happen.
-            guard s.activityElapsed >= Feel.Timing.anticipation else {
+        case .jump(let destID, let destX):
+            // He is allowed to arrive before he leaves again: a chained hop still plays the
+            // landing before it winds up for the next one.
+            if s.activity == .land || s.activity == .landHard { break }
+            // The 100ms crouch, from scratch every time. Non-negotiable: it is the entire
+            // difference between a cat and a teleporting rectangle. Requiring that he is
+            // ALREADY crouching is what makes it survive a jump planned mid-route — the clock
+            // left over from the walk that got him here would otherwise count as the wind-up.
+            guard s.activity == .crouch, s.activityElapsed >= Feel.Timing.anticipation else {
                 s.activity = .crouch
                 break
             }
-            guard let dest = world.surface(destID) else {
-                s.goal = nil; s.activity = .idle; s.restLeft = 0.5
-                break
-            }
-            guard let v = launch(dx: destX - s.position.x, dy: dest.y - s.position.y) else {
+            guard let dest = world.surface(destID),
+                  let v = launch(dx: destX - s.position.x, dy: dest.y - s.position.y) else {
                 // The window moved while he was winding up and it is out of reach now.
                 // Give up rather than teleporting.
-                s.goal = nil; s.activity = .idle; s.restLeft = 0.5
+                settle(&s)
                 break
             }
             s.velocity = v
@@ -470,71 +555,185 @@ public enum Cat {
             s.support = .falling
             s.activity = .airborne
             s.activityElapsed = 0
-            s.goal = nil
-            s.restLeft = Feel.Timing.restMin + Double.random(in: 0...Feel.Timing.restJitter)
+            // The intent survives the flight; he re-plans the instant he lands.
+
+        case .stepAcross(let destID, let x):
+            // A stride, not a leap. The gap is narrower than one pace — he is standing on the
+            // lip and the far side is a couple of dozen points away — so he simply arrives on
+            // it, and two tiled windows read as one shelf instead of an obstacle course.
+            guard let far = world.surface(destID) else {
+                settle(&s)
+                break
+            }
+            s.facing = x >= s.position.x ? 1 : -1
+            s.position = CGPoint(x: x, y: far.y)
+            s.support = .grounded(Perch(id: destID, dx: x - far.extent.lowerBound))
+            s.activity = .walk
+            advance(&s, on: far)
+
+        case .stepOff:
+            break   // resolved into a walk above; unreachable
         }
         return s
     }
 
-    /// Where he'd like to go next. Deliberately dumb: no A*, no navigation mesh.
-    /// A cat that pathfinds perfectly reads as a robot.
-    private static func pickGoal(from s: CatState, on surface: Surface, world: Skyline) -> Goal? {
-        let jumps = world.surfaces.compactMap { other -> Goal? in
-            guard other.id != surface.id, other.targetable,
-                  let x = landingX(on: other, from: s.position) else { return nil }
-            // He cannot fall through the ledge he launched from. Every jump starts upward, so
-            // a target below his own surface is only reachable where that surface is not in
-            // the way. Without this he "jumps to the desktop" from a full-width menu bar and
-            // comes straight back down onto the menu bar, over and over: 40 trials out of 40.
-            //
-            // This tests the LANDING x, not the x at which he crosses his own surface on the
-            // way down, so it reduces that loop rather than eliminating it: over a notch he
-            // can still aim through the hole and clip the far lip. Cheap and close enough,
-            // and the arc sweep that would settle it is not worth the code.
-            //
-            // ponytail: wrong layer. Jumping is the only descent that exists today, so this
-            // has to live here for now, but it belongs in `nextMove`'s jump branch once
-            // `Move.stepOff` exists — otherwise a below-surface destination is never even
-            // formed, `nextMove` is never asked about it, and `.stepOff` is dead code for
-            // exactly the case W2's acceptance names. Move it when Task 7 lands.
-            guard other.y > surface.y || !surface.solid.contains(where: { $0.contains(x) }) else {
-                return nil
+    /// Which lip to walk off, given where he is ultimately trying to end up: the nearest one to
+    /// the DESTINATION that actually has something under it.
+    ///
+    /// Nearest the destination rather than nearest him, because from the middle of a full-width
+    /// menu bar both edges are exactly as far away and only one of them is on the way.
+    private static func stepOffLip(from s: CatState, on surface: Surface, toward destX: CGFloat,
+                                   world: Skyline) -> (x: CGFloat, dir: CGFloat)? {
+        [CGFloat(1), -1]
+            .compactMap { dir -> (x: CGFloat, dir: CGFloat)? in
+                guard let x = edgeAhead(from: s.position.x, facing: dir, on: surface),
+                      isCliff(at: x, facing: dir, on: surface, world: world) else { return nil }
+                return (x, dir)
             }
-            return .jumpTo(other.id, x)
+            .min { abs($0.x - destX) < abs($1.x - destX) }
+    }
+
+    /// The single best next step toward a destination. Deliberately dumb: no A*, no navigation
+    /// mesh, one hop of lookahead and a greedy choice. Called again on every landing and at the
+    /// end of every step, which is what turns a chain of these into a route — and what lets a
+    /// jump he fluffs become the new starting point rather than a dead end.
+    ///
+    /// **This is final.** v2b's mind replaces only the code that chooses a destination.
+    public static func nextMove(from s: CatState, on surface: Surface,
+                                toward destID: SurfaceID, x destX: CGFloat,
+                                world: Skyline) -> Move? {
+        // Already there: just walk.
+        if destID == surface.id { return .walk(destX) }
+
+        guard let dest = world.surface(destID) else { return nil }
+        let here = s.position
+
+        // A crack, not a canyon. Measured between the two surfaces rather than between him and
+        // the far side, so he walks to the lip and steps across instead of only ever striding
+        // when he happens to be standing on it already.
+        if abs(dest.y - surface.y) <= Feel.World.coplanarTolerance,
+           let far = nearestSpanX(to: here.x, in: dest.solid),
+           let lip = edgeAhead(from: here.x, facing: far > here.x ? 1 : -1, on: surface),
+           abs(far - lip) <= Feel.Physics.strideGap {
+            return abs(here.x - lip) <= Feel.Physics.arrivalSlop
+                ? .stepAcross(destID, far) : .walk(lip)
         }
 
-        if let jump = jumps.randomElement(), Double.random(in: 0...1) < Feel.Physics.jumpChance {
-            return jump
+        // Straight there in one hop.
+        if let x = aimX(on: dest, from: here, toward: destX),
+           clears(surface, from: here, to: CGPoint(x: x, y: dest.y)) {
+            return .jump(destID, x)
         }
 
+        // Otherwise the reachable surface that gets him closest to the destination.
+        let target = CGPoint(x: destX, y: dest.y)
+        let hop = world.surfaces
+            .filter { $0.id != surface.id && $0.targetable && !$0.spans.isEmpty }
+            // Never further from the destination's HEIGHT than he already is. Straight-line
+            // distance on its own always votes for the floor: he can drop a thousand points
+            // for nothing and climb a hundred and ninety, so the one axis he cannot undo has
+            // to be the one he refuses to lose ground on.
+            .filter { abs($0.y - dest.y) <= abs(surface.y - dest.y) }
+            .compactMap { other -> (id: SurfaceID, x: CGFloat, d: CGFloat)? in
+                guard let x = aimX(on: other, from: here, toward: destX),
+                      clears(surface, from: here, to: CGPoint(x: x, y: other.y)) else { return nil }
+                return (other.id, x, hypot(x - target.x, other.y - target.y))
+            }
+            .min { $0.d < $1.d }
+
+        // Only take the hop if it is actually progress, or he ping-pongs between two ledges.
+        let current = hypot(here.x - target.x, here.y - target.y)
+        if let hop, hop.d < current - Feel.Physics.arrivalSlop {
+            return .jump(hop.id, hop.x)
+        }
+
+        // Nothing in the air, and the destination is below him. Walk to the lip and step off.
+        // Gravity was always there; v1 simply had no way to ask for it.
+        if dest.y < surface.y { return .stepOff }
+
+        // Nothing in the air and the destination is above. Walk to the point on his own ledge
+        // nearest to it and ask again from there: half of getting somewhere is standing in the
+        // right place first, and without this a hop he lands mid-ledge is a dead end.
+        if let x = nearestSpanX(to: destX, in: surface.solid),
+           abs(x - here.x) > Feel.Physics.arrivalSlop * 2 {
+            return .walk(x)
+        }
+        return nil
+    }
+
+    /// Does the arc to `to` get out from over the ledge he is launching from?
+    ///
+    /// Every jump starts upward, so a target BELOW his own surface means coming back down
+    /// through it — and `supportBelow` is inclusive at both ends and has no idea which surface
+    /// he left, so he re-grounds wherever the arc re-crosses his own y over his own solid.
+    /// Testing the LANDING x instead (as `pickGoal` used to) misses that entirely: the
+    /// minimum-energy launch is flat, and menu-bar-to-desktop at 500pt across re-crosses 44pt
+    /// out, where the old fixed-speed solve crossed at 268.
+    ///
+    /// This is also the whole discriminator between `.jump` and `.stepOff`. A deep drop is
+    /// nearly free under minimum energy, so without it every downward destination is a jump and
+    /// `.stepOff` is dead code. With it the rule is physical rather than arbitrary: if he can
+    /// get clear of his own ledge he jumps, and if he cannot he walks to the edge and drops.
+    static func clears(_ surface: Surface, from: CGPoint, to: CGPoint) -> Bool {
+        guard to.y < surface.y else { return true }
+        guard let v = launch(dx: to.x - from.x, dy: to.y - from.y, jitter: 0) else { return false }
+        // Range at launch height: 2·vx·vy/g.
+        let crossing = from.x + 2 * v.dx * v.dy / Feel.Physics.gravity
+        return !surface.solid.contains { $0.contains(crossing) }
+    }
+
+    /// The point on `surface` he can actually reach that sits closest to `x`, or nil if none of
+    /// it is in range. Deterministic: the router compares candidates to decide which way to
+    /// move, and a random draw would have it change its mind on every landing.
+    static func aimX(on surface: Surface, from: CGPoint, toward x: CGFloat) -> CGFloat? {
+        let reach = reachX(dy: surface.y - from.y)
+        guard reach > 0 else { return nil }
+        let window = (from.x - reach)...(from.x + reach)
+        let runs = surface.spans.filter { $0.overlaps(window) }.map { $0.clamped(to: window) }
+        guard let nearest = nearestSpanX(to: x, in: runs),
+              let run = runs.first(where: { $0.contains(nearest) }) else { return nil }
+        // Off the lip by the error he is about to make. Range goes as (1 ± aimError)², so the
+        // scatter is roughly ±2·aimError of the distance thrown, and aiming at a corner is a
+        // coin flip on falling past it — signed both ways, which is the whole point of the
+        // error. A run too narrow to hold that margin is not a target at all: he would be
+        // clipping the very corner of a ledge at the very limit of his reach, which is where
+        // the low half of the error stops being a wobble and becomes a fall. He walks closer
+        // and asks again instead.
+        let margin = 2 * Feel.Physics.aimError * abs(nearest - from.x)
+        guard run.length >= 2 * margin else { return nil }
+        return min(max(nearest, run.lowerBound + margin), run.upperBound - margin)
+    }
+
+    /// Where he'd like to go next, and the first step toward it. Deliberately dumb: no A*, no
+    /// navigation mesh. A cat that pathfinds perfectly reads as a robot.
+    ///
+    /// **This is the seam.** v2b's mind replaces this function and nothing else: everything
+    /// below it takes a destination as given.
+    private static func pickIntent(from s: CatState, on surface: Surface,
+                                   world: Skyline) -> Intent? {
+        if Double.random(in: 0...1) < Feel.Physics.jumpChance {
+            // Somewhere else entirely: the first candidate that routes, in random order.
+            // Unfiltered by reach on purpose — `nextMove` will chain two hops to get there, and
+            // filtering here by what is reachable in ONE would make multi-hop routing something
+            // only a test could ever ask for.
+            for other in world.surfaces.shuffled()
+            where other.id != surface.id && other.targetable {
+                guard let span = other.spans.randomElement() else { continue }
+                let x = CGFloat.random(in: span.lowerBound...span.upperBound)
+                if let move = nextMove(from: s, on: surface, toward: other.id, x: x, world: world) {
+                    return Intent(destination: other.id, destinationX: x, move: move)
+                }
+            }
+        }
+        // A stroll along the ledge he is on. The span is picked without weighting by length, so
+        // a 5pt sliver is as likely as a 300pt run; surfaces are one span in almost every real
+        // case, and a slight bias toward the awkward perches is not a defect worth code.
         guard let span = surface.spans.randomElement(), span.length > Feel.World.minStandWidth else {
             return nil
         }
         let x = CGFloat.random(in: span.lowerBound...span.upperBound)
-        return abs(x - s.position.x) < Feel.Physics.arrivalSlop * 2 ? nil : .walkTo(x)
-    }
-
-    /// A random point on that surface he can actually get to: a uniform draw from a uniformly
-    /// chosen one of its in-range spans, clipped to what is in range. Nil means none of it is.
-    ///
-    /// The span is picked without weighting by length, so a 5pt sliver is as likely as a 300pt
-    /// run. Surfaces are one span in almost every real case, and biasing him slightly toward
-    /// the awkward perches is not a defect worth code.
-    ///
-    /// Choosing and filtering are the same question, so they are the same call. v1 asked them
-    /// separately — filter on `extent` overlap, then pick a landing point at random from
-    /// `spans` — so it could select a jump it had just declared out of range, and the solver
-    /// would take it anyway. Drawing across the span rather than aiming at the near corner
-    /// also matters: the aim error is signed both ways about wherever he aims, so aiming at
-    /// the lip of a ledge is a coin flip on falling short of it.
-    static func landingX(on surface: Surface, from: CGPoint) -> CGFloat? {
-        let reach = reachX(dy: surface.y - from.y)
-        guard reach > 0 else { return nil }
-        let window = (from.x - reach)...(from.x + reach)
-        guard let span = surface.spans.filter({ $0.overlaps(window) }).randomElement() else {
-            return nil
-        }
-        return CGFloat.random(in: span.clamped(to: window))
+        return abs(x - s.position.x) < Feel.Physics.arrivalSlop * 2
+            ? nil : Intent(destination: surface.id, destinationX: x, move: .walk(x))
     }
 
     /// The point on these spans closest to `x`. Deterministic, unlike `landingX`: the router
@@ -627,9 +826,9 @@ public enum Cat {
     /// Nil covers two of the three cases. A hole with more of the SAME surface beyond it is a
     /// gap, not a cliff, and a gap is a wall (`isGap`). The notch is the only one that exists —
     /// windows produce a single solid run and the floor is uncarved — and it is a trap rather
-    /// than a ledge: he cannot jump to the surface he is standing on (`pickGoal` excludes it),
-    /// and his whole impulse buys 190pt of rise against the thousand points back up from the
-    /// desktop, so stepping into it is one-way.
+    /// than a ledge: he cannot jump to the surface he is standing on (`nextMove` walks there
+    /// instead), and his whole impulse buys 190pt of rise against the thousand points back up
+    /// from the desktop, so stepping into it is one-way.
     static func landing(past x: CGFloat, facing: CGFloat,
                         on surface: Surface, world: Skyline) -> Surface? {
         if isGap(at: x, facing: facing, on: surface) { return nil }
@@ -641,8 +840,4 @@ public enum Cat {
     static func isGap(at x: CGFloat, facing: CGFloat, on surface: Surface) -> Bool {
         surface.solid.contains { facing > 0 ? $0.lowerBound > x : $0.upperBound < x }
     }
-}
-
-extension Goal {
-    var isJump: Bool { if case .jumpTo = self { return true }; return false }
 }

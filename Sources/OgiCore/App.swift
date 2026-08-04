@@ -131,7 +131,8 @@ public final class OgiApp: NSObject, NSApplicationDelegate {
         var c = CatState(position: CGPoint(x: doorway, y: bar.y))
         c.support = .grounded(Perch(id: .menuBar, dx: doorway - bar.extent.lowerBound))
         c.activity = .walk
-        c.goal = .walkTo(goRight ? notch.maxX + Feel.Shape.width : notch.minX - Feel.Shape.width)
+        let out = goRight ? notch.maxX + Feel.Shape.width : notch.minX - Feel.Shape.width
+        c.intent = Intent(destination: .menuBar, destinationX: out, move: .walk(out))
         c.facing = goRight ? 1 : -1
         c.restLeft = Feel.Timing.restMin
         return c
@@ -188,7 +189,7 @@ public final class OgiApp: NSObject, NSApplicationDelegate {
         // lip and quitting would sit there for the whole eight seconds below.
         let goingTo = bar.map { OgiApp.doorway(from: startX, toward: homeX, on: $0) } ?? homeX
         self.homeX = goingTo        // the arrival check in `tick` has to match where he went
-        cat.goal = .walkTo(goingTo)
+        cat.intent = Intent(destination: .menuBar, destinationX: goingTo, move: .walk(goingTo))
         log("going home")
         // Never hang on the way out. Generous enough to cover the longest walk home from
         // anywhere on a wide screen, because quitting must never wait on the animation.
@@ -238,7 +239,7 @@ public final class OgiApp: NSObject, NSApplicationDelegate {
         // fixed-refresh display, where the link keeps firing 60 times a second and we
         // merely do less per fire. Since the battery cost of a desktop pet is wakeups
         // rather than pixels, "less work per wakeup" is not the fix — stopping is.
-        if cat.repose == .asleep, !cat.isMoving, cat.goal == nil {
+        if cat.repose == .asleep, !cat.isMoving, cat.intent == nil {
             enterSlumber()
             return
         }

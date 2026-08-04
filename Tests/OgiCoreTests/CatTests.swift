@@ -109,7 +109,8 @@ private func ledgeWorld() -> Skyline {
     var cat = CatState(position: CGPoint(x: 880, y: 600))
     cat.support = .grounded(Perch(id: .window(1), dx: 480))
     cat.facing = 1
-    cat.goal = .walkTo(1200)          // past the right-hand end at 900
+    // Past the right-hand end at 900.
+    cat.intent = Intent(destination: .window(1), destinationX: 1200, move: .walk(1200))
 
     for _ in 0..<600 {
         cat = Cat.step(cat, world: world, dt: dt)
@@ -129,7 +130,7 @@ private func ledgeWorld() -> Skyline {
     var cat = CatState(position: CGPoint(x: 30, y: 100))
     cat.support = .grounded(Perch(id: .floor, dx: 30))
     cat.facing = -1
-    cat.goal = .walkTo(-500)
+    cat.intent = Intent(destination: .floor, destinationX: -500, move: .walk(-500))
 
     for _ in 0..<600 { cat = Cat.step(cat, world: world, dt: dt) }
 
@@ -192,7 +193,7 @@ private func ledgeWorld() -> Skyline {
     var cat = CatState(position: CGPoint(x: 850, y: 600))
     cat.support = .grounded(Perch(id: .window(1), dx: 450))
     cat.facing = 1
-    cat.goal = .jumpTo(.floor, 1200)
+    cat.intent = Intent(destination: .floor, destinationX: 1200, move: .jump(.floor, 1200))
     cat.activity = .crouch          // already past the decision; only the wind-up is left
 
     cat = Cat.step(cat, world: world, dt: dt)
@@ -226,7 +227,8 @@ private let notched = ScreenGeometry(frame: CGRect(x: 0, y: 0, width: 1920, heig
 @Test func heDoesNotWalkIntoTheNotch() {
     // The cutout is a hole in the MIDDLE of the menu bar, not the end of it, and the desktop
     // visible through it makes it look exactly like a ledge. It is a trap: he cannot jump the
-    // gap (pickGoal refuses the surface he is already standing on) and he cannot climb back up
+    // gap (nextMove walks along the surface he is on rather than jumping to it) and he cannot
+    // climb back up
     // from the floor a thousand points below (his whole impulse buys 190pt of rise), so one
     // step in and he is off the menu bar for the rest of the session. An interior gap has to
     // be a wall.
@@ -241,7 +243,10 @@ private let notched = ScreenGeometry(frame: CGRect(x: 0, y: 0, width: 1920, heig
         // far side of the cutout instead of idling. Idling is no longer inert: a deep drop is
         // easier to reach than a shallow one, so left alone he now deliberately leaps off the
         // menu bar to the desktop, which is a feature and not what this test is about.
-        if cat.goal == nil { cat.goal = .walkTo(400) }   // straight across the cutout
+        // Straight across the cutout.
+        if cat.intent == nil {
+            cat.intent = Intent(destination: .menuBar, destinationX: 400, move: .walk(400))
+        }
         cat = Cat.step(cat, world: world, dt: dt)
         guard case .grounded(let p) = cat.support, p.id == .menuBar else {
             Issue.record("he stepped into the notch at x=\(Int(cat.position.x)) and cannot get back")
@@ -306,10 +311,10 @@ private let notched = ScreenGeometry(frame: CGRect(x: 0, y: 0, width: 1920, heig
     let home = OgiApp.doorway(from: 400, toward: notch.maxX, on: bar)
     var cat = CatState(position: CGPoint(x: 400, y: bar.y))
     cat.support = .grounded(Perch(id: .menuBar, dx: 400 - bar.extent.lowerBound))
-    cat.goal = .walkTo(home)
+    cat.intent = Intent(destination: .menuBar, destinationX: home, move: .walk(home))
     for _ in 0..<Int(30 / dt) {
         cat = Cat.step(cat, world: world, dt: dt)
-        if cat.goal == nil { break }
+        if cat.intent == nil { break }
     }
     guard case .grounded = cat.support else {
         Issue.record("he fell on the way out")
@@ -430,7 +435,7 @@ private let notched = ScreenGeometry(frame: CGRect(x: 0, y: 0, width: 1920, heig
 @MainActor
 @Test func heSometimesWashesInsteadOfGoingSomewhere() {
     // Manifesto §7.1 wants an occasional in-place behaviour while awake. The failure this
-    // guards is a wash that never ends: `groom` has no goal, so it sits in the same branch as
+    // guards is a wash that never ends: `groom` has no intent, so it sits in the same branch as
     // resting and would loop forever if the timeout were dropped.
     let ground = surface(.window(1), y: 500, from: 0, to: 900)
     var grooming = 0, longest = 0.0

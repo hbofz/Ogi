@@ -27,6 +27,9 @@ public enum Feel {
         public static let hurryDistance: CGFloat = 210
         /// He never arrives exactly on the mark.
         public static let arrivalSlop: CGFloat = 3
+        /// A gap he strides over rather than leaping. Two tiled windows sharing a top edge
+        /// read as one shelf; a full ballistic arc over the crack between them does not.
+        public static let strideGap: CGFloat = 24
 
         /// The whole jump budget: his launch speed, in px/s. Distance is an *output* of
         /// this and the angle, not an input.
@@ -124,6 +127,9 @@ public enum Feel {
         /// Tiled windows very often share a top edge exactly. Without this, the rear
         /// one's entire surface gets erased by the front one.
         public static let coplanarEpsilon: CGFloat = 0.5
+        /// Two surfaces within this vertical distance count as the same shelf, and the gap
+        /// between them as a crack to step over rather than a drop to leap.
+        public static let coplanarTolerance: CGFloat = 2
         public static let positionDeadband: CGFloat = 1
     }
 
