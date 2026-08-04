@@ -300,6 +300,28 @@ private func bareDesktop() -> Skyline {
                          toward: .floor, x: 1460, world: world) == .stepOff)
 }
 
+@Test func aLevelJumpCanStillFallShortOfTheLedge() {
+    // The aim margin keeps him off the lip, and it has to stay SMALLER than the shortfall he
+    // can actually make, or a whole class of jump silently becomes one he cannot fluff. A level
+    // throw's range is exactly s² of nominal, so a −6% push-off falls 11.6% short: against a
+    // margin of 2·aimError he misses about one draw in twenty-five, against aimError about one
+    // in four. (The overshoot side is starker still — at 2·aimError the worst overshoot reaches
+    // 0.9888 of a far lip, so sailing past one was arithmetically impossible.)
+    //
+    // Manifesto §6: a cat that occasionally misjudges a jump and has to recover reads as a cat.
+    let there = surface(.window(2), y: 500, from: 500, to: 900, z: 1)
+    let from = CGPoint(x: 300, y: 500)
+    // Aimed at the NEAR lip, which is where the clamp actually bites.
+    let aim = try! #require(Cat.aimX(on: there, from: from, toward: 400))
+    #expect(aim > 500 && aim < 560, "expected an aim just inside the lip, got \(aim)")
+
+    let short = (0..<400).filter { _ in
+        let v = Cat.launch(dx: aim - from.x, dy: 0)!
+        return from.x + 2 * v.dx * v.dy / Feel.Physics.gravity < 500
+    }.count
+    #expect(short > 40, "he fell short only \(short)/400 times; the margin has eaten the error")
+}
+
 @Test func heStridesOverACrackRatherThanLeapingIt() {
     // Two tiled windows sharing a top edge are one shelf. A full ballistic arc over the ten
     // points between them reads as a comedy pratfall.

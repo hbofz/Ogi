@@ -611,8 +611,13 @@ public enum Cat {
         // A crack, not a canyon. Measured between the two surfaces rather than between him and
         // the far side, so he walks to the lip and steps across instead of only ever striding
         // when he happens to be standing on it already.
+        //
+        // `spans`, not `solid`: he is CHOOSING where to put himself down, and `solid` includes
+        // the parts of the far window that are hidden behind something else. Striding onto one
+        // of those is a legal place to stand and an absurd place to be seen — which is the
+        // distinction the two arrays exist to draw.
         if abs(dest.y - surface.y) <= Feel.World.coplanarTolerance,
-           let far = nearestSpanX(to: here.x, in: dest.solid),
+           let far = nearestSpanX(to: here.x, in: dest.spans),
            let lip = edgeAhead(from: here.x, facing: far > here.x ? 1 : -1, on: surface),
            abs(far - lip) <= Feel.Physics.strideGap {
             return abs(here.x - lip) <= Feel.Physics.arrivalSlop
@@ -677,9 +682,18 @@ public enum Cat {
     static func clears(_ surface: Surface, from: CGPoint, to: CGPoint) -> Bool {
         guard to.y < surface.y else { return true }
         guard let v = launch(dx: to.x - from.x, dy: to.y - from.y, jitter: 0) else { return false }
-        // Range at launch height: 2·vx·vy/g.
-        let crossing = from.x + 2 * v.dx * v.dy / Feel.Physics.gravity
-        return !surface.solid.contains { $0.contains(crossing) }
+        // Range at launch height: 2·vx·vy/g — but he judges soberly and executes with a wobble,
+        // so what he actually gets is that range scaled by (1 ± aimError)². Every crossing in
+        // that band has to clear, not just the sober one: a jump whose sober crossing sits a
+        // few points past his own lip comes back down ON it on a low draw. Testing the band
+        // rather than its two ends because his own solid can have a hole in the middle of it —
+        // the notch is exactly that, and threading a jump through the doorway is the one
+        // downward jump on a bare desktop that does work.
+        let range = 2 * v.dx * v.dy / Feel.Physics.gravity
+        let low = range * (1 - Feel.Physics.aimError) * (1 - Feel.Physics.aimError)
+        let high = range * (1 + Feel.Physics.aimError) * (1 + Feel.Physics.aimError)
+        let band = (from.x + min(low, high))...(from.x + max(low, high))
+        return !surface.solid.contains { $0.overlaps(band) }
     }
 
     /// The point on `surface` he can actually reach that sits closest to `x`, or nil if none of
@@ -692,15 +706,21 @@ public enum Cat {
         let runs = surface.spans.filter { $0.overlaps(window) }.map { $0.clamped(to: window) }
         guard let nearest = nearestSpanX(to: x, in: runs),
               let run = runs.first(where: { $0.contains(nearest) }) else { return nil }
-        // Off the lip by the error he is about to make. Range goes as (1 ± aimError)², so the
-        // scatter is roughly ±2·aimError of the distance thrown, and aiming at a corner is a
-        // coin flip on falling past it — signed both ways, which is the whole point of the
-        // error. A run too narrow to hold that margin is not a target at all: he would be
-        // clipping the very corner of a ledge at the very limit of his reach, which is where
-        // the low half of the error stops being a wobble and becomes a fall. He walks closer
-        // and asks again instead.
-        let margin = 2 * Feel.Physics.aimError * abs(nearest - from.x)
-        guard run.length >= 2 * margin else { return nil }
+        // Off the lip, but by LESS than the error he is about to make. Aiming at a corner is a
+        // coin flip on falling past it, so some margin has to exist; a margin as wide as the
+        // scatter itself (±2·aimError of the throw, since range goes as (1 ± aimError)²) makes
+        // a whole class of jump one he cannot fluff. At 2·aimError he could not sail past a far
+        // lip AT ALL — worst overshoot reaches 0.9888 of it — and fell short of a near one on
+        // only 4% of draws. Half that leaves 1.0562 and 26%: off the lip, still fallible.
+        // Manifesto §6: "preserve the failure cases; they are where the charm lives."
+        //
+        // The refusal below is the part that keeps him sensible, and it is deliberately twice
+        // the margin. A run too narrow to hold it is not a target at all: he would be clipping
+        // the very corner of a ledge at the very limit of his reach, which is where the low
+        // half of the error stops being a wobble and becomes a fall. He walks closer and asks
+        // again instead.
+        let margin = Feel.Physics.aimError * abs(nearest - from.x)
+        guard run.length >= 4 * margin else { return nil }
         return min(max(nearest, run.lowerBound + margin), run.upperBound - margin)
     }
 
