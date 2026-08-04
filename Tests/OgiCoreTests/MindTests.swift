@@ -518,11 +518,14 @@ private func twoLedges() -> Skyline {
     cat.restLeft = .infinity              // so any move must be the yield
     cat.cursor = CGPoint(x: 900, y: 1215) // right on him
 
+    let clear = Feel.Shape.width / 2 + Feel.Mind.cursorGap
     for _ in 0..<(120 * 20) {
         cat.cursorStill += dt             // parked there, not sweeping past
         cat = Cat.step(cat, world: sky([bar]), dt: dt)
+        // Moving aside is the whole claim; see theYieldMeasuresTheDrawnSpriteNotTheNominalBox.
+        if abs(cat.position.x - 900) >= clear - Feel.Physics.arrivalSlop * 3,
+           cat.intent == nil { break }
     }
-    let clear = Feel.Shape.width / 2 + Feel.Mind.cursorGap
     #expect(abs(cat.position.x - 900) >= clear - Feel.Physics.arrivalSlop * 3,
             "he stayed under the cursor at \(cat.position.x), so his window is eating clicks")
 }
@@ -870,6 +873,11 @@ private func twoLedges() -> Skyline {
     for _ in 0..<(120 * 20) {
         cat.cursorStill += dt
         cat = Cat.step(cat, world: sky([bar]), dt: dt)
+        // Moving aside is the whole claim. Running the clock on after he has done it lets a
+        // later random stroll be mid-walk at the cutoff — the hidden test failed one run in
+        // eight on exactly this shape.
+        if abs(cat.position.x - 940) >= 45 + Feel.Mind.cursorGap - Feel.Physics.arrivalSlop * 3,
+           cat.intent == nil { break }
     }
     #expect(abs(cat.position.x - 940) >= 45 + Feel.Mind.cursorGap - Feel.Physics.arrivalSlop * 3,
             "he stayed at \(cat.position.x) with the cursor on his drawn body, eating clicks")
