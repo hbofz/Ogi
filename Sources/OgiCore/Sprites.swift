@@ -182,10 +182,14 @@ public enum Sprites {
         // automatic bottom-of-ink reading finds his HANGING TAIL instead and would dangle him
         // upside down off the window, which is exactly the mistake that once shipped on `fall`.
         //
-        // Set BY EYE off the four frames, whose paws sit somewhere around 0.80-0.90 of the way
-        // up the 628px band, and never visually confirmed. Look at him on a real window and
-        // adjust; do not "correct" it from a measured ink box.
-        case .cling: return 0.85
+        // Read off the four cut frames by finding his front paws in each: 0.75-0.85, 0.90-0.97,
+        // 0.85-0.95, 0.80-0.90 of the way up the 628px band. 0.875 centres that. It was 0.85,
+        // the bottom of the range, which rode him 30-60px low on frames 1 and 2 — a visible bob
+        // against the wall on a 4fps loop.
+        //
+        // Still unconfirmed on screen. Look at him on a real window and adjust; do not
+        // "correct" it from a measured ink box, which finds the tail every time.
+        case .cling: return 0.875
         default:    return 0
         }
     }

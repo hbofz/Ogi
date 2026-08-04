@@ -645,3 +645,34 @@ private let notched = ScreenGeometry(frame: CGRect(x: 0, y: 0, width: 1920, heig
     #expect(abs(cat.position.y - 600) < 0.001)
     #expect(abs(cat.position.x - 650) < 1)
 }
+
+@Test func mantlingOutOfACornerPutsHimSomewhereHeCanActuallyStand() {
+    // A real window's top edge is inset by `cornerInset` and clipped to the visible screen, so
+    // the column he climbed is not necessarily standable. Landing on it grounded him for
+    // exactly one tick, and the shrunken-window backstop then dropped him straight back off.
+    var inset = surface(.window(1), y: 600, from: 400, to: 900,
+                        rect: CGRect(x: 400, y: 300, width: 500, height: 300))
+    inset.solid = [410...890]           // the rounded corners eat the ends
+    inset.spans = inset.solid
+    let world = sky([inset, surface(.floor, y: 100, from: 0, to: 1920, z: .max)])
+
+    var cat = CatState(position: CGPoint(x: 403, y: 560))
+    cat.support = .clinging(Grip(id: .window(1), dx: 3, dy: 40))   // gripping the top-left corner
+
+    for _ in 0..<(120 * 30) {
+        cat = Cat.step(cat, world: world, dt: 1.0 / 120)
+        if case .grounded = cat.support { break }
+    }
+    guard case .grounded = cat.support else {
+        Issue.record("never made it over the lip, got \(cat.support)")
+        return
+    }
+    // ...and he is still up there a moment later, rather than popping over and falling off.
+    for _ in 0..<10 { cat = Cat.step(cat, world: world, dt: 1.0 / 120) }
+    guard case .grounded(let p) = cat.support else {
+        Issue.record("mantled onto a corner he cannot stand on, got \(cat.support)")
+        return
+    }
+    #expect(p.id == .window(1))
+    #expect(cat.position.x >= 410, "he is standing where no window is drawn")
+}

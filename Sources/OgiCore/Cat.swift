@@ -302,9 +302,21 @@ public enum Cat {
                     // Close enough to the top: he climbs it and mantles onto the ledge.
                     grip.dy -= Feel.Physics.clingSlideSpeed * CGFloat(dt)
                     if grip.dy <= 0 {
-                        s.support = .grounded(Perch(id: grip.id,
-                                                    dx: rect.minX + grip.dx - surface.extent.lowerBound))
-                        s.position = CGPoint(x: rect.minX + grip.dx, y: surface.y)
+                        // The column he climbed is not necessarily somewhere he can stand: a
+                        // top edge is inset by the corner radius and clipped to the visible
+                        // screen, so a grip in the top corner mantles onto nothing. He gets
+                        // pulled along the lip to the nearest place that is real — and if the
+                        // whole edge is unstandable there is nothing to mantle onto, so he
+                        // lets go. Without this he grounded for exactly one tick and the
+                        // shrunken-window backstop below dropped him straight off again.
+                        guard let x = nearestSpanX(to: rect.minX + grip.dx, in: surface.solid) else {
+                            s.support = .falling
+                            s.activity = .slip
+                            s.activityElapsed = 0
+                            return s
+                        }
+                        s.support = .grounded(Perch(id: grip.id, dx: x - surface.extent.lowerBound))
+                        s.position = CGPoint(x: x, y: surface.y)
                         s.activity = .land
                         s.activityElapsed = 0
                         return s
