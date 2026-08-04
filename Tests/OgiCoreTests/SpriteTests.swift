@@ -1,4 +1,5 @@
 import Testing
+import Foundation
 import CoreGraphics
 @testable import OgiCore
 
@@ -51,6 +52,13 @@ private func eyeToInk(_ clip: Sprites.Clip, _ i: Int) -> Double? {
     // `held` is deliberately absent: he dangles fully stretched out, so his ink height is
     // nearly twice a sitting cat's while his eye stays the same. His ratio is honestly 0.047
     // against everyone else's 0.06-0.10, and including him would fail correct art.
+    //
+    // `climbUp` is absent for `held`'s reason exactly: a cat reaching up a wall is stretched to
+    // his full length, so his ink height is half again a hanging cat's while his eye stays the
+    // same, and his ratio is honestly 0.040 against the band's 0.061-0.097. The eye is found
+    // correctly, steady at 17-23px across six frames and proportional to a smaller drawing, and
+    // the scale it produces is right: he renders 16.3pt wide against `cling`'s 16.1pt, which is
+    // the number `theClimbSheetIsTheSameCatAsTheCling` guards instead.
     //
     // `peek` is absent for the mirror of that reason, and it is the case the median does not
     // cover. Every other clip holds one posture, so its frames agree and the median is the
@@ -216,4 +224,72 @@ private func eyeToInk(_ clip: Sprites.Clip, _ i: Int) -> Double? {
         #expect(abs(plays - clip.fps) < clip.fps * 0.15,
                 "\(clip.rawValue) plays at \(plays)fps against a declared \(clip.fps)fps: \(speed)px/s over a \(stride)pt stride of \(clip.count) frames")
     }
+}
+
+// MARK: - climbUp
+
+@MainActor
+@Test func theClimbAndTheClingHangFromTheSamePoint() {
+    // He switches between these the instant he decides to go up rather than hang on, so a
+    // different anchor would snap him up or down the face at that moment. Both are the same
+    // grip by the same front paws on the same wall.
+    #expect(Sprites.footAnchor(.climbUp) == Sprites.footAnchor(.cling))
+}
+
+@MainActor
+@Test func theClimbSheetPlaysAtTheRateHeActuallyClimbs() {
+    // Derived rather than declared, so the two numbers cannot drift apart. This is the run-gait
+    // bug written as a test: that sheet played at 31.5fps against the 14 it was drawn for
+    // because the stride it shared was written down in one place and used for two gaits.
+    let cyclesPerSecond = Double(Feel.Physics.clingClimbSpeed / Feel.Shape.climbStride)
+    #expect(abs(Sprites.Clip.climbUp.fps - cyclesPerSecond * 6) < 0.001)
+    // ...and the rate has to be watchable. Outside this range it is either a slideshow or a blur.
+    #expect(Sprites.Clip.climbUp.fps > 6, "the climb is a slideshow at \(Sprites.Clip.climbUp.fps)fps")
+    #expect(Sprites.Clip.climbUp.fps < 20, "the climb is a blur at \(Sprites.Clip.climbUp.fps)fps")
+}
+
+@MainActor
+@Test func theClimbSheetHasAllItsFrames() {
+    for i in 0..<Sprites.Clip.climbUp.count {
+        #expect(Sprites.image(.climbUp, i) != nil, "climbUp frame \(i) is missing")
+    }
+    #expect(Sprites.Clip.climbUp.loops, "a climb that does not loop stops after half a second")
+}
+
+@MainActor
+@Test func theClimbSheetIsTheSameCatAsTheCling() {
+    // climbUp cannot be held to the eye-against-ink-height yardstick (see the exemption above),
+    // so it needs its own guard against the failure that yardstick exists to catch: a sheet
+    // whose eye is mis-measured renders at the wrong size, silently.
+    //
+    // WIDTH is the right measure for these two. He is on the same wall in both, seen from the
+    // side, so he is the same cat wide however stretched out he is tall. A mis-scaled sheet
+    // moves this immediately: the two clips are drawn at different pixel sizes and only the
+    // eye normalisation brings them together, so if that fails they will not agree.
+    func renderedWidth(_ c: Sprites.Clip) -> CGFloat {
+        let ws = (0..<c.count).compactMap { i in Sprites.image(c, i).map { CGFloat($0.width) } }
+        return ws.sorted()[ws.count / 2] * Sprites.clipScale(c)
+    }
+    let climb = renderedWidth(.climbUp), cling = renderedWidth(.cling)
+    #expect(abs(climb - cling) / cling < 0.20,
+            "climbUp renders \(climb)pt wide against cling's \(cling)pt; one of them is mis-scaled")
+}
+
+@MainActor
+@Test func theClimbSheetDoesNotBobAgainstTheWall() {
+    // He hangs from his grip, so the top of his ink is what has to stay put. The cling loop was
+    // the top cosmetic risk in the project partly because it did not. Measured off the cut
+    // frames: 2px of drift across six, because the prompt demanded his head stay at one height.
+    var tops: [Int] = []
+    for i in 0..<Sprites.Clip.climbUp.count {
+        guard let img = Sprites.image(.climbUp, i),
+              let data = img.dataProvider?.data, let ptr = CFDataGetBytePtr(data) else { continue }
+        let bpr = img.bytesPerRow, bpp = img.bitsPerPixel / 8
+        outer: for y in 0..<img.height {
+            for x in 0..<img.width where ptr[y * bpr + x * bpp + 3] > 128 { tops.append(y); break outer }
+        }
+    }
+    #expect(tops.count == Sprites.Clip.climbUp.count)
+    let drift = (tops.max() ?? 0) - (tops.min() ?? 0)
+    #expect(drift <= 8, "his grip slides \(drift)px up and down the wall across the loop")
 }

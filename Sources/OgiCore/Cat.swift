@@ -74,6 +74,7 @@ public enum Activity: Sendable, Equatable {
     case brace      // riding a window that is being dragged
     case slip       // the ground just went away
     case cling      // gripping a vertical face
+    case climb      // going UP one, on purpose
     case airborne
     case land
     case landHard
@@ -471,11 +472,19 @@ public enum Cat {
                 s.activityElapsed = 0
                 return s
             }
-            s.activity = .cling
+            // Sticky once he has committed to going up. Re-asserting `.cling` unconditionally
+            // flipped the activity back and forth every tick, and since a changed activity
+            // zeroes `activityElapsed`, the hold below restarted forever and he never left the
+            // spot he grabbed.
+            if s.activity != .climb { s.activity = .cling }
             s.velocity = .zero
             s.perchSpeed = 0
 
-            if s.activityElapsed > Feel.Timing.clingHold {
+            // The hold is the "oh no" beat before he decides. Once he has decided it is spent,
+            // which is why committing is part of the condition rather than only the clock: the
+            // clock restarts when the activity changes, and asking it again would put him back
+            // in the beat he just came out of.
+            if s.activity == .climb || s.activityElapsed > Feel.Timing.clingHold {
                 // Where the slide would actually put him down: the BOTTOM of the face, not
                 // wherever he happens to be hanging. It carries him all the way there and lets
                 // go, straight past anything in between, because a clinging cat is never
@@ -497,6 +506,12 @@ public enum Cat {
                     // nobody could see him. Either way the only way is up: he climbs and
                     // mantles onto the ledge.
                     grip.dy -= Feel.Physics.clingClimbSpeed * CGFloat(dt)
+                    // Going up on purpose, which is a different animal from hanging on. The
+                    // `cling` sheet was drawn as a moment, a cat scrabbling with its ears back,
+                    // and a full ascent of a fullscreen face ran it unbroken for up to 10.8s.
+                    // The hold before he decides, and the slide when he cannot hold, both stay
+                    // on `cling`, which is exactly what it was drawn for.
+                    s.activity = .climb
                     if grip.dy <= 0 {
                         // The column he climbed is not necessarily somewhere he can stand: a
                         // top edge is inset by the corner radius and clipped to the visible

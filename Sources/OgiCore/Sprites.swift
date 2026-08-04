@@ -22,6 +22,7 @@ public enum Sprites {
     public enum Clip: String, Sendable {
         case walk, idle, jump, land, fall, run, alert, sitdown, held, sleep, groom, curl, cling
         case lookDown, peek, turn, shake
+        case climbUp
 
         var count: Int {
             switch self {
@@ -38,6 +39,7 @@ public enum Sprites {
             case .groom: 6
             case .curl: 5
             case .cling: 4
+            case .climbUp: 6
             case .lookDown: 4
             case .peek: 4
             case .turn: 4
@@ -61,6 +63,17 @@ public enum Sprites {
             case .groom: 8
             case .curl: 6
             case .cling: 4      // a slow scrabble, not a flail
+            // DERIVED, not chosen, so it cannot drift from the speed it has to match. The sheet
+            // is six frames covering `climbStride` of wall, so the rate is however many strides
+            // per second he is actually climbing, times six. At clingClimbSpeed 110 and a 55pt
+            // stride that is 12fps.
+            //
+            // The run gait is why this is derived. It shared one stride constant with the walk
+            // and played its 8-frame sheet at 31.5fps against the 14 it was drawn for, a blur of
+            // legs, and nothing failed. Tying the two numbers together is the only fix that
+            // stays fixed.
+            case .climbUp:
+                Double(Feel.Physics.clingClimbSpeed / Feel.Shape.climbStride) * 6
             case .lookDown: 6   // head over the side in half a second, then he holds
             case .peek: 5       // creeping out of the doorway; slower than he ever walks
             case .turn: 12      // a pivot is quick
@@ -73,7 +86,7 @@ public enum Sprites {
             // groom loops: a cat washing does it for a while, and the sheet's last frame
             // returns to the sitting pose it started from, so the seam is invisible.
             // cling loops: he holds on until he lets go.
-            case .walk, .run, .idle, .sleep, .held, .alert, .groom, .cling: true
+            case .walk, .run, .idle, .sleep, .held, .alert, .groom, .cling, .climbUp: true
             // curl settles into the sleep pose and holds it until sleep takes over.
             // lookDown holds its last frame too: he leans out over the lip and stays there
             // while he thinks. The hold IS the tell, so it must not cycle back to standing.
@@ -148,6 +161,7 @@ public enum Sprites {
         // dropped him. The fall sheet is the righting reflex, so it covers both.
         case .slip, .righting:      return .fall
         case .cling:                return .cling
+        case .climb:                return .climbUp
         case .scruffed:             return .held
         // A drop that rattles him and a step down off a window edge used to be the same
         // picture, which made the squash the only thing telling them apart.
@@ -229,6 +243,11 @@ public enum Sprites {
         // Still unconfirmed on screen. Look at him on a real window and adjust; do not
         // "correct" it from a measured ink box, which finds the tail every time.
         case .cling: return 0.875
+        // The same grip on the same wall, so the same anchor. These two MUST agree: he switches
+        // between them the moment he decides to go up rather than hang, and a different anchor
+        // would snap him up or down the face at that instant. `theClimbAndTheClingHangFromTheSamePoint`
+        // pins them together.
+        case .climbUp: return 0.875
         default:    return 0
         }
     }

@@ -419,6 +419,16 @@ public enum Feel {
         /// skating; `eachGaitPlaysAtItsOwnClipsDeclaredRate` holds both against their clips.
         public static let strideLength: CGFloat = 30
         public static let runStrideLength: CGFloat = 67
+        /// How much wall one full six-frame `climbUp` cycle covers.
+        ///
+        /// The sheet came back as three poses drawn twice rather than six distinct ones, so a
+        /// full cycle reads as TWO reaches, which is why this is 55 and not half of it. At 27.5pt
+        /// a reach against his 32pt height that is a plausibly long stretch for a climbing cat.
+        ///
+        /// `Sprites.Clip.climbUp.fps` is derived from this and `clingClimbSpeed`, so the sheet
+        /// can never play at a rate the ascent does not match. That is the run-gait bug, which
+        /// shipped because two numbers that had to agree were written down twice.
+        public static let climbStride: CGFloat = 55
         /// Impact speed that produces maxSquash.
         public static let squashReference: CGFloat = 900
     }

@@ -1404,3 +1404,26 @@ private func lookDownReach() -> (toes: CGFloat, nose: CGFloat) {
     #expect(slowestAfterHurrying < Feel.Physics.edgeCreepSpeed * 1.5,
             "he stopped easing: slowest after the trot was \(slowestAfterHurrying)")
 }
+
+@MainActor
+@Test func goingUpAFacePlaysTheClimbSheetAndHangingOnDoesNot() {
+    // The whole reason the sheet exists. `cling` was drawn as a moment, a cat scrabbling with
+    // its ears back, and a full ascent of a fullscreen face ran it unbroken for up to 10.8s.
+    // The hold before he decides has to stay on `cling`, which is exactly what it is for.
+    let world = ledgeWorld()          // window(1) face runs x 400...900, y 300...600
+    var cat = CatState(position: CGPoint(x: 650, y: 560))
+    cat.support = .clinging(Grip(id: .window(1), dx: 250, dy: 40))
+    cat.intent = Intent(destination: .window(1), destinationX: 650, move: .climb(.window(1), 650))
+
+    var sawCling = false, sawClimb = false
+    for _ in 0..<(120 * 20) {
+        cat = Cat.step(cat, world: world, dt: dt)
+        if cat.activity == .cling { sawCling = true }
+        if cat.activity == .climb { sawClimb = true }
+        if case .grounded = cat.support { break }
+    }
+    #expect(sawCling, "he never played the grab-and-hold beat")
+    #expect(sawClimb, "he climbed the whole face on the sheet drawn for hanging on")
+    #expect(Sprites.clip(for: .climb, dangling: false) == .climbUp)
+    #expect(Sprites.clip(for: .cling, dangling: false) == .cling)
+}
