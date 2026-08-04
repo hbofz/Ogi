@@ -771,6 +771,45 @@ private func landing(fromHeight h: CGFloat, routing: Bool = false) -> (Activity,
     #expect(abs(g.dy - 180) < 1)      // 600 - 420, down from the top edge
 }
 
+@Test func droppedFastOnAWindowFaceHeStillClingsToIt() {
+    // The bug: a drag that was still moving when you let go sailed past the face. Real drags
+    // are never still (20pt in the ~100ms velocity window is already 200 px/s), so the old
+    // speed guard meant only a dead stop ever grabbed. Inside the face is inside the face.
+    let world = ledgeWorld()          // window(1) rect is x 400...900, y 300...600
+    var cat = CatState(position: CGPoint(x: 650, y: 420))
+    cat = Cat.grab(cat, at: CGPoint(x: 650, y: 420))
+    cat = Cat.release(cat, throwVelocity: CGVector(dx: 900, dy: -900), world: world)
+
+    guard case .clinging(let g) = cat.support else {
+        Issue.record("expected clinging, got \(cat.support)")
+        return
+    }
+    #expect(g.id == .window(1))
+    #expect(cat.activity == .cling)
+    #expect(cat.velocity == .zero, "he caught the face, he is not still travelling")
+}
+
+@Test func thrownJustAsFastInOpenAirHeStillFallsAndRights() {
+    // The other half: nothing about deleting the guard touches a throw that misses everything.
+    let world = ledgeWorld()
+    var cat = CatState(position: CGPoint(x: 1500, y: 800))
+    cat = Cat.grab(cat, at: CGPoint(x: 1500, y: 800))
+    cat = Cat.release(cat, throwVelocity: CGVector(dx: 900, dy: -900), world: world)
+
+    guard case .falling = cat.support else {
+        Issue.record("expected falling, got \(cat.support)")
+        return
+    }
+    #expect(cat.activity == .righting)
+    #expect(cat.righting == 0)
+    #expect(cat.velocity == CGVector(dx: 900, dy: -900))
+
+    cat = Cat.release(Cat.grab(cat, at: CGPoint(x: 1500, y: 800)),
+                      throwVelocity: CGVector(dx: 99_000, dy: -99_000), world: world)
+    #expect(abs(cat.velocity.dx) <= Feel.Physics.maxThrow)
+    #expect(abs(cat.velocity.dy) <= Feel.Physics.maxThrow)
+}
+
 @Test func droppedInOpenAirHeStillFalls() {
     let world = ledgeWorld()
     var cat = CatState(position: CGPoint(x: 1500, y: 800))

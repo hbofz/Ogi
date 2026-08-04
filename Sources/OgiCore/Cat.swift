@@ -575,14 +575,22 @@ public enum Cat {
     /// Let go. If he is over a window's face he grabs it; otherwise he twists, rights
     /// himself, and lands on his feet.
     ///
+    /// **Where he is decides it, not how fast he was going.** A cat thrown at a curtain grabs
+    /// the curtain, which is the whole reason the cling exists. There used to be a speed guard
+    /// here, on the theory that a fast release was a throw rather than a placement, and it made
+    /// the feature unreachable: the release velocity comes from the last ~100ms of drag, so
+    /// 20pt of hand movement already reads as 200 px/s and every real drop sailed past the
+    /// face. Only a dead stop ever grabbed. A threshold was the worst of both anyway, since
+    /// grabbing at 190 and throwing at 210 is less predictable than either rule applied
+    /// consistently.
+    ///
     /// **Entry is on release only, deliberately.** Clinging on any fall past any window
     /// would stop every descent at the first window it passed, and the fall is the app's
     /// entire demo.
     public static func release(_ state: CatState, throwVelocity v: CGVector,
                                world: Skyline) -> CatState {
         var s = state
-        if abs(v.dx) < Feel.Physics.clingGrabSpeed, abs(v.dy) < Feel.Physics.clingGrabSpeed,
-           let face = world.faceContaining(s.position) {
+        if let face = world.faceContaining(s.position) {
             s.support = .clinging(Grip(id: face.id,
                                        dx: s.position.x - (face.rect?.minX ?? 0),
                                        dy: face.y - s.position.y))

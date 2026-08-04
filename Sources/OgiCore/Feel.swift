@@ -151,9 +151,6 @@ public enum Feel {
         /// Within this far of the top edge he climbs up and mantles onto it instead of
         /// sliding down.
         public static let mantleReach: CGFloat = 90
-        /// How gently he has to be put down to catch the face at all, px/s on either axis.
-        /// Above it he was thrown rather than placed, and a thrown cat does not grab.
-        public static let clingGrabSpeed: CGFloat = 200
         /// How far INTO a face he has to be able to leap before he will try to climb it, and
         /// how much extra height he asks of that leap. One number doing both jobs, because
         /// they are the same job: it is the margin that stops a leap which merely GRAZES the
