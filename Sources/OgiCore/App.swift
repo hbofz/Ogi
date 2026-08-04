@@ -114,9 +114,8 @@ public final class OgiApp: NSObject, NSApplicationDelegate {
         NSWorkspace.shared.notificationCenter.addObserver(
             forName: NSWorkspace.willSleepNotification, object: nil, queue: .main) { [weak self] _ in
             MainActor.assumeIsolated {
-                guard let self, let homeX = self.homeX else { return }
-                self.cat.receive(Stimulus(kind: .goHome, at: CGPoint(x: homeX, y: 0)))
-                self.log("machine is sleeping, heading home")
+                guard let self else { return }
+                self.headHome(because: "machine is sleeping, heading home")
             }
         }
 
@@ -632,11 +631,22 @@ public final class OgiApp: NSObject, NSApplicationDelegate {
         // long as the window stayed fullscreen, which is a cat who cannot be anywhere else.
         let frame = ScreenGeometry(screen).frame
         let fullscreen = OgiApp.somethingFullscreen(in: raw, frame: frame, ownPID: ownPID)
-        if fullscreen, !wasFullscreen, let homeX {
-            cat.receive(Stimulus(kind: .goHome, at: CGPoint(x: homeX, y: 0)))
-            log("something went fullscreen, heading home")
+        if fullscreen, !wasFullscreen {
+            headHome(because: "something went fullscreen, heading home")
         }
         wasFullscreen = fullscreen
+    }
+
+    /// Send him home, if there is a home. The stimulus point is the doorway on the menu bar
+    /// LINE: the x routes him and the y is what his eyes flick to. It used to be y=0, the
+    /// bottom of the screen — invisible while the pupils are switched off, and a retreating
+    /// cat glancing at the floor the day they return. One helper because the two retreats
+    /// (fullscreen, machine sleep) are the same act with a different prompt.
+    private func headHome(because reason: String) {
+        guard let homeX else { return }
+        cat.receive(Stimulus(kind: .goHome,
+                             at: CGPoint(x: homeX, y: skyline.screen.visibleFrame.maxY)))
+        log(reason)
     }
 
     /// Is his screen essentially covered by one real window?
