@@ -194,6 +194,13 @@ public enum Feel {
         /// Squash depth is proportional to impact speed, capped here.
         public static let maxSquash: CGFloat = 0.30
         /// Ground covered per full gait cycle. Tuned so the paws do not skate.
+        ///
+        /// ponytail: one length for both gaits. The walk and the run cycle off this same 30pt,
+        /// so the run clip is over-cranked by however much longer a trot's stride really is.
+        /// That is still a large improvement on what it replaced, which advanced the gait at a
+        /// flat `walkSpeed` and skated by 2.5x at a trot and through every acceleration.
+        /// Upgrade path: a second constant here and a `cat.hurrying ?` in `buildPose`. Left
+        /// undone because it wants eyes on the running cat, not arithmetic.
         public static let strideLength: CGFloat = 30
         /// Impact speed that produces maxSquash.
         public static let squashReference: CGFloat = 900

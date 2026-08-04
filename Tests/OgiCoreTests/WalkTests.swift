@@ -41,7 +41,11 @@ private func strolling(to x: CGFloat, on s: Surface) -> Intent {
         cat = Cat.step(cat, world: sky([ledge]), dt: dt)
         if cat.intent == nil { break }
     }
-    #expect(abs(cat.position.x - 400) < Feel.Physics.arrivalSlop + 1)
+    // He no longer stops dead on the mark: he brakes late and coasts a few points past it, so
+    // this bound is `brakingDistance` plus the slop rather than the slop alone. It and its twin
+    // in `heStridesOverACrackRatherThanLeapingIt` are the real ceiling on how big the overshoot
+    // is allowed to get, tighter than anything in the overshoot tests themselves.
+    #expect(abs(cat.position.x - 400) < Feel.Physics.brakingDistance + Feel.Physics.arrivalSlop)
     #expect(cat.activity == .idle, "he should settle once he arrives")
 }
 
@@ -53,7 +57,22 @@ private func ledgeWorld() -> Skyline {
     sky([surface(.window(1), y: 600, from: 400, to: 900)])
 }
 
-@Test func heOvershootsHisTargetAndSettlesBack() {
+@Test func heCoastsPastHisMarkInsteadOfStoppingDeadOnIt() {
+    // What this checks is that he PASSES his mark and stops near it, which is not the same
+    // claim as the manifesto's "settles back". He does not walk back, deliberately, and this
+    // test cannot tell the difference: at a 3pt overshoot the third expectation below passes
+    // identically whether a settle-back exists or not. Naming it after one would be how a
+    // behaviour gets marked done on a green run without ever having been built, which is
+    // precisely what happened to overshoot itself on the old roadmap.
+    //
+    // Why it is unbuilt: a walk back only happens if the overshoot exceeds `advance`'s
+    // arrival tolerance, and the window where that is stable is
+    //     max(arrivalSlop * 3, brakingDistance) < overshoot < brakingDistance + walkSpeed² / (2 * accel)
+    // At or below `brakingDistance` he cannot move on the return leg at all and deadlocks;
+    // above the ceiling the return leg reaches full speed and overshoots by exactly as much
+    // again, for ever. That ceiling is 4.81pt wide at ANY tuning, because the width is
+    // walkSpeed² / (2 * accel) and nothing else. Too narrow to ship. Widening it properly
+    // means tapering the approach speed rather than braking at a fixed distance.
     let world = ledgeWorld()          // ledge 400...900 at y=600
     var cat = CatState(position: CGPoint(x: 450, y: 600))
     cat.support = .grounded(Perch(id: .window(1), dx: 50))
@@ -67,22 +86,27 @@ private func ledgeWorld() -> Skyline {
     }
     #expect(maxX > 700)                            // he went past it
     #expect(maxX < 700 + 20)                       // but not far past it
-    #expect(abs(cat.position.x - 700) < 12)        // and settled back near it
+    #expect(abs(cat.position.x - 700) < 12)        // and stopped near it
 }
 
 @Test func heAcceleratesRatherThanStartingAtFullSpeed() {
     let world = ledgeWorld()
     var cat = CatState(position: CGPoint(x: 450, y: 600))
     cat.support = .grounded(Perch(id: .window(1), dx: 50))
-    cat.intent = Intent(destination: .window(1), destinationX: 850, move: .walk(850))
+    // 210pt, so he is inside `hurryDistance` and strolling. Aimed at 850 this passed on the
+    // RUN speed, which is 2.5x the bound below and would have stayed green with no ramp on
+    // the walk at all.
+    cat.intent = Intent(destination: .window(1), destinationX: 660, move: .walk(660))
 
     cat = Cat.step(cat, world: world, dt: 1.0 / 120)
     let early = abs(cat.perchSpeed)
     for _ in 0..<120 { cat = Cat.step(cat, world: world, dt: 1.0 / 120) }
     let later = abs(cat.perchSpeed)
 
+    #expect(!cat.hurrying, "he is trotting, so this is measuring the wrong top speed")
     #expect(early < Feel.Physics.walkSpeed * 0.5)
     #expect(later > Feel.Physics.walkSpeed * 0.8)
+    #expect(later <= Feel.Physics.walkSpeed, "he wound up past the speed he was asking for")
 }
 
 @Test func heDoesNotCoastOffALipHeWasAimingAt() {
@@ -410,7 +434,9 @@ private func bareDesktop() -> Skyline {
     #expect(!fell, "he fell into a ten-point crack")
     guard case .grounded(let p) = cat.support else { Issue.record("not grounded"); return }
     #expect(p.id == .window(2))
-    #expect(abs(cat.position.x - 500) < Feel.Physics.arrivalSlop + 1)
+    // Braking distance plus slop, not slop alone: he coasts past his mark. See the twin of this
+    // bound in `heWalksToHisDestinationAndStops`.
+    #expect(abs(cat.position.x - 500) < Feel.Physics.brakingDistance + Feel.Physics.arrivalSlop)
 }
 
 @Test func steppingOffTheEndOfTheScreenStillLandsOnTheFloor() {
