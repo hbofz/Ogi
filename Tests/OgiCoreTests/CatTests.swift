@@ -318,6 +318,74 @@ private let notched = ScreenGeometry(frame: CGRect(x: 0, y: 0, width: 1920, heig
     #expect(Cat.isGap(at: notch.maxX, facing: -1, on: bar), "a hole is not the end of the world")
 }
 
+@Test func fromTheMenuBarHeDropsOntoTheWindowBelow() {
+    // What Hamzah watched: from the bar, every descent walked to a screen corner, because a
+    // full-width surface's only lips ARE the corners — stepOff picks the lip nearest the
+    // destination, and from the bar that is a thousand-point walk followed by a
+    // thousand-point fall into a corner nowhere near where he was going. Windows were never
+    // stepping stones on the way down.
+    let bar = surface(.menuBar, y: 1205, from: 0, to: 1920, z: -1)
+    let win1 = surface(.window(1), y: 1110, from: 264, to: 1091)
+    let floor = surface(.floor, y: 90, from: 0, to: 1920, z: .max)
+    let world = sky([bar, win1, floor])
+    var cat = CatState(position: CGPoint(x: 1500, y: 1205))
+    cat.support = .grounded(Perch(id: .menuBar, dx: 1500))
+
+    let move = Cat.nextMove(from: cat, on: bar, toward: .window(1), x: 650, world: world)
+    guard case .drop(.window(1), let x)? = move else {
+        Issue.record("expected a drop, got \(String(describing: move))")
+        return
+    }
+    #expect(abs(x - 650) < Feel.Physics.edgeApproach + 1)
+}
+
+@Test func aWindowLipStillGetsTheTellNotADrop() {
+    // The drop must not eat the edge. From a window whose lip actually gains ground, the
+    // crafted approach-slow-look-hold beat stays exactly as v2a built it.
+    let ledge = surface(.window(1), y: 600, from: 400, to: 900)
+    let floor = surface(.floor, y: 90, from: 0, to: 1920, z: .max)
+    var cat = CatState(position: CGPoint(x: 650, y: 600))
+    cat.support = .grounded(Perch(id: .window(1), dx: 250))
+    let move = Cat.nextMove(from: cat, on: ledge, toward: .floor, x: 650,
+                            world: sky([ledge, floor]))
+    if case .drop = move { Issue.record("the drop ate the edge tell") }
+}
+
+@Test func heUsesWindowsAsStepsDownFromTheBar() {
+    // End to end: walk along the bar to above the window, the look-down tell, the hop, the
+    // landing — and never a trip to the screen corner.
+    let bar = surface(.menuBar, y: 1205, from: 0, to: 1920, z: -1)
+    let win1 = surface(.window(1), y: 1110, from: 264, to: 1091,
+                       rect: CGRect(x: 264, y: 192, width: 827, height: 918))
+    let floor = surface(.floor, y: 90, from: 0, to: 1920, z: .max)
+    let world = sky([bar, win1, floor])
+
+    // He can refuse a drop after looking at it (commitChance), which settles the intent, so
+    // a few attempts are legitimate; three failures in a row would be a 0.01% draw.
+    var landed = false, cornered = false, looked = false
+    for _ in 0..<3 {
+        var cat = CatState(position: CGPoint(x: 1500, y: 1205))
+        cat.support = .grounded(Perch(id: .menuBar, dx: 1500))
+        cat.restLeft = .greatestFiniteMagnitude
+        guard let move = Cat.nextMove(from: cat, on: bar, toward: .window(1), x: 650,
+                                      world: world) else {
+            Issue.record("no route from the bar to the window below it"); return
+        }
+        cat.intent = Intent(destination: .window(1), destinationX: 650, move: move)
+        for _ in 0..<Int(60 / dt) {
+            cat = Cat.step(cat, world: world, dt: dt)
+            looked = looked || cat.activity == .edgeLook
+            cornered = cornered || cat.position.x < 150 || cat.position.x > 1770
+            if case .grounded(let p) = cat.support, p.id == .window(1) { landed = true; break }
+            if cat.intent == nil { break }      // refused after the look; try again
+        }
+        if landed { break }
+    }
+    #expect(landed, "he never made it down onto the window")
+    #expect(looked, "he dropped without the look-down tell")
+    #expect(!cornered, "he walked to a screen corner instead of using the window below")
+}
+
 @MainActor
 @Test func aNotchlessMacStillHasADoorway() {
     // homeX used to be nil without a notch, so desktop Macs got no fullscreen retreat, no

@@ -97,6 +97,11 @@ public enum Move: Sendable, Equatable {
     /// Cats go up curtains, and this is the only route out of the desktop: `jumpImpulse` buys
     /// 190pt of rise against windows that are routinely five times that tall.
     case climb(SurfaceID, CGFloat)
+    /// Walk to the spot on his own surface directly above a lower ledge, look down, and hop
+    /// off the glass onto it. The descent a full-width surface could never make: the menu
+    /// bar's only lips are the screen corners, so stepping off it walked the whole bar and
+    /// dropped a thousand points into a corner — windows were never stepping stones down.
+    case drop(SurfaceID, CGFloat)
 }
 
 /// Where he is ultimately going, and the current step toward it. Nil means he is content
@@ -1203,6 +1208,13 @@ public enum Cat {
         if case .climb(_, let x) = move, abs(x - s.position.x) > Feel.Physics.arrivalSlop * 2 {
             move = .walk(x)
         }
+        // A drop starts with a walk to the spot above the target, resolved exactly the way
+        // a climb's walk is and for the same reason: never written back, and the re-plan on
+        // arrival hands back the same drop from the same arithmetic, so it settles rather
+        // than chasing itself.
+        if case .drop(_, let x) = move, abs(x - s.position.x) > Feel.Physics.arrivalSlop * 2 {
+            move = .walk(x)
+        }
         if case .stepOff = move {
             guard let lip = stepOffLip(from: s, on: surface, toward: intent.destinationX,
                                        world: world) else {
@@ -1456,6 +1468,46 @@ public enum Cat {
             s.drift = 0
             s.lastPerchOrigin = nil
 
+        case .drop(let dropID, _):
+            // In position over it. Re-verified live, because the window can move or close
+            // during the walk over: the thing below him must still be the thing he chose.
+            guard let below = world.surface(dropID),
+                  world.supportBelow(x: s.position.x,
+                                     from: surface.y - Feel.World.coplanarEpsilon,
+                                     to: -.greatestFiniteMagnitude)?.id == dropID else {
+                settle(&s)
+                break
+            }
+            // The tell, at a lip that is not a lip: plant, look down at the thing below,
+            // hold, then commit or think better of it. The same beat as the edge, scaled by
+            // the same drop, because the decision is the same size.
+            if s.activity != .edgeLook {
+                s.perchSpeed = 0
+                s.activity = .edgeLook
+                break
+            }
+            let depth = surface.y - below.y
+            guard s.activityElapsed >= hesitation(forDrop: depth) else {
+                s.perchSpeed = 0
+                break
+            }
+            guard Double.random(in: 0...1) < commitChance(forDrop: depth) else {
+                settle(&s)      // thought better of it; the next idea starts from scratch
+                break
+            }
+            s.support = .falling
+            s.activity = .slip
+            s.activityElapsed = 0
+            // Half a point below his own line so supportBelow cannot re-catch the surface
+            // he just left, exactly as a step-off clears it. Straight down, no kick: the
+            // target sits under him by construction, and sideways speed only risks the
+            // edge of its span.
+            s.position.y = surface.y - Feel.World.coplanarEpsilon
+            s.velocity = .zero
+            s.drift = 0
+            s.lastPerchOrigin = nil
+            // The intent survives; he re-plans where he lands, like every other way down.
+
         case .stepOff:
             break   // resolved into a walk above; unreachable
         }
@@ -1616,9 +1668,33 @@ public enum Cat {
             return .climb(climb.id, climb.x)
         }
 
-        // Nothing in the air, and the destination is below him. Walk to the lip and step off.
-        // Gravity was always there; v1 simply had no way to ask for it.
-        if dest.y < surface.y { return .stepOff }
+        // Nothing in the air, and the destination is below him. Gravity was always there;
+        // v1 simply had no way to ask for it — and v2c learned that a lip is only a route
+        // if stepping off it gains ground. From a window's end it almost always does. From
+        // the menu bar, whose only lips are the screen corners, the step-off walked the
+        // whole bar and dropped a thousand points into a corner nowhere near where he was
+        // going: Hamzah watched him do it. When the lip loses ground and the target sits
+        // under his own solid with nothing in between, he hops down the glass instead,
+        // with the same tell the edge gets.
+        // ponytail: lip-vs-drop is progress-based, not time-costed; revisit if corner
+        // walks still read dumb on a real desktop
+        if dest.y < surface.y {
+            let lipGains: Bool = {
+                guard let lip = stepOffLip(from: s, on: surface, toward: destX, world: world),
+                      let below = landing(past: lip.x, facing: lip.dir, on: surface,
+                                          world: world) else { return false }
+                return hypot(lip.x - destX, below.y - dest.y)
+                    < hypot(here.x - destX, here.y - dest.y) - Feel.Physics.arrivalSlop
+            }()
+            if lipGains { return .stepOff }
+            if let x = standingRoom(near: destX, in: dest.spans),
+               surface.solid.contains(where: { $0.contains(x) }),
+               world.supportBelow(x: x, from: surface.y - Feel.World.coplanarEpsilon,
+                                  to: -.greatestFiniteMagnitude)?.id == destID {
+                return .drop(destID, x)
+            }
+            return .stepOff
+        }
 
         // Nothing in the air and the destination is above. Walk to the point on his own ledge
         // nearest to it and ask again from there: half of getting somewhere is standing in the
