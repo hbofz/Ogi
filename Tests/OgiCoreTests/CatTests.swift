@@ -144,6 +144,51 @@ private func ledgeWorld() -> Skyline {
     #expect(Cat.edgeAhead(from: 5000, facing: 1, on: s) == nil)
 }
 
+// MARK: - Footing
+
+@Test func footingMeasuresTheDropAhead() {
+    let world = ledgeWorld()          // ledge 400...900 at y=600, floor at y=100
+    var cat = CatState(position: CGPoint(x: 850, y: 600))
+    cat.support = .grounded(Perch(id: .window(1), dx: 450))
+    cat.facing = 1
+
+    cat = Cat.step(cat, world: world, dt: dt)
+
+    #expect(abs(cat.footing.edgeAhead - 50) < 1)      // 900 - 850
+    #expect(cat.footing.dropAhead != nil)
+    #expect(abs((cat.footing.dropAhead ?? 0) - 500) < 1)   // 600 - 100
+    #expect(cat.footing.landingAhead == .floor)
+    #expect(cat.footing.isCliff)
+    #expect(!cat.footing.gapAhead)
+    #expect(!cat.footing.isAtEdge)                    // 50 > edgeApproach
+}
+
+@Test func footingReportsNoDropAtAWall() {
+    let world = ledgeWorld()
+    var cat = CatState(position: CGPoint(x: 20, y: 100))
+    cat.support = .grounded(Perch(id: .floor, dx: 20))
+    cat.facing = -1
+
+    cat = Cat.step(cat, world: world, dt: dt)
+
+    #expect(cat.footing.dropAhead == nil)             // wall, nothing below the floor
+    #expect(cat.footing.landingAhead == nil)
+    #expect(!cat.footing.isCliff)
+    #expect(!cat.footing.gapAhead, "the end of the world is not a hole")
+    #expect(cat.footing.isAtEdge)                     // 20 <= edgeApproach
+}
+
+@Test func footingIsInfiniteWhileAirborne() {
+    let world = ledgeWorld()
+    var cat = CatState(position: CGPoint(x: 600, y: 900))
+    cat.support = .falling
+
+    cat = Cat.step(cat, world: world, dt: dt)
+
+    #expect(cat.footing.edgeAhead == .infinity)
+    #expect(!cat.footing.isAtEdge)
+}
+
 /// A 1920-wide screen with a 200pt cutout at 830...1030, as a notched Mac reports it.
 private let notched = ScreenGeometry(frame: CGRect(x: 0, y: 0, width: 1920, height: 1243),
                                      visibleFrame: CGRect(x: 0, y: 90, width: 1920, height: 1115),
@@ -170,6 +215,31 @@ private let notched = ScreenGeometry(frame: CGRect(x: 0, y: 0, width: 1920, heig
         }
         #expect(cat.position.x >= notch.maxX - 0.001, "he is standing in the cutout")
     }
+}
+
+@Test func footingReportsNoDropAtTheNotch() {
+    // The third case, and the reason `Footing` cannot re-derive the answer from `supportBelow`
+    // alone: there IS a floor a thousand points under the cutout, so a naive drop measurement
+    // reports a 1115pt cliff. It is not a cliff, it is a hole with more menu bar on the far
+    // side, and stepping in is one-way. `Footing` has to agree with `isCliff` or the tell will
+    // hesitate over a gap he must never step into.
+    let world = World.build(windows: [], screen: notched, ownPID: 99)
+    let bar = world.surface(.menuBar)!
+    let notch = notched.notch!
+    var cat = CatState(position: CGPoint(x: notch.maxX + 30, y: bar.y))
+    cat.support = .grounded(Perch(id: .menuBar, dx: notch.maxX + 30 - bar.extent.lowerBound))
+    cat.facing = -1
+
+    cat = Cat.step(cat, world: world, dt: dt)
+
+    // There really is something below, which is what makes this the interesting case.
+    #expect(world.supportBelow(x: notch.midX, from: bar.y - 1, to: -.greatestFiniteMagnitude) != nil)
+
+    #expect(abs(cat.footing.edgeAhead - 30) < 1)
+    #expect(cat.footing.dropAhead == nil, "he sees a cliff into the notch")
+    #expect(cat.footing.landingAhead == nil)
+    #expect(!cat.footing.isCliff)
+    #expect(cat.footing.gapAhead, "a hole is not the end of the world")
 }
 
 @MainActor

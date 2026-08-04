@@ -20,6 +20,28 @@ public enum Support: Sendable, Equatable {
     case held(CGPoint)
 }
 
+/// What the ground ahead of him looks like. Recomputed every tick, never stored across one.
+///
+/// This is what the hesitation reads. Without it he has no way to know he is standing next
+/// to a drop, which is why v1 could not have a tell: the information did not exist.
+public struct Footing: Sendable, Equatable {
+    /// Distance to the end of solid ground in his facing direction. `.infinity` if he is
+    /// not on solid ground, or airborne.
+    public var edgeAhead: CGFloat = .infinity
+    /// How far down to the next surface past that edge. Nil means there is nothing he could
+    /// land on: a wall, or an interior gap, both of which he treats as a wall.
+    public var dropAhead: CGFloat?
+    /// What he would land on if he stepped off.
+    public var landingAhead: SurfaceID?
+    /// The same surface resumes past that edge: a hole, not the end of the world. He stops at
+    /// both, but they are different beats, because a gap has a far side you can see across.
+    /// Mutually exclusive with `isCliff`, since a gap is never something to step into.
+    public var gapAhead = false
+
+    public var isAtEdge: Bool { edgeAhead <= Feel.Physics.edgeApproach }
+    public var isCliff: Bool { dropAhead != nil }
+}
+
 public enum Activity: Sendable, Equatable {
     case idle
     case groom      // washing, in place, while awake
@@ -98,6 +120,9 @@ public struct CatState: Sendable {
     /// against a perfectly stationary ledge.
     public var lastPerchID: SurfaceID?
 
+    /// The ground ahead of him. Recomputed each tick by `Cat.step`.
+    public var footing = Footing()
+
     /// -1..1. How hard he is leaning against the motion of his platform.
     public var lean: CGFloat {
         max(-1, min(1, drift / Feel.Physics.driftReference))
@@ -165,6 +190,11 @@ public enum Cat {
         var s = state
         s.activityElapsed += dt
         s.squashElapsed += dt
+        // Never carried across a tick. Cleared here rather than in each of the branches that
+        // leaves the ground, because two of them (the vanished platform, the shrunken window)
+        // return before the grounded branch ever gets to recompute it, and a cat one tick into
+        // a fall would still be reporting the ledge he just lost.
+        s.footing = Footing()
 
         switch s.support {
         case .held(let point):
@@ -203,6 +233,21 @@ public enum Cat {
                 s.lastPerchOrigin = nil
                 return s
             }
+            // What the ground ahead looks like. The tell reads this. It has to come from the
+            // same rule the fall-off branch uses, not from `supportBelow` on its own: there is
+            // a floor under the notch, so a drop measured directly reports a thousand-point
+            // cliff at a hole he must never step into.
+            // Computed before he decides anything, so the routing and the tell both read the
+            // ground he is deciding from rather than the ground he has already stepped onto.
+            if let edge = edgeAhead(from: standingOn, facing: s.facing, on: surface) {
+                s.footing.edgeAhead = abs(edge - standingOn)
+                s.footing.gapAhead = isGap(at: edge, facing: s.facing, on: surface)
+                if let below = landing(past: edge, facing: s.facing, on: surface, world: world) {
+                    s.footing.dropAhead = surface.y - below.y
+                    s.footing.landingAhead = below.id
+                }
+            }
+
             // World position is derived. Surfing is free — he is already being carried.
             // What this measures is his *reaction* to being carried.
             //
@@ -474,16 +519,29 @@ public enum Cat {
 
     /// Is there anywhere to land past that edge? Cliff if yes, wall if no.
     static func isCliff(at x: CGFloat, facing: CGFloat, on surface: Surface, world: Skyline) -> Bool {
-        // A hole with more of the SAME surface beyond it is a gap, not a cliff, and a gap is
-        // a wall. The notch is the only one that exists — windows produce a single solid run
-        // and the floor is uncarved — and it is a trap rather than a ledge: he cannot jump to
-        // the surface he is standing on (`pickGoal` excludes it), and the desktop a thousand
-        // points below is far past `maxJumpDrop`, so stepping into it is one-way.
-        if surface.solid.contains(where: { facing > 0 ? $0.lowerBound > x : $0.upperBound < x }) {
-            return false
-        }
+        landing(past: x, facing: facing, on: surface, world: world) != nil
+    }
+
+    /// The same question, answered with the surface itself so `Footing` can measure the drop.
+    /// One implementation, because a `Footing` that disagreed with `isCliff` would have him
+    /// hesitating at edges he walks straight over and stepping off ones he stops at.
+    ///
+    /// Nil covers two of the three cases. A hole with more of the SAME surface beyond it is a
+    /// gap, not a cliff, and a gap is a wall (`isGap`). The notch is the only one that exists —
+    /// windows produce a single solid run and the floor is uncarved — and it is a trap rather
+    /// than a ledge: he cannot jump to the surface he is standing on (`pickGoal` excludes it),
+    /// and the desktop a thousand points below is far past `maxJumpDrop`, so stepping into it
+    /// is one-way.
+    static func landing(past x: CGFloat, facing: CGFloat,
+                        on surface: Surface, world: Skyline) -> Surface? {
+        if isGap(at: x, facing: facing, on: surface) { return nil }
         return world.supportBelow(x: x, from: surface.y - Feel.World.coplanarEpsilon,
-                                  to: -.greatestFiniteMagnitude) != nil
+                                  to: -.greatestFiniteMagnitude)
+    }
+
+    /// Does the surface resume past that edge? Then it is a hole, not the end of it.
+    static func isGap(at x: CGFloat, facing: CGFloat, on surface: Surface) -> Bool {
+        surface.solid.contains { facing > 0 ? $0.lowerBound > x : $0.upperBound < x }
     }
 }
 

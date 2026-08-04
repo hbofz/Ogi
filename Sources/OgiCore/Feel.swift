@@ -18,6 +18,8 @@ public enum Feel {
         /// clear of the edge he just left rather than scraping down it. Small: his centre of
         /// mass has only just crossed.
         public static let edgeTolerance: CGFloat = 2
+        /// How close to the edge counts as "at the edge" for the approach and the tell.
+        public static let edgeApproach: CGFloat = 26
 
         public static let walkSpeed: CGFloat = 46          // px/s
         public static let runSpeed: CGFloat = 118
