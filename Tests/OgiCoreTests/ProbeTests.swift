@@ -421,3 +421,69 @@ func PROBE_openingTwoWindowsTheWayAPersonDoes() {
                      gap, went, freeAtSecond))
     }
 }
+
+/// A layout where windows actually overlap each other's top edges, which is what makes any of
+/// him ever be hidden. The other fixtures happen not to occlude anything.
+private func overlappingDesktop() -> Skyline {
+    // The list is FRONT to back, so index 0 is the window in front. To hide a top edge the front
+    // window has to straddle it vertically, which is why the first entry is the tall one: a
+    // first attempt at this fixture had the front windows shorter than the back ones, occluded
+    // nothing at all, and passed the probe at a very convincing 0.0%.
+    World.build(windows: [
+        RawWindow(id: 1, pid: 100, layer: 0, rect: CGRect(x: 600, y: 100, width: 800, height: 1100),
+                  alpha: 1, owner: "Front"),
+        RawWindow(id: 2, pid: 101, layer: 0, rect: CGRect(x: 200, y: 300, width: 800, height: 500),
+                  alpha: 1, owner: "Middle"),
+        RawWindow(id: 3, pid: 102, layer: 0, rect: CGRect(x: 900, y: 200, width: 800, height: 400),
+                  alpha: 1, owner: "Back"),
+    ], screen: probeScreen, ownPID: 999)
+}
+
+/// He wants to be seen. Measured as the share of his grounded life spent somewhere you cannot
+/// see him, on a desktop whose windows overlap the way real ones do.
+@Test(.enabled(if: ProcessInfo.processInfo.environment["OGI_PROBE"] != nil))
+func PROBE_heDoesNotSpendHisLifeBehindWindows() {
+    let dt = Feel.Timing.fixedDT
+    let world = overlappingDesktop()
+    var hidden = 0, grounded = 0, worstSpell = 0.0
+    for run in 0..<30 {
+        // Start him buried on purpose, so the measurement includes getting out.
+        let starts: [(CGFloat, SurfaceID)] = [(700, .window(1)), (1000, .window(2)),
+                                              (1200, .window(3)), (600, .floor)]
+        let (x, id) = starts[run % starts.count]
+        guard let s0 = world.surface(id) else { continue }
+        var cat = CatState(position: CGPoint(x: x, y: s0.y))
+        cat.support = .grounded(Perch(id: id, dx: x - s0.extent.lowerBound))
+        var spell = 0.0
+        for _ in 0..<(120 * 300) {
+            cat = Cat.step(cat, world: world, dt: dt)
+            guard case .grounded = cat.support else { spell = 0; continue }
+            grounded += 1
+            if Cat.isHidden(cat, world: world) {
+                hidden += 1; spell += dt; worstSpell = max(worstSpell, spell)
+            } else { spell = 0 }
+        }
+    }
+    let share = Double(hidden) / Double(max(grounded, 1))
+    print(String(format: "hidden for %.1f%% of his grounded life, longest spell %.1fs",
+                 share * 100, worstSpell))
+    #expect(share < 0.15, "he spends a lot of his life where you cannot see him")
+    #expect(worstSpell < Feel.Mind.hiddenPatience * 4,
+            "he was stuck out of sight for \(worstSpell)s")
+}
+
+/// Guards the fixture above against silently occluding nothing, which is how the first version
+/// of it passed at 0.0%.
+@Test(.enabled(if: ProcessInfo.processInfo.environment["OGI_PROBE"] != nil))
+func PROBE_theOverlappingFixtureActuallyOverlaps() {
+    let world = overlappingDesktop()
+    let occluded = world.surfaces.filter { s in
+        let solid = s.solid.reduce(0.0) { $0 + $1.length }
+        let vis = s.spans.reduce(0.0) { $0 + $1.length }
+        return solid - vis > 1
+    }
+    for s in world.surfaces {
+        print("  \(name(s.id)) y=\(Int(s.y)) solid=\(Int(s.solid.reduce(0){$0+$1.length})) visible=\(Int(s.spans.reduce(0){$0+$1.length}))")
+    }
+    #expect(occluded.count >= 2, "the fixture hides nothing, so the probe proves nothing")
+}

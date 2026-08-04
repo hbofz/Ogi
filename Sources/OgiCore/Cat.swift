@@ -305,6 +305,10 @@ public struct CatState: Sendable {
     public var lookingAt: CGPoint?
     /// Seconds of glance left. Internal to the glance; public only because `Cat.step` is free.
     public var glanceLeft: TimeInterval = 0
+
+    /// How long he has been somewhere you cannot see him. He wants to be seen: a cat behind a
+    /// window is a cat doing nothing, however good the thing he is doing.
+    public var hiddenFor: TimeInterval = 0
     /// Covering a long distance, so he trots instead of strolling.
     public var hurrying = false
 
@@ -364,6 +368,9 @@ public enum Cat {
         s.activityElapsed += dt
         s.squashElapsed += dt
         s.arousal = max(0, min(1, s.arousal * pow(0.5, dt / Feel.Mind.arousalHalfLife)))
+        // How long you have not been able to see him. Counted here rather than in the branch
+        // that acts on it, so that time spent hidden while walking somewhere still counts.
+        s.hiddenFor = isHidden(s, world: world) ? s.hiddenFor + dt : 0
 
         // A glance is a one-shot: consumed here, cleared, and never written back, so it cannot
         // re-fire on the next 120 ticks. The gaze is `App`'s only read of this.
@@ -954,6 +961,36 @@ public enum Cat {
             // Nothing to do. Sit still until boredom wins.
             // Low battery makes him idle longer. A sluggish cat means plug in.
             // Settledness stretches the same timer rather than stopping it.
+            // He wants to be seen. A cat behind a window is a cat doing nothing, however good
+            // the thing he is doing, so this outranks every other idea he could have.
+            //
+            // `spans` is exactly "where he is visible", so a window raised over his perch makes
+            // this true with no new world model: the same array the renderer already uses to
+            // decide what to clip. He steps out along his own ledge if any of it is still
+            // showing, and only leaves the ledge entirely when the whole thing is covered.
+            if s.hiddenFor >= Feel.Mind.hiddenPatience {
+                if let x = nearestSpanX(to: s.position.x, in: surface.spans),
+                   abs(x - s.position.x) > Feel.Physics.arrivalSlop * 3 {
+                    s.intent = Intent(destination: surface.id, destinationX: x, move: .walk(x))
+                    s.activity = .walk
+                    s.activityElapsed = 0
+                    return s
+                }
+                // His whole ledge is covered. Somewhere else entirely, and the first that routes.
+                for other in world.surfaces.shuffled()
+                where other.id != surface.id && other.targetable && !other.spans.isEmpty {
+                    guard let span = other.spans.randomElement() else { continue }
+                    let x = (span.lowerBound + span.upperBound) / 2
+                    if let move = nextMove(from: s, on: surface, toward: other.id, x: x,
+                                           world: world) {
+                        s.intent = Intent(destination: other.id, destinationX: x, move: move)
+                        if case .jump = move { s.activity = .crouch } else { s.activity = .walk }
+                        s.activityElapsed = 0
+                        return s
+                    }
+                }
+            }
+
             // Cats approach when you go still. Not gated on arousal: this is a condition rather
             // than an event, and an excited cat coming over is not what it is for. Above the
             // boredom timer, so a waiting cursor beats an ordinary idea rather than racing it.
@@ -1610,6 +1647,20 @@ public enum Cat {
         let x = CGFloat.random(in: span.lowerBound...span.upperBound)
         return abs(x - s.position.x) < Feel.Physics.arrivalSlop * 2
             ? nil : Intent(destination: surface.id, destinationX: x, move: .walk(x))
+    }
+
+    /// Is he behind something, where you cannot see him?
+    ///
+    /// A lookup rather than a computation. `Surface.spans` is defined as `solid` minus every
+    /// window in front, which is exactly "where he is visible", so the occlusion work already
+    /// done for rendering answers this for free. Only while grounded: falling, clinging and
+    /// being carried are all brief, and a cat who ducks behind a window mid-leap has not been
+    /// abandoned there.
+    public static func isHidden(_ s: CatState, world: Skyline) -> Bool {
+        guard case .grounded(let p) = s.support, let surface = world.surface(p.id) else {
+            return false
+        }
+        return !surface.spans.contains { $0.contains(s.position.x) }
     }
 
     /// The box your cursor has to be inside for him to count as being in your way, which is his

@@ -237,6 +237,11 @@ public enum Feel {
         /// deciding you wanted the thing underneath.
         public static let yieldPatience: TimeInterval = 1.5
 
+        /// How long he will put up with being behind a window before moving somewhere you can
+        /// see him. Long enough that a window raised over him for a moment is not a stampede,
+        /// short enough that you do not lose him.
+        public static let hiddenPatience: TimeInterval = 10
+
         /// `restLeft` drains at `1 + arousal * this`, so a fully roused cat has an idea about
         /// two and a half times sooner.
         public static let restUrgency: Double = 1.5

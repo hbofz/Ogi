@@ -778,3 +778,83 @@ private func twoLedges() -> Skyline {
     #expect(box.insetBy(dx: Feel.Mind.cursorGap, dy: Feel.Mind.cursorGap) == hit,
             "his box should be exactly the click rect plus one cursorGap of clearance")
 }
+
+// MARK: - He wants to be seen
+
+/// A ledge whose middle is covered by a window in front of it: solid all the way across, but
+/// only the two ends are visible. This is exactly what `spans` means.
+private func partlyCoveredLedge() -> Surface {
+    Surface(id: .window(1), z: 1, y: 600, extent: 0...1000,
+            solid: [0...1000], spans: [0...300, 700...1000], targetable: true, rect: nil)
+}
+
+@Test func spansIsWhatTellsHimHeIsHidden() {
+    let ledge = partlyCoveredLedge()
+    let world = sky([ledge, surface(.floor, y: 90, from: 0, to: 1920, z: .max)])
+    var cat = CatState(position: CGPoint(x: 500, y: 600))
+    cat.support = .grounded(Perch(id: .window(1), dx: 500))
+    #expect(Cat.isHidden(cat, world: world), "x=500 is behind the window in front")
+
+    cat.position.x = 150
+    #expect(!Cat.isHidden(cat, world: world), "x=150 is on a visible part of the ledge")
+}
+
+@Test func heStepsOutFromBehindAWindow() {
+    let ledge = partlyCoveredLedge()
+    let world = sky([ledge, surface(.floor, y: 90, from: 0, to: 1920, z: .max)])
+    var cat = CatState(position: CGPoint(x: 500, y: 600))
+    cat.support = .grounded(Perch(id: .window(1), dx: 500))
+    cat.restLeft = .infinity          // so anything he does is about being hidden
+
+    for _ in 0..<Int((Feel.Mind.hiddenPatience + 20) / dt) {
+        cat = Cat.step(cat, world: world, dt: dt)
+    }
+    #expect(!Cat.isHidden(cat, world: world),
+            "he stayed behind the window at x=\(cat.position.x)")
+}
+
+@Test func heDoesNotBoltTheInstantAWindowCoversHim() {
+    // A window raised over him for a moment should not start a stampede.
+    let ledge = partlyCoveredLedge()
+    let world = sky([ledge, surface(.floor, y: 90, from: 0, to: 1920, z: .max)])
+    var cat = CatState(position: CGPoint(x: 500, y: 600))
+    cat.support = .grounded(Perch(id: .window(1), dx: 500))
+    cat.restLeft = .infinity
+
+    for _ in 0..<Int(Feel.Mind.hiddenPatience * 0.5 / dt) {
+        cat = Cat.step(cat, world: world, dt: dt)
+    }
+    #expect(cat.intent == nil, "he moved before his patience ran out")
+}
+
+@Test func heLeavesTheLedgeEntirelyIfAllOfItIsCovered() {
+    // Nothing of his own ledge showing, so stepping along it cannot help.
+    let buried = Surface(id: .window(1), z: 1, y: 600, extent: 0...1000,
+                         solid: [0...1000], spans: [], targetable: true, rect: nil)
+    let floor = surface(.floor, y: 90, from: 0, to: 1920, z: .max)
+    var cat = CatState(position: CGPoint(x: 500, y: 600))
+    cat.support = .grounded(Perch(id: .window(1), dx: 500))
+    cat.restLeft = .infinity
+
+    var left = false
+    for _ in 0..<Int((Feel.Mind.hiddenPatience + 30) / dt) {
+        cat = Cat.step(cat, world: sky([buried, floor]), dt: dt)
+        if case .grounded(let p) = cat.support, p.id != .window(1) { left = true; break }
+    }
+    #expect(left, "his whole ledge was covered and he stayed on it")
+}
+
+@Test func beingHiddenBeatsAnOrdinaryIdea() {
+    // He wants to be seen more than he wants anything else, so this outranks the boredom timer.
+    let ledge = partlyCoveredLedge()
+    let world = sky([ledge, surface(.floor, y: 90, from: 0, to: 1920, z: .max)])
+    var cat = CatState(position: CGPoint(x: 500, y: 600))
+    cat.support = .grounded(Perch(id: .window(1), dx: 500))
+    cat.hiddenFor = Feel.Mind.hiddenPatience + 1
+    cat.restLeft = 0                  // boredom is due this very tick
+
+    cat = Cat.step(cat, world: world, dt: dt)
+    guard let intent = cat.intent else { Issue.record("he did nothing at all"); return }
+    #expect(intent.destinationX == 300 || intent.destinationX == 700,
+            "he picked \(intent.destinationX) rather than the nearest visible edge")
+}
