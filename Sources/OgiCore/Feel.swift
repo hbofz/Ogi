@@ -271,6 +271,44 @@ public enum Feel {
         public static let travelUrgency: Double = 0.6
     }
 
+    /// Where he goes when nothing has happened: the taste election, v2c. Candidates are
+    /// scored by six urges and drawn with a temperature, so he leans toward what he likes
+    /// and stays unpredictable. Hand-tuned like everything else physical; the two rules
+    /// that keep the numbers honest are pinned by `noveltyOutranksHabit` and
+    /// `theLoungeWinsBareDesksButNotAlways`.
+    public enum Taste {
+        /// How opinionated he is. Lower is more compulsive; higher approaches the old
+        /// coin flip.
+        public static let temperature: Double = 0.25
+        /// New furniture stays interesting for minutes, not for a glance. Dominant by
+        /// design: a new window must beat any stale, familiar perch.
+        public static let wNovelty: Double = 1.0
+        public static let noveltyHalfLife: Double = 90
+        /// A perch he has not used in a while feels fresh again. This is what rotates him.
+        public static let wStale: Double = 0.5
+        public static let staleHalfLife: Double = 300
+        /// Cats like being up.
+        public static let wHeight: Double = 0.3
+        /// A mild pull toward you.
+        public static let wNear: Double = 0.3
+        public static let nearScale: CGFloat = 500
+        /// A whisper of habit: a perch he has used before is a perch he trusts.
+        public static let wFamiliar: Double = 0.2
+        public static let familiarVisits: Double = 3
+        /// Walking is work.
+        public static let wEffort: Double = 0.4
+        public static let effortScale: CGFloat = 800
+        /// The null candidate: stay here and lounge. Has to beat a bare floor's typical
+        /// stroll score, and by less than a couple of temperatures, or he either paces
+        /// for ever or never strolls at all.
+        public static let loungeBase: Double = 0.55
+        /// A lounge is a spell, not a pose. The rest jitter after it provides the variety.
+        public static let loungeSeconds: TimeInterval = 45
+        /// Surfaces recorded in the first moments are the world he woke into, and the
+        /// launch world is not news. v2b learned this with the window-opened signal.
+        public static let launchGrace: TimeInterval = 5
+    }
+
     public enum Timing {
         public static let fixedDT: TimeInterval = 1.0 / 120
         /// Without this clamp the first tick after the display link resumes from screen

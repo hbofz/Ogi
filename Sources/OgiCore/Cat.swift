@@ -292,6 +292,23 @@ public struct CatState: Sendable {
     /// strolling across it. He still glances, still yields, and still answers a retreat.
     public var screenCovered = false
 
+    /// What he remembers about a place. Session-only by design: quit and he forgets, which
+    /// is the product call that keeps the README's uninstall promise intact.
+    public struct Place: Sendable, Equatable {
+        /// When it appeared. `-infinity` for the world he woke into, which is never novel.
+        public var firstSeen: TimeInterval
+        /// When he last stood on it. `-infinity` until he has.
+        public var lastVisit: TimeInterval = -.infinity
+        public var visits = 0
+        public init(firstSeen: TimeInterval) { self.firstSeen = firstSeen }
+    }
+    /// Total simulated time. The clock his memory is written against.
+    public var age: TimeInterval = 0
+    /// The taste layer's memory of places, keyed by surface. Written by `Cat.step`.
+    public var memory: [SurfaceID: Place] = [:]
+    /// The surface the current visit was counted for, so sitting still is one visit.
+    public var lastVisitedID: SurfaceID?
+
     /// 0...1. How stirred up he is. Rises when something happens, decays with quiet.
     ///
     /// Two invariants hold this honest, and both are tested:
@@ -399,6 +416,19 @@ public enum Cat {
         var s = state
         s.activityElapsed += dt
         s.squashElapsed += dt
+        s.age += dt
+        // The taste layer's memory. Recorded here rather than at the election, or a window
+        // opened while he was busy would read as brand new an hour later. Costs nothing on
+        // the ticks where no surface is new.
+        for fresh in world.surfaces where s.memory[fresh.id] == nil {
+            s.memory[fresh.id] = CatState.Place(
+                firstSeen: s.age < Feel.Taste.launchGrace ? -.infinity : s.age)
+        }
+        if case .grounded(let p) = s.support, var place = s.memory[p.id] {
+            place.lastVisit = s.age
+            if s.lastVisitedID != p.id { place.visits += 1; s.lastVisitedID = p.id }
+            s.memory[p.id] = place
+        }
         s.arousal = max(0, min(1, s.arousal * pow(0.5, dt / Feel.Mind.arousalHalfLife)))
         // How long you have not been able to see him. Counted here rather than in the branch
         // that acts on it, so that time spent hidden while walking somewhere still counts.
