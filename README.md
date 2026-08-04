@@ -9,7 +9,7 @@ your battery, your microphone, and how long you have been working without a brea
 He asks nothing of you, ever, and there is nothing to manage.
 
 - [MANIFESTO.md](MANIFESTO.md) — what he is, and why
-- [ROADMAP.md](ROADMAP.md) — where he is now, what ships in each version
+- [ROADMAP.md](ROADMAP.md) — what works, what doesn't, and what is being built next
 - [docs/DESIGN.md](docs/DESIGN.md) — architecture, and the research behind every decision
 
 ---
