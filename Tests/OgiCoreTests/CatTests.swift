@@ -48,6 +48,29 @@ private let dt = Feel.Timing.fixedDT
     #expect(cat.position.y == 100)
 }
 
+@Test func heCannotFallOutOfTheBottomOfTheWorld() {
+    // Grab him, drag over the Dock strip, let go: the cursor can sit BELOW the floor line
+    // (the floor is the top of a pinned Dock), so the fall starts beneath the lowest surface.
+    // `supportBelow` only ever searches downward, so nothing can catch a fall that starts
+    // under everything — he leaves the world for the session with the display link pinned,
+    // which is the same fatal exit as the sides.
+    let world = sky([surface(.floor, y: 100, from: 0, to: 1920, z: .max)])
+    var cat = Cat.release(CatState(position: CGPoint(x: 500, y: 40)),
+                          throwVelocity: .zero, world: world)
+
+    for _ in 0..<600 {
+        cat = Cat.step(cat, world: world, dt: dt)
+        if case .grounded = cat.support { break }
+    }
+
+    guard case .grounded(let perch) = cat.support else {
+        Issue.record("fell out of the world, still at y=\(Int(cat.position.y))")
+        return
+    }
+    #expect(perch.id == .floor)
+    #expect(cat.position.y == 100)
+}
+
 @Test func vanishingPlatformMakesHimFall() {
     let ground = surface(.window(1), y: 500, from: 0, to: 400)
     var cat = CatState(position: CGPoint(x: 200, y: 500))

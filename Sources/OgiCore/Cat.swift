@@ -688,7 +688,18 @@ public enum Cat {
                 return s
             }
 
-            if s.velocity.dy < 0, let hit = world.supportBelow(x: x, from: y0, to: y1) {
+            // The world has a hard bottom as well as hard sides, and a fall can START
+            // beneath it: a release over the Dock strip puts him below the floor line (the
+            // floor is the TOP of a pinned Dock, and the cursor goes lower than that), and
+            // `supportBelow` only ever searches downward, so no sweep from there can catch
+            // anything. That is the same fatal exit as the sides — gone for the session,
+            // display link pinned — so it gets the same catch-all: a descent already under
+            // the floor lands ON the floor, which reads as landing on the Dock shelf.
+            // Ordinary falls are untouched, because for them y0 starts above the floor and
+            // the sweep catches the crossing.
+            let underworld = world.surfaces.first { $0.id == .floor && y0 < $0.y }
+            if s.velocity.dy < 0,
+               let hit = world.supportBelow(x: x, from: y0, to: y1) ?? underworld {
                 let impact = abs(s.velocity.dy)
                 s.position = CGPoint(x: x, y: hit.y)
                 s.support = .grounded(Perch(id: hit.id, dx: x - hit.extent.lowerBound))
