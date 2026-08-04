@@ -167,10 +167,11 @@ private func ledgeWorld() -> Skyline {
     #expect(abs(cat.footing.edgeAhead - 50) < 1)      // 900 - 850
     #expect(cat.footing.dropAhead != nil)
     #expect(abs((cat.footing.dropAhead ?? 0) - 500) < 1)   // 600 - 100
-    #expect(cat.footing.landingAhead == .floor)
     #expect(cat.footing.isCliff)
-    #expect(!cat.footing.gapAhead)
-    #expect(!cat.footing.isAtEdge)                    // 50 > edgeApproach
+    #expect(cat.footing.edgeAhead > Feel.Physics.edgeApproach, "50 is not at the edge")
+    let s = world.surface(.window(1))!
+    #expect(Cat.landing(past: 900, facing: 1, on: s, world: world)?.id == .floor)
+    #expect(!Cat.isGap(at: 900, facing: 1, on: s))
 }
 
 @Test func footingReportsNoDropAtAWall() {
@@ -182,10 +183,11 @@ private func ledgeWorld() -> Skyline {
     cat = Cat.step(cat, world: world, dt: dt)
 
     #expect(cat.footing.dropAhead == nil)             // wall, nothing below the floor
-    #expect(cat.footing.landingAhead == nil)
     #expect(!cat.footing.isCliff)
-    #expect(!cat.footing.gapAhead, "the end of the world is not a hole")
-    #expect(cat.footing.isAtEdge)                     // 20 <= edgeApproach
+    #expect(cat.footing.edgeAhead <= Feel.Physics.edgeApproach, "20 is at the edge")
+    let floor = world.surface(.floor)!
+    #expect(Cat.landing(past: 0, facing: -1, on: floor, world: world) == nil)
+    #expect(!Cat.isGap(at: 0, facing: -1, on: floor), "the end of the world is not a hole")
 }
 
 @Test func footingIsClearedOnTheTickHeCommitsToAJump() {
@@ -221,7 +223,7 @@ private func ledgeWorld() -> Skyline {
     cat = Cat.step(cat, world: world, dt: dt)
 
     #expect(cat.footing.edgeAhead == .infinity)
-    #expect(!cat.footing.isAtEdge)
+    #expect(cat.footing.dropAhead == nil)
 }
 
 /// A 1920-wide screen with a 200pt cutout at 830...1030, as a notched Mac reports it.
@@ -288,9 +290,9 @@ private let notched = ScreenGeometry(frame: CGRect(x: 0, y: 0, width: 1920, heig
 
     #expect(abs(cat.footing.edgeAhead - 30) < 1)
     #expect(cat.footing.dropAhead == nil, "he sees a cliff into the notch")
-    #expect(cat.footing.landingAhead == nil)
     #expect(!cat.footing.isCliff)
-    #expect(cat.footing.gapAhead, "a hole is not the end of the world")
+    #expect(Cat.landing(past: notch.maxX, facing: -1, on: bar, world: world) == nil)
+    #expect(Cat.isGap(at: notch.maxX, facing: -1, on: bar), "a hole is not the end of the world")
 }
 
 @MainActor

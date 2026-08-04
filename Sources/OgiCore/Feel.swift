@@ -12,6 +12,10 @@ public enum Feel {
         public static let gravity: CGFloat = 2000
         /// Capped so long falls stay readable rather than becoming a blur.
         public static let terminalVelocity: CGFloat = 1400
+        /// Impact speed above which a landing is a hard one and he shakes himself off rather
+        /// than simply arriving. Against `gravity` that is a 90pt drop, which is an ordinary
+        /// step down between two windows — so most landings are hard ones, deliberately.
+        public static let hardLanding: CGFloat = 600
         /// Sideways nudge when the ground vanishes underfoot, so he doesn't drop straight down.
         public static let slipKick: CGFloat = 40
         /// How far past the lip he is placed at the instant he steps off, so the fall starts

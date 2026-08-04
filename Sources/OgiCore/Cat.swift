@@ -47,15 +47,13 @@ public struct Footing: Sendable, Equatable {
     public var edgeAhead: CGFloat = .infinity
     /// How far down to the next surface past that edge. Nil means there is nothing he could
     /// land on: a wall, or an interior gap, both of which he treats as a wall.
+    ///
+    /// The two nils used to be told apart here by a `gapAhead` flag, alongside a `landingAhead`
+    /// and an `isAtEdge` that read the same way. Nothing outside the tests ever asked, and dead
+    /// state on a struct rebuilt every tick is worse than nothing: `isGap` and `landing` answer
+    /// both questions from the world directly, which is where the tests now ask them.
     public var dropAhead: CGFloat?
-    /// What he would land on if he stepped off.
-    public var landingAhead: SurfaceID?
-    /// The same surface resumes past that edge: a hole, not the end of the world. He stops at
-    /// both, but they are different beats, because a gap has a far side you can see across.
-    /// Mutually exclusive with `isCliff`, since a gap is never something to step into.
-    public var gapAhead = false
 
-    public var isAtEdge: Bool { edgeAhead <= Feel.Physics.edgeApproach }
     public var isCliff: Bool { dropAhead != nil }
 }
 
@@ -375,10 +373,8 @@ public enum Cat {
             // ground he is deciding from rather than the ground he has already stepped onto.
             if let edge = edgeAhead(from: standingOn, facing: s.facing, on: surface) {
                 s.footing.edgeAhead = abs(edge - standingOn)
-                s.footing.gapAhead = isGap(at: edge, facing: s.facing, on: surface)
                 if let below = landing(past: edge, facing: s.facing, on: surface, world: world) {
                     s.footing.dropAhead = surface.y - below.y
-                    s.footing.landingAhead = below.id
                 }
             }
 
@@ -406,10 +402,21 @@ public enum Cat {
             if case .falling = s.support { s.footing = Footing() }
 
             // Braced against the motion. He is standing on a moving object.
-            if abs(s.lean) > Feel.Physics.braceThreshold, s.intent == nil {
-                s.activity = .brace
-            } else if s.activity == .brace {
-                s.activity = .idle
+            //
+            // It only ever swaps the pose he is WAITING in for a braced one. This sits outside
+            // `ground`, so it runs after every hold `standing` just set, and unconditional it
+            // overwrote all of them: the landing shake (and once activity is `.brace`,
+            // `landingHold` returns nil, so the hold that keeps the shake on screen stops
+            // existing), the pivot on the tick it was set, the wash, and the alert. A sleeping
+            // cat is excluded outright — `.brace` draws the alert sheet, so he sat bolt upright
+            // on a dragged window and then slumbered in it.
+            if s.intent == nil, s.repose != .asleep {
+                let braced = abs(s.lean) > Feel.Physics.braceThreshold
+                if braced, s.activity == s.repose.restingActivity {
+                    s.activity = .brace
+                } else if !braced, s.activity == .brace {
+                    s.activity = s.repose.restingActivity
+                }
             }
 
         case .falling:
@@ -420,7 +427,19 @@ public enum Cat {
                                 -Feel.Physics.terminalVelocity)
             let y0 = s.position.y
             let y1 = y0 + s.velocity.dy * dt
-            let x = s.position.x + s.velocity.dx * dt
+            // The world has hard sides, and this is the only place he can reach them: every
+            // surface's `solid` is clipped to the visible frame, so one point outside it there
+            // is nothing under him at ANY height. `supportBelow` returns nil for ever, `isMoving`
+            // pins the display link at 60Hz, `enterSlumber` becomes unreachable and he is gone
+            // for the session — the whole idle-cost claim with him.
+            //
+            // Deliberately a catch-all rather than a fix to whichever aim let him out. `aimX`
+            // is *supposed* to be able to sail past a far lip (see the margin there), a throw
+            // can do it at 1500 px/s, and both must keep working; what must not survive is
+            // leaving the world at all. Falling short of an interior lip and having to climb
+            // back is untouched, because there is always something below one.
+            let bounds = world.screen.visibleFrame
+            let x = min(max(s.position.x + s.velocity.dx * dt, bounds.minX), bounds.maxX)
 
             if s.velocity.dy < 0, let hit = world.supportBelow(x: x, from: y0, to: y1) {
                 let impact = abs(s.velocity.dy)
@@ -429,7 +448,7 @@ public enum Cat {
                 s.velocity = .zero
                 s.squash = min(impact / Feel.Shape.squashReference, 1) * Feel.Shape.maxSquash
                 s.squashElapsed = 0
-                s.activity = impact > 600 ? .landHard : .land
+                s.activity = impact > Feel.Physics.hardLanding ? .landHard : .land
                 s.activityElapsed = 0
                 s.righting = 1
                 // Re-plan from where he actually landed, not from where he meant to. Asking
@@ -881,6 +900,12 @@ public enum Cat {
             s.support = .falling
             s.activity = .airborne
             s.activityElapsed = 0
+            // Same two lines as every other grounded→falling exit. Without them a jump that
+            // lands back on the surface he left resumes against a `lastPerchOrigin` from
+            // before the flight, and reads the whole of the drag that happened during it as
+            // one tick of drift.
+            s.drift = 0
+            s.lastPerchOrigin = nil
             // The intent survives the flight; he re-plans the instant he lands.
 
         case .stepAcross(let destID, let x):
@@ -1040,7 +1065,11 @@ public enum Cat {
         // Nothing in the air and the destination is above. Walk to the point on his own ledge
         // nearest to it and ask again from there: half of getting somewhere is standing in the
         // right place first, and without this a hop he lands mid-ledge is a dead end.
-        if let x = nearestSpanX(to: destX, in: surface.solid),
+        //
+        // `spans`, not `solid`, for the same reason the stride above uses it: he is choosing
+        // where to put himself, and the hidden part of his own ledge is a legal place to stand
+        // and an absurd place to walk to on purpose.
+        if let x = nearestSpanX(to: destX, in: surface.spans),
            abs(x - here.x) > Feel.Physics.arrivalSlop * 2 {
             return .walk(x)
         }

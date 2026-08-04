@@ -727,3 +727,154 @@ private func bareDesktop() -> Skyline {
     #expect(cat.activity != .brace)
 }
 
+
+// MARK: - The world has sides
+
+/// A drag delivered the way the real world poll delivers one: a 10Hz staircase of 48pt steps,
+/// which is ~480 px/s, well past the speed he leans as hard as he ever will at.
+private func draggedLedge(_ origin: CGFloat) -> Skyline {
+    sky([surface(.window(1), y: 500, from: origin, to: origin + 800)])
+}
+
+@Test func heCannotBeAimedOutOfTheWorldAltogether() {
+    // `aimX` deliberately leaves him able to sail past the far lip of the run he is aiming at:
+    // the margin is one `aimError` and the scatter is roughly two, and that failability is the
+    // point — a cat who always sticks the landing reads as a machine (Manifesto §6).
+    //
+    // At an interior lip whatever is below catches him. At the OUTERMOST one there is nothing:
+    // every surface's `solid` is clipped to the visible frame, so a cat one point outside it
+    // has nothing under him at any height, `supportBelow` returns nil for ever, `isMoving`
+    // pins the display link at 60Hz and the 0.0% idle claim dies with him. He is gone for the
+    // session. `clampToSurface` used to make this unreachable; deleting it exposed it.
+    let ledge = surface(.window(1), y: 1160, from: 1400, to: 1600)
+    let world = sky([surface(.menuBar, y: 1205, from: 0, to: 1920, z: -1), ledge,
+                     surface(.floor, y: 90, from: 0, to: 1920, z: .max)])
+
+    // The real planner, over enough jumps at the screen's own edge that a 20%-per-jump escape
+    // cannot hide. Deterministic in everything except the wobble it is here to survive.
+    for _ in 0..<5 {
+        for destX in stride(from: CGFloat(1860), through: 1920, by: 4) {
+            var cat = standing(at: 1600, on: ledge)
+            let move = try! #require(Cat.nextMove(from: cat, on: ledge, toward: .menuBar,
+                                                  x: destX, world: world))
+            guard case .jump = move else {
+                Issue.record("the planner did not jump at \(Int(destX)): \(move)")
+                return
+            }
+            cat.intent = Intent(destination: .menuBar, destinationX: destX, move: move)
+            cat.activity = .crouch
+
+            var launched = false
+            var landed = false
+            for _ in 0..<Int(4 / dt) {
+                cat = Cat.step(cat, world: world, dt: dt)
+                if case .falling = cat.support { launched = true; continue }
+                if launched, case .grounded = cat.support { landed = true; break }
+            }
+            guard landed else {
+                Issue.record("aimed at \(Int(destX)), he left the world at x=\(Int(cat.position.x)) and is still falling")
+                return
+            }
+        }
+    }
+}
+
+// MARK: - The brace respects the holds
+
+@Test func aHardLandingOnADraggedWindowStillPlaysItsShake() {
+    // The brace used to sit OUTSIDE every hold in `standing` and overwrite whatever they had
+    // just set. Landing on a window someone is actually dragging therefore deleted the shake:
+    // once activity is `.brace`, `landingHold` returns nil, so the hold that exists to keep it
+    // on screen stops existing.
+    var origin: CGFloat = 0
+    var tick = 0
+    var cat = CatState(position: CGPoint(x: 400, y: 700))     // 200pt up: a hard landing
+    cat.restLeft = .greatestFiniteMagnitude
+
+    func advance() {
+        if tick % 12 == 0 { origin += 48 }
+        cat = Cat.step(cat, world: draggedLedge(origin), dt: dt)
+        tick += 1
+    }
+    while case .falling = cat.support, tick < Int(3 / dt) { advance() }
+    #expect(cat.activity == .landHard, "he did not land hard; the test proves nothing")
+
+    var braced = false
+    var leaned = false
+    for _ in 0..<Int(Feel.Timing.landHardSeconds / dt) - 1 {
+        advance()
+        braced = braced || cat.activity == .brace
+        leaned = leaned || abs(cat.lean) > Feel.Physics.braceThreshold
+    }
+    #expect(leaned, "the drag never got past the brace threshold; the test proves nothing")
+    #expect(!braced, "the brace overwrote the landing shake")
+}
+
+@Test func aPivotOnADraggedWindowStillPivots() {
+    // Same root cause, and this one costs the property `turnSeconds` exists to guarantee: the
+    // brace overwrote `.turn` on the tick it was set, so he flipped like a sprite.
+    let ledge = surface(.window(1), y: 500, from: 0, to: 800)
+    var cat = standing(at: 40, on: ledge)
+    // Already pointing the way he is going, so the only pivot in the whole run is the one at
+    // the wall — which is the one that matters, because bouncing off a wall clears the intent
+    // and the brace only ever fired when there was none.
+    cat.facing = -1
+    // Already riding a fast drag rather than spending the walk building one up, so the wall is
+    // reached with the lean already over the threshold.
+    cat.drift = 3
+    cat.lastPerchID = .window(1)
+    cat.lastPerchOrigin = 0
+    cat.intent = Intent(destination: .window(1), destinationX: -200, move: .walk(-200))
+
+    var origin: CGFloat = 0
+    var turnedAt: Int?
+    var flipped = false
+    for tick in 0..<Int(3 / dt) {
+        if tick % 12 == 0 { origin += 48 }
+        cat = Cat.step(cat, world: draggedLedge(origin), dt: dt)
+        if cat.activity == .turn, turnedAt == nil { turnedAt = tick }
+        if let t = turnedAt, tick - t < Int(Feel.Timing.turnSeconds / dt) - 1 {
+            flipped = flipped || cat.activity != .turn
+        }
+    }
+    #expect(cat.facing == 1, "he never reached the wall; the test proves nothing")
+    #expect(cat.lean > Feel.Physics.braceThreshold, "the drag stopped; the test proves nothing")
+    #expect(turnedAt != nil, "the brace overwrote the pivot on the tick it was set")
+    #expect(!flipped, "the pivot was cut short and he flipped on the spot")
+}
+
+@Test func aSleepingCatRidesTheDragOutAsleep() {
+    // `.brace` draws the alert sheet, so a sleeping cat on a dragged window sat bolt upright in
+    // it — and then slumbered there, since `isResting` does not care what he is drawing.
+    var cat = standing(at: 400, on: surface(.window(1), y: 500, from: 0, to: 800))
+    cat.repose = .asleep
+    var origin: CGFloat = 0
+    for tick in 0..<Int(2 / dt) {
+        if tick % 12 == 0 { origin += 48 }
+        cat = Cat.step(cat, world: draggedLedge(origin), dt: dt)
+    }
+    #expect(cat.lean > Feel.Physics.braceThreshold, "the drag never registered")
+    #expect(cat.activity == .sleep)
+}
+
+@Test func aCurledCatGoesBackToBeingCurledWhenTheDragStops() {
+    // The brace also restored to `.idle` rather than to the pose he was actually resting in, so
+    // a curled cat popped upright for a tick and then played the whole curl-down again.
+    var cat = standing(at: 400, on: surface(.window(1), y: 500, from: 0, to: 800))
+    cat.repose = .curled
+    var origin: CGFloat = 0
+    for tick in 0..<Int(1.5 / dt) {
+        if tick % 12 == 0 { origin += 48 }
+        cat = Cat.step(cat, world: draggedLedge(origin), dt: dt)
+    }
+    #expect(cat.activity == .brace, "he never braced; the test proves nothing")
+
+    var popped = false
+    for _ in 0..<Int(3 / dt) {
+        cat = Cat.step(cat, world: draggedLedge(origin), dt: dt)   // the drag stops
+        popped = popped || cat.activity == .idle
+    }
+    #expect(abs(cat.lean) < Feel.Physics.braceThreshold, "the lean never settled")
+    #expect(!popped, "he popped upright out of the brace instead of settling back")
+    #expect(cat.activity == .curl)
+}
