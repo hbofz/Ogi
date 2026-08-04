@@ -197,3 +197,23 @@ private func eyeToInk(_ clip: Sprites.Clip, _ i: Int) -> Double? {
     #expect(r.minY < 300)
     #expect(r.maxY - 300 < r.height * 0.15)
 }
+
+@Test @MainActor func eachGaitPlaysAtItsOwnClipsDeclaredRate() {
+    // The gait cycle is driven by ground covered, not by a clock: `buildPose` advances
+    // `walkPhase` by `speed / strideLength` and `Sprites.index` reads `count` frames off it.
+    // So the rate a sheet actually plays at is `speed / stride * count`, and NOTHING connected
+    // that to the `fps` the sheet declares — which is how the run came to play at 31.5fps
+    // against a declared 14, sharing the walk's 30pt stride when a trot covers 67.
+    //
+    // Everything here is derived, so a change to a speed, a stride, a frame count or an fps
+    // has to keep agreeing with itself.
+    for (clip, speed, stride) in [(Sprites.Clip.walk, Feel.Physics.walkSpeed, Feel.Shape.strideLength),
+                                  (Sprites.Clip.run, Feel.Physics.runSpeed, Feel.Shape.runStrideLength)] {
+        let plays = Double(speed / stride) * Double(clip.count)
+        // 15%, which is the walk's own deliberate 8%: 30pt is what stops its paws skating and
+        // that is the number that matters, so its sheet runs slightly under its declared rate.
+        // The run was 125% over, which no tolerance should ever have covered.
+        #expect(abs(plays - clip.fps) < clip.fps * 0.15,
+                "\(clip.rawValue) plays at \(plays)fps against a declared \(clip.fps)fps: \(speed)px/s over a \(stride)pt stride of \(clip.count) frames")
+    }
+}

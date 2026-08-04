@@ -288,13 +288,19 @@ public enum Feel {
         public static let maxSquash: CGFloat = 0.30
         /// Ground covered per full gait cycle. Tuned so the paws do not skate.
         ///
-        /// ponytail: one length for both gaits. The walk and the run cycle off this same 30pt,
-        /// so the run clip is over-cranked by however much longer a trot's stride really is.
-        /// That is still a large improvement on what it replaced, which advanced the gait at a
-        /// flat `walkSpeed` and skated by 2.5x at a trot and through every acceleration.
-        /// Upgrade path: a second constant here and a `cat.hurrying ?` in `buildPose`. Left
-        /// undone because it wants eyes on the running cat, not arithmetic.
+        /// One per gait, because a trotting cat covers much more ground per stride than a
+        /// strolling one and the gait is cycled off distance: `buildPose` advances the phase by
+        /// `speed / stride`, so a stride that is too short cranks the sheet. Sharing the walk's
+        /// 30pt ran the 8-frame run sheet at 31.5fps against the 14 it declares — 2.25x, a blur
+        /// of legs rather than a trot, and the one thing the distance-driven gait was supposed
+        /// to have fixed.
+        ///
+        /// The run figure is `runSpeed * frames / fps`: the stride that makes the sheet play at
+        /// the rate it was drawn for. The walk's 30 is a hand-tuned figure that predates the
+        /// arithmetic and leaves its sheet 8% slow, which is invisible and stops the paws
+        /// skating; `eachGaitPlaysAtItsOwnClipsDeclaredRate` holds both against their clips.
         public static let strideLength: CGFloat = 30
+        public static let runStrideLength: CGFloat = 67
         /// Impact speed that produces maxSquash.
         public static let squashReference: CGFloat = 900
     }

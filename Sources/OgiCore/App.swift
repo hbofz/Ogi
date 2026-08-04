@@ -417,7 +417,12 @@ public final class OgiApp: NSObject, NSApplicationDelegate {
             // Gait speed follows the speed he is actually moving at, so the feet do not skate.
             // Against the constant it used to read, the wind-up and the coast to a halt would
             // both be moonwalks, and a trot would have been one all along.
-            walkPhase += dt * abs(cat.perchSpeed) / Feel.Shape.strideLength
+            //
+            // Per gait, because a trot's stride is more than twice a stroll's: one shared length
+            // makes the distance-driven phase correct in ground covered and wrong in frame rate,
+            // and the run sheet was over-cranked 2.25x by exactly that.
+            let stride = cat.hurrying ? Feel.Shape.runStrideLength : Feel.Shape.strideLength
+            walkPhase += dt * abs(cat.perchSpeed) / stride
             walkPhase = walkPhase.truncatingRemainder(dividingBy: 1)
         }
         pose.walkPhase = walkPhase
