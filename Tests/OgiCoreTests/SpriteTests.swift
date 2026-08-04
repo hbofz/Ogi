@@ -5,7 +5,7 @@ import CoreGraphics
 /// Clips regenerated against the current `art/character.png`. Add each name as its sheet
 /// lands. Kept by hand on purpose: the old version inferred this from eye colour, which
 /// stopped meaning anything the moment the cat himself became ginger.
-private let redrawnClips: Set<String> = ["walk", "fall", "land", "idle", "jump", "run", "sitdown", "sleep", "alert", "held", "groom", "curl", "cling", "lookDown"]
+private let redrawnClips: Set<String> = ["walk", "fall", "land", "idle", "jump", "run", "sitdown", "sleep", "alert", "held", "groom", "curl", "cling", "lookDown", "peek"]
 
 /// The drawn frames come from separately-generated sheets that draw him at wildly different
 /// sizes, so `Sprites` rescales each clip to make him one cat. These check that it works,
@@ -25,6 +25,14 @@ private let redrawnClips: Set<String> = ["walk", "fall", "land", "idle", "jump",
     // `held` is deliberately absent: he dangles fully stretched out, so his ink height is
     // nearly twice a sitting cat's while his eye stays the same. His ratio is honestly 0.047
     // against everyone else's 0.06-0.10, and including him would fail correct art.
+    //
+    // `peek` is absent for the mirror of that reason, and it is the case the median does not
+    // cover. Every other clip holds one posture, so its frames agree and the median is the
+    // clip. Peek deliberately spans a flat crouch (ink 171px) to an upright cat (335px) —
+    // that rise IS the animation — so its four ratios run 0.199, 0.139, 0.099, 0.093 and the
+    // median lands on a crouch. His *emerged* frame reads 0.093, inside the band and next to
+    // `land`'s 0.097, and his measured eye is steady across the four frames at 34/30/28/31px,
+    // so the eye is found correctly; only the yardstick fails.
     var ratios: [(String, Double)] = []
     for clip in [Sprites.Clip.walk, .idle, .jump, .land, .fall, .run, .alert, .sitdown, .sleep, .groom, .curl, .cling, .lookDown]
     where redrawnClips.contains(clip.rawValue) {
@@ -68,7 +76,7 @@ private let redrawnClips: Set<String> = ["walk", "fall", "land", "idle", "jump",
     // `clipScale` silently falls back to 1.0 when it finds no eyes, which does not crash and
     // does not look obviously wrong in a still — it just renders that clip at the raw pixel
     // size of its sheet. Catching it here is much cheaper than noticing it on screen.
-    for clip in [Sprites.Clip.walk, .idle, .jump, .land, .fall, .run, .alert, .sitdown, .held, .cling, .lookDown] {
+    for clip in [Sprites.Clip.walk, .idle, .jump, .land, .fall, .run, .alert, .sitdown, .held, .cling, .lookDown, .peek] {
         let withEyes = (0..<clip.count).filter { !Sprites.eyes(clip, $0).isEmpty }
         #expect(!withEyes.isEmpty, "\(clip.rawValue): no frame has a findable eye")
     }
@@ -76,7 +84,7 @@ private let redrawnClips: Set<String> = ["walk", "fall", "land", "idle", "jump",
 
 @MainActor
 @Test func everyFrameOfEveryClipLoads() {
-    for clip in [Sprites.Clip.walk, .idle, .jump, .land, .fall, .run, .alert, .sitdown, .held, .sleep, .cling, .lookDown] {
+    for clip in [Sprites.Clip.walk, .idle, .jump, .land, .fall, .run, .alert, .sitdown, .held, .sleep, .cling, .lookDown, .peek] {
         for i in 0..<clip.count {
             #expect(Sprites.image(clip, i) != nil, "\(clip.rawValue)\(i).png is missing")
         }

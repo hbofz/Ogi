@@ -353,6 +353,61 @@ private let notched = ScreenGeometry(frame: CGRect(x: 0, y: 0, width: 1920, heig
     #expect(cat.position.x > notched.notch!.maxX, "he never left the doorway")
 }
 
+@MainActor
+@Test func heComesOutOfTheDoorwayBeforeHeWalksOutOfIt() {
+    // The arrival, in three beats: he is on the lip with half of him still in the cutout, he
+    // creeps out, and only then does he walk. Without the hold the walk starts on the first
+    // tick and the peek plays while he is already leaving, which is a cat sliding sideways.
+    let world = World.build(windows: [], screen: notched, ownPID: 99)
+    let bar = world.surface(.menuBar)!
+    let notch = notched.notch!
+    var cat = OgiApp.arrival(notch: notch, bar: bar, screenMaxX: notched.frame.maxX)
+    #expect(cat.activity == .peek)
+
+    for _ in 0..<Int(Feel.Timing.peekSeconds * 0.9 / dt) { cat = Cat.step(cat, world: world, dt: dt) }
+    #expect(cat.activity == .peek, "something walked out from underneath the peek")
+    #expect(abs(cat.position.x - notch.maxX) < 1, "he slid out of the doorway mid-peek")
+
+    // ...and then he leaves, without having lost the walk that was queued behind it.
+    for _ in 0..<Int(1 / dt) { cat = Cat.step(cat, world: world, dt: dt) }
+    #expect(cat.activity == .walk)
+    #expect(cat.position.x > notch.maxX + 10, "he never left the doorway")
+}
+
+@MainActor
+@Test func thePeekFinishesBeforeHeWalksOut() {
+    // Same shape as the lean at a lip: a non-looping clip holds its last frame, so the peek is
+    // only ever *seen* if the hold outlasts the sheet. Derived from the clip so it tracks a
+    // change to either number.
+    let clip = Sprites.Clip.peek
+    let toHeldFrame = Double(clip.count - 1) / clip.fps
+    #expect(Feel.Timing.peekSeconds >= toHeldFrame,
+            "the hold is \(Feel.Timing.peekSeconds)s and the emergence takes \(toHeldFrame)s")
+}
+
+@MainActor
+@Test func theNotchClipsTheHalfOfHimStillInsideIt() {
+    // What makes the peek real. He stands on the lip, which is solid, and the half of him
+    // overhanging the cutout is masked away by the occlusion machinery that already exists —
+    // rather than by the old trick of a black cat against a black bezel, which died the day
+    // he became a ginger tabby.
+    let world = World.build(windows: [], screen: notched, ownPID: 99)
+    let bar = world.surface(.menuBar)!
+    let notch = notched.notch!
+    let cat = OgiApp.arrival(notch: notch, bar: bar, screenMaxX: notched.frame.maxX)
+
+    // Exactly the question `renderNow` asks: everything in front of the surface he is perched
+    // on, intersecting the box he is drawn in. The notch has to survive BOTH filters in there
+    // — `isRealWindow` as well as the z test — or it is silently ignored.
+    let body = CGRect(x: cat.position.x - Feel.Shape.width / 2, y: cat.position.y,
+                      width: Feel.Shape.width, height: Feel.Shape.height)
+    let mask = world.occluders(above: bar.z, intersecting: body)
+    #expect(mask.contains { $0.contains(CGPoint(x: notch.maxX - 4, y: cat.position.y + 8)) },
+            "the cutout does not clip the part of him that is inside it")
+    #expect(!mask.contains { $0.contains(CGPoint(x: notch.maxX + 4, y: cat.position.y + 8)) },
+            "it clipped the part of him that is out in the open")
+}
+
 @Test func squashDepthIsMonotonicInImpactSpeed() {
     let ground = surface(.window(1), y: 100, from: 0, to: 500)
     let world = sky([ground])

@@ -119,9 +119,11 @@ public final class OgiApp: NSObject, NSApplicationDelegate {
     /// He steps out of the doorway, not out of the middle of it. The notch is a hardware
     /// cutout with no pixels behind it, which is precisely why it is a hole in the menu
     /// bar's `solid`: standing at its centre is standing on nothing, and he falls on the
-    /// first tick. So he starts on its lip, half in the black, and walks out into the lit
-    /// strip — a black cat leaving a black doorway, achieved by the geometry rather than in
-    /// spite of it.
+    /// first tick. So he starts on its lip, with the rest of him overhanging the cutout —
+    /// where `World.build`'s permanent notch occluder masks him away — creeps out, and walks
+    /// into the lit strip. Peeking out of the hole, achieved with the geometry rather than in
+    /// spite of it. (The version of this that placed him at `notch.midX` worked only while the
+    /// walk consulted `extent`; against `solid` it is a cat standing on nothing.)
     ///
     /// Pure and static so the launch placement is testable without an NSApplication.
     static func arrival(notch: CGRect, bar: Surface, screenMaxX: CGFloat) -> CatState {
@@ -130,7 +132,11 @@ public final class OgiApp: NSObject, NSApplicationDelegate {
         let doorway = goRight ? notch.maxX : notch.minX
         var c = CatState(position: CGPoint(x: doorway, y: bar.y))
         c.support = .grounded(Perch(id: .menuBar, dx: doorway - bar.extent.lowerBound))
-        c.activity = .walk
+        // Half of him is inside the cutout, where the notch occluder masks him away, so what
+        // is on screen is a cat coming out of the hole rather than one appearing beside it.
+        // `Cat.step` holds the walk until the clip has played.
+        c.activity = .peek
+        c.activityElapsed = 0
         let out = goRight ? notch.maxX + Feel.Shape.width : notch.minX - Feel.Shape.width
         c.intent = Intent(destination: .menuBar, destinationX: out, move: .walk(out))
         c.facing = goRight ? 1 : -1

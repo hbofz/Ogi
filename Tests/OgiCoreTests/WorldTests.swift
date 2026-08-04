@@ -69,13 +69,15 @@ private let screen = ScreenGeometry(
     let ghost = win(1, CGRect(x: 0, y: 100, width: 900, height: 900), alpha: 0.4)
     let sky = World.build(windows: [ghost], screen: screen, ownPID: 99)
     #expect(sky.surface(.window(1)) == nil)
-    #expect(sky.occluders.isEmpty)
+    // Named rather than counted: this screen has a notch, and the notch is a permanent
+    // occluder of its own.
+    #expect(!sky.occluders.contains { $0.rect == ghost.rect })
 }
 
 @Test func ownWindowsAreExcluded() {
     let mine = win(1, CGRect(x: 0, y: 0, width: 1920, height: 1243), pid: 42)
     let sky = World.build(windows: [mine], screen: screen, ownPID: 42)
-    #expect(sky.occluders.isEmpty)
+    #expect(!sky.occluders.contains { $0.rect == mine.rect })
 }
 
 @Test func menuBarAndFloorAlwaysExist() {
@@ -127,7 +129,7 @@ private let screen = ScreenGeometry(
     let menu = win(1, CGRect(x: 100, y: 500, width: 300, height: 400), layer: 101)
     let sky = World.build(windows: [menu], screen: screen, ownPID: 99)
     #expect(sky.surface(.window(1)) == nil, "a popup menu is not a platform")
-    #expect(sky.occluders.count == 1, "but it still occludes")
+    #expect(sky.occluders.contains { $0.rect == menu.rect }, "but it still occludes")
 }
 
 // MARK: - Walkable is not the same as visible

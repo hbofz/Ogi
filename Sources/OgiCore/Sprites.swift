@@ -1,7 +1,7 @@
 #if canImport(AppKit)
 import AppKit
 
-/// The drawn cat: 59 frames across twelve animations, generated per `docs/ART-BRIEF.md`.
+/// The drawn cat: 71 frames across fifteen animations, generated per `docs/ART-BRIEF.md`.
 ///
 /// Ogi was procedural first — one filled path assembled from a torso, a skull, four legs and
 /// a simulated tail. It worked, it animated, and it did not look good enough. The silhouette
@@ -21,7 +21,7 @@ public enum Sprites {
     /// Ordered frames per animation. Names match the files in Resources/Sprites.
     public enum Clip: String, Sendable {
         case walk, idle, jump, land, fall, run, alert, sitdown, held, sleep, groom, curl, cling
-        case lookDown
+        case lookDown, peek
 
         var count: Int {
             switch self {
@@ -39,6 +39,7 @@ public enum Sprites {
             case .curl: 5
             case .cling: 4
             case .lookDown: 4
+            case .peek: 4
             }
         }
 
@@ -59,6 +60,7 @@ public enum Sprites {
             case .curl: 6
             case .cling: 4      // a slow scrabble, not a flail
             case .lookDown: 6   // head over the side in half a second, then he holds
+            case .peek: 5       // creeping out of the doorway; slower than he ever walks
             }
         }
 
@@ -71,7 +73,9 @@ public enum Sprites {
             // curl settles into the sleep pose and holds it until sleep takes over.
             // lookDown holds its last frame too: he leans out over the lip and stays there
             // while he thinks. The hold IS the tell, so it must not cycle back to standing.
-            case .jump, .land, .fall, .sitdown, .curl, .lookDown: false
+            // peek holds too: it ends with his front half out and upright, which is exactly the
+            // pose the walk starts from. Looping it would put him back on his chest.
+            case .jump, .land, .fall, .sitdown, .curl, .lookDown, .peek: false
             }
         }
     }
@@ -128,6 +132,7 @@ public enum Sprites {
         switch activity {
         case .walk:                 return hurrying ? .run : .walk
         case .edgeLook:             return .lookDown
+        case .peek:                 return .peek
         case .crouch:               return .jump      // the wind-up frames
         case .airborne:             return .jump
         // Both ways he leaves the ground without choosing to: his platform vanished, or you

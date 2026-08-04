@@ -69,6 +69,7 @@ public enum Activity: Sendable, Equatable {
     case scruffed   // limp, legs tucked, dangling
     case righting   // the twist, mid-air
     case walk
+    case peek       // creeping out of the notch, low and cautious
     case edgeLook   // stopped at the lip, head over the side, deciding
     case crouch     // the 100ms wind-up before every jump
     case brace      // riding a window that is being dragged
@@ -533,6 +534,16 @@ public enum Cat {
         if s.repose == .asleep {
             s.intent = nil
             s.activity = .sleep
+            return s
+        }
+
+        // Coming out of the doorway. He is standing on the notch's lip with the rest of him
+        // still inside the cutout, where the mask clips him away, so the emergence has to
+        // finish before anything moves him — otherwise the walk starts on the first tick and
+        // the peek plays while he is already leaving. Above the intent handling rather than
+        // inside it for the same reason `edgeLook` holds where it does: the hold IS the beat.
+        if s.activity == .peek, s.activityElapsed < Feel.Timing.peekSeconds {
+            s.perchSpeed = 0
             return s
         }
 

@@ -160,6 +160,17 @@ public enum Feel {
         public static let edgeHesitationMin: TimeInterval = 0.5
         public static let edgeHesitationMax: TimeInterval = 1.6
 
+        /// How long he creeps out of the notch on launch before he starts walking. The whole
+        /// of the first impression, so it is a beat rather than a transition.
+        ///
+        /// Floored by the `peek` sheet's own length, 4 frames at 5fps, for the same reason
+        /// `edgeHesitationMin` is floored by `lookDown`: the clip does not loop, so anything
+        /// shorter cuts him off mid-crouch and he snaps upright into a walk. The remainder is
+        /// spent holding the last frame — front half out, head up, hindquarters still in the
+        /// dark — which is the pose the walk starts from. `thePeekFinishesBeforeHeWalksOut`
+        /// derives the floor from the clip and fails if either number moves.
+        public static let peekSeconds: TimeInterval = 1.1
+
         /// OGI_RESTLESS=1 collapses these so his behaviour can actually be watched.
         /// Living with him wants long pauses; testing him does not.
         public static let restMin: TimeInterval = restless ? 0.4 : 3.5
