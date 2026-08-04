@@ -7,6 +7,11 @@ public final class OgiApp: NSObject, NSApplicationDelegate {
     private var overlay: Overlay!
     private var statusItem: NSStatusItem!
     private var tracker = WorldTracker()
+    /// The last raw snapshot, kept so an app activation can be mapped to one of its windows
+    /// by pid. `Surface` deliberately does not carry a pid.
+    private var lastRaw: [RawWindow] = []
+    /// Whether the desktop he launched into has been reported as new yet. See `poll`.
+    private var sawLaunchWorld = false
     private var skyline = Skyline(surfaces: [], occluders: [],
                                   screen: ScreenGeometry(frame: .zero, visibleFrame: .zero, notch: nil))
     private var cat = CatState(position: .zero)
@@ -546,8 +551,23 @@ public final class OgiApp: NSObject, NSApplicationDelegate {
     private func poll(force: Bool) {
         guard let screen = homeScreen else { return }
         let raw = World.snapshot(flipOrigin: flipOrigin)
+        lastRaw = raw
         let fresh = World.build(windows: raw, screen: ScreenGeometry(screen), ownPID: ownPID)
         skyline = tracker.ingest(fresh)
+
+        // New furniture. He looks at the first one: a stimulus is one-shot and two arriving in
+        // the same poll would mean the second silently overwrote the first, so taking the first
+        // makes that choice visible rather than accidental.
+        //
+        // Not the world he woke up to. Everything is new at launch, the floor and the menu bar
+        // included, and all of it crosses the age threshold on the same poll, so the FIRST
+        // non-empty report is exactly the launch world and nothing in it can be news.
+        if sawLaunchWorld, let id = tracker.justAppeared.first, let s = skyline.surface(id) {
+            let x = s.solid.first.map { ($0.lowerBound + $0.upperBound) / 2 } ?? s.extent.lowerBound
+            cat.stimulus = Stimulus(kind: .windowOpened, at: CGPoint(x: x, y: s.y))
+            log("noticed a window at \(Int(x)),\(Int(s.y))")
+        }
+        if !tracker.justAppeared.isEmpty { sawLaunchWorld = true }
     }
 
     /// His depth in the window stack, which decides what is allowed to occlude him.

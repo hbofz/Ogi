@@ -232,3 +232,31 @@ func PROBE_heDoesNotPaceTowardTheUnreachable() {
     #expect(impossibleRate == 0, "he still sets out for the menu bar from the floor")
     #expect(arrivalRate >= 0.80, "under 80% of his intents reach the surface they named")
 }
+
+/// B1's acceptance, calm half. A unit test can only show that a stimulus produces a glance;
+/// this shows that a window opening on a running cat actually reaches him, over and over,
+/// while he is busy doing other things.
+@Test(.enabled(if: ProcessInfo.processInfo.environment["OGI_PROBE"] != nil))
+func PROBE_heLooksAtWindowsThatOpen() {
+    let dt = Feel.Timing.fixedDT
+    var noticed = 0, opened = 0
+    for run in 0..<40 {
+        let world = realDesktop()
+        var cat = CatState(position: CGPoint(x: 400 + CGFloat(run % 5) * 100, y: 1205))
+        cat.support = .grounded(Perch(id: .menuBar, dx: cat.position.x))
+        var sawGlance = false
+        for tick in 0..<(120 * 600) {
+            // A window opens every 60 simulated seconds.
+            if tick % (120 * 60) == 0, tick > 0 {
+                cat.stimulus = Stimulus(kind: .windowOpened, at: CGPoint(x: 1500, y: 700))
+                opened += 1
+                sawGlance = false
+            }
+            cat = Cat.step(cat, world: world, dt: dt)
+            if cat.lookingAt != nil, !sawGlance { noticed += 1; sawGlance = true }
+        }
+    }
+    let rate = Double(noticed) / Double(max(opened, 1))
+    print(String(format: "glanced at %.1f%% of windows that opened", rate * 100))
+    #expect(rate >= 0.90, "he ignored more than one window in ten")
+}

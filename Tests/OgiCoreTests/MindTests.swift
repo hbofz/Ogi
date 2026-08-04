@@ -208,3 +208,46 @@ private let dt = Feel.Timing.fixedDT
     #expect(two > Feel.Mind.investigateAbove,
             "two windows ten seconds apart no longer earn a trip; the dial does nothing")
 }
+
+// MARK: - Task 4: a window opening
+
+private func win(_ id: CGWindowID, y: CGFloat, from: CGFloat, to: CGFloat) -> Surface {
+    surface(.window(id), y: y, from: from, to: to,
+            rect: CGRect(x: from, y: y - 300, width: to - from, height: 300))
+}
+
+@Test func theTrackerReportsAWindowTheMomentItBecomesSomewhereHeCouldGo() {
+    var tracker = WorldTracker()
+    let floor = surface(.floor, y: 90, from: 0, to: 1920, z: .max)
+
+    // Settle the world first. Everything is new at launch, including the floor and the menu
+    // bar, and each is reported on the poll its age reaches minAgePolls. That is correct for
+    // a tracker primitive and wrong as a behaviour, so `App` ignores the first poll rather
+    // than the tracker pretending the world began already old.
+    for _ in 0...Feel.World.minAgePolls { _ = tracker.ingest(sky([floor])) }
+    #expect(tracker.justAppeared.isEmpty, "fixture: the world has not settled")
+
+    for poll in 1...Feel.World.minAgePolls {
+        _ = tracker.ingest(sky([floor, win(7, y: 600, from: 400, to: 900)]))
+        if poll < Feel.World.minAgePolls {
+            #expect(tracker.justAppeared.isEmpty,
+                    "he noticed it on poll \(poll), before it was a place he could stand")
+        }
+    }
+    #expect(tracker.justAppeared == [.window(7)])
+
+    _ = tracker.ingest(sky([floor, win(7, y: 600, from: 400, to: 900)]))
+    #expect(tracker.justAppeared.isEmpty, "it reported the same window twice")
+}
+
+@Test func aWindowThatClosesAndReopensIsNewAgain() {
+    var tracker = WorldTracker()
+    let floor = surface(.floor, y: 90, from: 0, to: 1920, z: .max)
+    let w = win(7, y: 600, from: 400, to: 900)
+
+    for _ in 0..<5 { _ = tracker.ingest(sky([floor, w])) }
+    // Gone long enough to be forgotten: vanishConfirmPolls of misses expires it.
+    for _ in 0..<(Feel.World.vanishConfirmPolls + 2) { _ = tracker.ingest(sky([floor])) }
+    for _ in 0..<Feel.World.minAgePolls { _ = tracker.ingest(sky([floor, w])) }
+    #expect(tracker.justAppeared == [.window(7)])
+}

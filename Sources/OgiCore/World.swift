@@ -270,6 +270,15 @@ public struct WorldTracker {
     private var lastKnown: [SurfaceID: Surface] = [:]
     private var holdOffLeft = 0
 
+    /// Surfaces that became targetable on the most recent `ingest`, in the order they were
+    /// seen. Refreshed every ingest, so a reader that skips a poll misses the event.
+    ///
+    /// Reported when they become TARGETABLE rather than when they first appear. `targetable`
+    /// already exists to stop him chasing menus and sheets, which come and go inside a poll or
+    /// two, so the glance inherits that filtering rather than growing its own copy of it. At
+    /// the usual 10Hz that is a 200ms delay, which is nothing for a look.
+    public private(set) var justAppeared: [SurfaceID] = []
+
     public init() {}
 
     /// Ignore disappearances for the next `polls` ingests. For a Space change, where the
@@ -284,12 +293,15 @@ public struct WorldTracker {
         var out: [Surface] = []
         var seen = Set<SurfaceID>()
 
+        justAppeared.removeAll(keepingCapacity: true)
         for var s in fresh.surfaces {
             seen.insert(s.id)
             missCount[s.id] = 0
             let a = (age[s.id] ?? 0) + 1
             age[s.id] = a
             s.targetable = a >= Feel.World.minAgePolls
+            // Exactly on the transition, so it reports once rather than on every poll after.
+            if a == Feel.World.minAgePolls { justAppeared.append(s.id) }
             lastKnown[s.id] = s
             out.append(s)
         }
