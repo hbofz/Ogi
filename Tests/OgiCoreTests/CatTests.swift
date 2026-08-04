@@ -435,6 +435,59 @@ private let notched = ScreenGeometry(frame: CGRect(x: 0, y: 0, width: 1920, heig
     #expect(hard <= Feel.Shape.maxSquash + 0.001)
 }
 
+// MARK: - A bone-rattling drop reads differently from a step down
+
+/// Falls from `h` and returns him on the tick he touches down, plus how long he then spends in
+/// whatever landing he ended up in.
+private func landing(fromHeight h: CGFloat) -> (Activity, TimeInterval) {
+    let ground = surface(.window(1), y: 100, from: 0, to: 500)
+    let world = sky([ground])
+    var cat = CatState(position: CGPoint(x: 250, y: 100 + h))
+    cat.restLeft = .greatestFiniteMagnitude       // no new ideas while this is being measured
+    while cat.support == .falling { cat = Cat.step(cat, world: world, dt: dt) }
+    let landed = cat.activity
+    var held: TimeInterval = 0
+    while cat.activity == landed, held < 5 {
+        cat = Cat.step(cat, world: world, dt: dt)
+        held += dt
+    }
+    return (landed, held)
+}
+
+@Test @MainActor func aHardLandingShakesHimOffAndAGentleOneDoesNot() {
+    // Before this they were the same picture: `landHard` played the ordinary `land` clip and
+    // timed out on the same clock, so a drop off the menu bar and a step down onto the window
+    // below it were indistinguishable. The squash depth already differed and nothing else did.
+    #expect(Sprites.clip(for: .landHard, dangling: false) == .shake)
+    #expect(Sprites.clip(for: .land, dangling: false) == .land)
+}
+
+@Test func aHardLandingIsHeldLongerThanAGentleOne() {
+    // The other half of the same complaint. Both landings used to time out on one 0.35s clock,
+    // so even with a different sheet the shake would be cut off part-way through: it does not
+    // loop, and a hard landing that ends on the same beat as a step down is not a hard landing.
+    let (hardActivity, hardHeld) = landing(fromHeight: 600)
+    let (softActivity, softHeld) = landing(fromHeight: 40)
+
+    #expect(hardActivity == .landHard, "a 600pt drop has to be the hard landing")
+    #expect(softActivity == .land, "a 40pt step down has to be the ordinary landing")
+    #expect(hardHeld > softHeld + 0.05,
+            "he shrugs off a \(hardHeld)s bone-rattling drop as fast as a \(softHeld)s step down")
+    #expect(hardHeld >= Feel.Timing.landHardSeconds - 2 * dt,
+            "he was back to idle after \(hardHeld)s, before the shake had played out")
+}
+
+@Test @MainActor func theShakeOutlastsItsOwnSheet() {
+    // The floor `peekSeconds` and `edgeHesitationMin` both have, for the same reason: the clip
+    // does not loop, so a timeout shorter than the sheet cuts him off mid-shudder and snaps him
+    // upright with his fur still on end. Strictly longer, because the last frame is him
+    // settling back to normal and the remainder is spent holding it, which is the pose idle
+    // picks up from.
+    let clip = Sprites.Clip.shake
+    #expect(Feel.Timing.landHardSeconds > Double(clip.count) / clip.fps,
+            "he returns to idle before the shake's \(clip.count) frames at \(clip.fps)fps have played")
+}
+
 @Test func squashSpringsBackToNeutral() {
     var cat = CatState(position: .zero)
     cat.support = .grounded(Perch(id: .floor, dx: 0))

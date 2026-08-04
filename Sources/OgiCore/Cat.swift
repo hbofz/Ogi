@@ -459,8 +459,12 @@ public enum Cat {
             }
         }
 
-        // Settle out of landing back to idle.
-        if s.activity == .land || s.activity == .landHard, s.activityElapsed > 0.35 {
+        // Settle out of landing back to idle. Two clocks, because the two landings are now two
+        // different animations: the hard one shakes himself off and that takes the length of
+        // the sheet plus a beat holding the settled frame.
+        let landingHold = s.activity == .landHard ? Feel.Timing.landHardSeconds
+                                                  : Feel.Timing.landSeconds
+        if s.activity == .land || s.activity == .landHard, s.activityElapsed > landingHold {
             s.activity = .idle
             s.activityElapsed = 0
         }

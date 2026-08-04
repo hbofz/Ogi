@@ -5,7 +5,7 @@ import CoreGraphics
 /// Clips regenerated against the current `art/character.png`. Add each name as its sheet
 /// lands. Kept by hand on purpose: the old version inferred this from eye colour, which
 /// stopped meaning anything the moment the cat himself became ginger.
-private let redrawnClips: Set<String> = ["walk", "fall", "land", "idle", "jump", "run", "sitdown", "sleep", "alert", "held", "groom", "curl", "cling", "lookDown", "peek", "turn"]
+private let redrawnClips: Set<String> = ["walk", "fall", "land", "idle", "jump", "run", "sitdown", "sleep", "alert", "held", "groom", "curl", "cling", "lookDown", "peek", "turn", "shake"]
 
 /// The drawn frames come from separately-generated sheets that draw him at wildly different
 /// sizes, so `Sprites` rescales each clip to make him one cat. These check that it works,
@@ -60,7 +60,7 @@ private func eyeToInk(_ clip: Sprites.Clip, _ i: Int) -> Double? {
     // `land`'s 0.097, and his measured eye is steady across the four frames at 34/30/28/31px,
     // so the eye is found correctly; only the yardstick fails.
     var ratios: [(String, Double)] = []
-    for clip in [Sprites.Clip.walk, .idle, .jump, .land, .fall, .run, .alert, .sitdown, .sleep, .groom, .curl, .cling, .lookDown, .turn]
+    for clip in [Sprites.Clip.walk, .idle, .jump, .land, .fall, .run, .alert, .sitdown, .sleep, .groom, .curl, .cling, .lookDown, .turn, .shake]
     where redrawnClips.contains(clip.rawValue) {
         // Median across frames. One frame is a bad sample for the same reason clipScale takes
         // a median: a squash frame is legitimately short and would read as an oversized eye.
@@ -154,7 +154,7 @@ private func eyeToInk(_ clip: Sprites.Clip, _ i: Int) -> Double? {
     // `clipScale` silently falls back to 1.0 when it finds no eyes, which does not crash and
     // does not look obviously wrong in a still — it just renders that clip at the raw pixel
     // size of its sheet. Catching it here is much cheaper than noticing it on screen.
-    for clip in [Sprites.Clip.walk, .idle, .jump, .land, .fall, .run, .alert, .sitdown, .held, .cling, .lookDown, .peek, .turn] {
+    for clip in [Sprites.Clip.walk, .idle, .jump, .land, .fall, .run, .alert, .sitdown, .held, .cling, .lookDown, .peek, .turn, .shake] {
         let withEyes = (0..<clip.count).filter { !Sprites.eyes(clip, $0).isEmpty }
         #expect(!withEyes.isEmpty, "\(clip.rawValue): no frame has a findable eye")
     }
@@ -162,7 +162,7 @@ private func eyeToInk(_ clip: Sprites.Clip, _ i: Int) -> Double? {
 
 @MainActor
 @Test func everyFrameOfEveryClipLoads() {
-    for clip in [Sprites.Clip.walk, .idle, .jump, .land, .fall, .run, .alert, .sitdown, .held, .sleep, .cling, .lookDown, .peek, .turn] {
+    for clip in [Sprites.Clip.walk, .idle, .jump, .land, .fall, .run, .alert, .sitdown, .held, .sleep, .cling, .lookDown, .peek, .turn, .shake] {
         for i in 0..<clip.count {
             #expect(Sprites.image(clip, i) != nil, "\(clip.rawValue)\(i).png is missing")
         }

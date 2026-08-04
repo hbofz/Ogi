@@ -21,7 +21,7 @@ public enum Sprites {
     /// Ordered frames per animation. Names match the files in Resources/Sprites.
     public enum Clip: String, Sendable {
         case walk, idle, jump, land, fall, run, alert, sitdown, held, sleep, groom, curl, cling
-        case lookDown, peek, turn
+        case lookDown, peek, turn, shake
 
         var count: Int {
             switch self {
@@ -41,6 +41,7 @@ public enum Sprites {
             case .lookDown: 4
             case .peek: 4
             case .turn: 4
+            case .shake: 4
             }
         }
 
@@ -63,6 +64,7 @@ public enum Sprites {
             case .lookDown: 6   // head over the side in half a second, then he holds
             case .peek: 5       // creeping out of the doorway; slower than he ever walks
             case .turn: 12      // a pivot is quick
+            case .shake: 12     // a shudder, not a wobble
             }
         }
 
@@ -79,7 +81,9 @@ public enum Sprites {
             // pose the walk starts from. Looping it would put him back on his chest.
             // turn holds too: it ends on him facing the other way, which is exactly where the
             // walk that follows picks up. Looping it would spin him.
-            case .jump, .land, .fall, .sitdown, .curl, .lookDown, .peek, .turn: false
+            // shake runs once and settles: the last frame is a cat standing normally again,
+            // which is what hands off to idle. Looping it would be a cat with a nervous tic.
+            case .jump, .land, .fall, .sitdown, .curl, .lookDown, .peek, .turn, .shake: false
             }
         }
     }
@@ -145,7 +149,10 @@ public enum Sprites {
         case .slip, .righting:      return .fall
         case .cling:                return .cling
         case .scruffed:             return .held
-        case .land, .landHard:      return .land
+        // A drop that rattles him and a step down off a window edge used to be the same
+        // picture, which made the squash the only thing telling them apart.
+        case .landHard:             return .shake
+        case .land:                 return .land
         case .sit:                  return .sitdown
         case .curl:                 return .curl
         case .sleep:                return .sleep
