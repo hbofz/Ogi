@@ -491,3 +491,39 @@ func PROBE_theOverlappingFixtureActuallyOverlaps() {
     }
     #expect(occluded.count >= 2, "the fixture hides nothing, so the probe proves nothing")
 }
+
+/// Diagnostic for Hamzah's report that he shrinks while looking over an edge. Per-frame eye
+/// width and ink box for the clips involved. `clipScale` applies ONE scale per clip, taken from
+/// the median eye width, so anything that varies frame to frame varies on screen too.
+@MainActor
+@Test(.enabled(if: ProcessInfo.processInfo.environment["OGI_DIAG"] != nil))
+func DIAG_perFrameSize() {
+    for clip in [Sprites.Clip.lookDown, .peek, .idle, .walk] {
+        print("\n=== \(clip) ===  clipScale=\(String(format: "%.4f", Sprites.clipScale(clip)))")
+        var i = 0
+        while let img = Sprites.image(clip, i) {
+            let eye = Sprites.eyes(clip, i).first
+            let w = img.width, h = img.height
+            // Ink box: opaque pixels.
+            var minX = w, maxX = 0, minY = h, maxY = 0
+            guard let data = img.dataProvider?.data,
+                  let ptr = CFDataGetBytePtr(data) else { i += 1; continue }
+            let bpr = img.bytesPerRow, bpp = img.bitsPerPixel / 8
+            for y in 0..<h {
+                for x in 0..<w {
+                    let a = ptr[y * bpr + x * bpp + 3]
+                    if a > 128 {
+                        minX = min(minX, x); maxX = max(maxX, x)
+                        minY = min(minY, y); maxY = max(maxY, y)
+                    }
+                }
+            }
+            let inkW = maxX - minX + 1, inkH = maxY - minY + 1
+            print(String(format: "  f%d  frame=%dx%d  ink=%dx%d  eyeW=%.1f  renderedH=%.1fpt  renderedW=%.1fpt",
+                         i, w, h, inkW, inkH, eye?.width ?? -1,
+                         Double(inkH) * Double(Sprites.clipScale(clip)),
+                         Double(inkW) * Double(Sprites.clipScale(clip))))
+            i += 1
+        }
+    }
+}
