@@ -518,7 +518,10 @@ private func twoLedges() -> Skyline {
     cat.restLeft = .infinity              // so any move must be the yield
     cat.cursor = CGPoint(x: 900, y: 1215) // right on him
 
-    for _ in 0..<(120 * 20) { cat = Cat.step(cat, world: sky([bar]), dt: dt) }
+    for _ in 0..<(120 * 20) {
+        cat.cursorStill += dt             // parked there, not sweeping past
+        cat = Cat.step(cat, world: sky([bar]), dt: dt)
+    }
     let clear = Feel.Shape.width / 2 + Feel.Mind.cursorGap
     #expect(abs(cat.position.x - 900) >= clear - Feel.Physics.arrivalSlop * 3,
             "he stayed under the cursor at \(cat.position.x), so his window is eating clicks")
@@ -724,4 +727,54 @@ private func twoLedges() -> Skyline {
     cat = Cat.step(cat, world: sky([bar]), dt: dt)
     #expect(cat.activity == .walk, "the glance stopped him mid-walk")
     #expect(cat.lookingAt != nil, "he should still have looked")
+}
+
+@Test func pointingAtHimDoesNotMakeHimScoot() {
+    // What Hamzah saw: put the mouse next to him and he left immediately. Coming over needs a
+    // full minute of stillness and the yield needed none, so "mouse near cat" always lost that
+    // race and always read as avoidance.
+    let bar = surface(.menuBar, y: 1205, from: 0, to: 1920, z: -1)
+    var cat = CatState(position: CGPoint(x: 900, y: 1205))
+    cat.support = .grounded(Perch(id: .menuBar, dx: 900))
+    cat.restLeft = .infinity
+    cat.cursor = CGPoint(x: 900, y: 1215)
+    cat.cursorStill = 0                   // you have only just arrived
+
+    for _ in 0..<Int(Feel.Mind.yieldPatience * 0.8 / dt) {
+        cat.cursorStill += dt
+        cat = Cat.step(cat, world: sky([bar]), dt: dt)
+    }
+    #expect(cat.intent == nil, "he bolted the moment you pointed at him")
+    #expect(abs(cat.position.x - 900) < 1)
+}
+
+@Test func aCursorFarBelowHimIsNotInHisWay() {
+    // The yield measured x alone, so a cursor anywhere vertically counted as being on him. Same
+    // mistake as the approach had, in the other half of the feature.
+    let bar = surface(.menuBar, y: 1205, from: 0, to: 1920, z: -1)
+    let floor = surface(.floor, y: 90, from: 0, to: 1920, z: .max)
+    var cat = CatState(position: CGPoint(x: 900, y: 1205))
+    cat.support = .grounded(Perch(id: .menuBar, dx: 900))
+    cat.restLeft = .infinity
+    cat.cursor = CGPoint(x: 900, y: 400)  // directly below him, 800pt down
+    cat.cursorStill = 999
+
+    for _ in 0..<(120 * 10) {
+        cat.cursorStill += dt
+        cat = Cat.step(cat, world: sky([bar, floor]), dt: dt)
+    }
+    #expect(abs(cat.position.x - 900) < 1, "he moved aside for a cursor nowhere near him")
+}
+
+@Test func hisBoxAgreesWithTheRectThatSwallowsClicks() {
+    // App.hitRect is what actually decides whether his window eats your clicks. If these two
+    // drift he either moves aside for a cursor that was never on him, or sits on one that is.
+    var cat = CatState(position: CGPoint(x: 900, y: 1205))
+    cat.support = .grounded(Perch(id: .menuBar, dx: 900))
+    let hit = CGRect(x: cat.position.x - Feel.Shape.width / 2, y: cat.position.y,
+                     width: Feel.Shape.width, height: Feel.Shape.height)
+    let box = Cat.hisBox(cat)
+    #expect(box.contains(hit), "his box has to cover every point that swallows a click")
+    #expect(box.insetBy(dx: Feel.Mind.cursorGap, dy: Feel.Mind.cursorGap) == hit,
+            "his box should be exactly the click rect plus one cursorGap of clearance")
 }

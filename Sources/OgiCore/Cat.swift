@@ -838,8 +838,15 @@ public enum Cat {
         // sleep gate, which has better reasons not to move him. Being held puts the cursor on
         // him by definition, and `standing` is only reachable while grounded, so the drag is
         // safe by structure rather than by a check.
+        // Both axes, and only once you have SETTLED there. Measured across x alone it fired for
+        // a cursor anywhere vertically, and firing on arrival meant that pointing at him made
+        // him scoot: the approach needs a full minute of stillness and the yield needed none, so
+        // "mouse near cat" always lost the race and always read as the cat avoiding you. He
+        // tolerates you pointing at him and moves only if you park there, which is also what a
+        // cat does. `cursorStill` already resets the moment you move, so this costs no new state.
         if s.intent == nil, let cursor = s.cursor,
-           abs(cursor.x - s.position.x) < Feel.Shape.width / 2 + Feel.Mind.cursorGap,
+           s.cursorStill >= Feel.Mind.yieldPatience,
+           hisBox(s).contains(cursor),
            let x = beside(cursor: cursor, on: surface, from: s.position.x),
            abs(x - s.position.x) > Feel.Physics.arrivalSlop {
             s.intent = Intent(destination: surface.id, destinationX: x, move: .walk(x))
@@ -1603,6 +1610,20 @@ public enum Cat {
         let x = CGFloat.random(in: span.lowerBound...span.upperBound)
         return abs(x - s.position.x) < Feel.Physics.arrivalSlop * 2
             ? nil : Intent(destination: surface.id, destinationX: x, move: .walk(x))
+    }
+
+    /// The box your cursor has to be inside for him to count as being in your way, which is his
+    /// drawn size plus the same clearance `beside` leaves.
+    ///
+    /// Built from `Feel.Shape` because `App.hitRect` is built from `Feel.Shape`, and that is the
+    /// rect deciding whether his window swallows your clicks. If these two ever disagree he is
+    /// either moving aside for a cursor that was never on him or sitting on one that is.
+    public static func hisBox(_ s: CatState) -> CGRect {
+        let pad = Feel.Mind.cursorGap
+        return CGRect(x: s.position.x - Feel.Shape.width / 2 - pad,
+                      y: s.position.y - pad,
+                      width: Feel.Shape.width + pad * 2,
+                      height: Feel.Shape.height + pad * 2)
     }
 
     /// Where to stop so he is beside your cursor rather than on top of it, or nil if there is

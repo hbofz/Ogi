@@ -228,6 +228,14 @@ public enum Feel {
         /// hit rect, because Apple's per-pixel alpha hit testing regressed again on 26.5.1.
         /// A cat parked on your cursor is a cat swallowing every click you make.
         public static let cursorGap: CGFloat = 8
+        /// How long your cursor has to sit on him before he gets up and moves aside.
+        ///
+        /// Not zero, which is what it effectively was. Firing on arrival meant that pointing at
+        /// him made him scoot, and since coming over needs a full minute of stillness, "mouse
+        /// near cat" always lost that race and always read as the cat avoiding you. Long enough
+        /// to sweep the pointer across him, or to reach for him to pick him up, without him
+        /// deciding you wanted the thing underneath.
+        public static let yieldPatience: TimeInterval = 1.5
 
         /// `restLeft` drains at `1 + arousal * this`, so a fully roused cat has an idea about
         /// two and a half times sooner.
