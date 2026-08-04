@@ -485,7 +485,18 @@ public enum Cat {
             // He cannot fall through the ledge he launched from. Every jump starts upward, so
             // a target below his own surface is only reachable where that surface is not in
             // the way. Without this he "jumps to the desktop" from a full-width menu bar and
-            // comes straight back down onto the menu bar, over and over.
+            // comes straight back down onto the menu bar, over and over: 40 trials out of 40.
+            //
+            // This tests the LANDING x, not the x at which he crosses his own surface on the
+            // way down, so it reduces that loop rather than eliminating it: over a notch he
+            // can still aim through the hole and clip the far lip. Cheap and close enough,
+            // and the arc sweep that would settle it is not worth the code.
+            //
+            // ponytail: wrong layer. Jumping is the only descent that exists today, so this
+            // has to live here for now, but it belongs in `nextMove`'s jump branch once
+            // `Move.stepOff` exists — otherwise a below-surface destination is never even
+            // formed, `nextMove` is never asked about it, and `.stepOff` is dead code for
+            // exactly the case W2's acceptance names. Move it when Task 7 lands.
             guard other.y > surface.y || !surface.solid.contains(where: { $0.contains(x) }) else {
                 return nil
             }
@@ -503,15 +514,19 @@ public enum Cat {
         return abs(x - s.position.x) < Feel.Physics.arrivalSlop * 2 ? nil : .walkTo(x)
     }
 
-    /// A random point on that surface he can actually get to, uniform over the reachable
-    /// part of it. Nil means none of it is in range.
+    /// A random point on that surface he can actually get to: a uniform draw from a uniformly
+    /// chosen one of its in-range spans, clipped to what is in range. Nil means none of it is.
+    ///
+    /// The span is picked without weighting by length, so a 5pt sliver is as likely as a 300pt
+    /// run. Surfaces are one span in almost every real case, and biasing him slightly toward
+    /// the awkward perches is not a defect worth code.
     ///
     /// Choosing and filtering are the same question, so they are the same call. v1 asked them
     /// separately — filter on `extent` overlap, then pick a landing point at random from
     /// `spans` — so it could select a jump it had just declared out of range, and the solver
-    /// would take it anyway. Picking uniformly rather than at the near corner also matters:
-    /// the aim error is symmetric about wherever he aims, so aiming at the lip of a ledge is
-    /// a coin flip on falling short of it.
+    /// would take it anyway. Drawing across the span rather than aiming at the near corner
+    /// also matters: the aim error is signed both ways about wherever he aims, so aiming at
+    /// the lip of a ledge is a coin flip on falling short of it.
     static func landingX(on surface: Surface, from: CGPoint) -> CGFloat? {
         let reach = reachX(dy: surface.y - from.y)
         guard reach > 0 else { return nil }
@@ -522,45 +537,59 @@ public enum Cat {
         return CGFloat.random(in: span.clamped(to: window))
     }
 
-    /// Solve for a launch that hits `(dx, dy)` at a **fixed speed**. Nil means he cannot
-    /// make it: the discriminant *is* the reachability test.
+    /// The point on these spans closest to `x`. Deterministic, unlike `landingX`: the router
+    /// compares candidate distances to decide which way to move, and a random draw would make
+    /// it change its mind every tick.
+    static func nearestSpanX(to x: CGFloat, in spans: [ClosedRange<CGFloat>]) -> CGFloat? {
+        spans.map { min(max(x, $0.lowerBound), $0.upperBound) }
+             .min { abs($0 - x) < abs($1 - x) }
+    }
+
+    /// The **cheapest** launch that hits `(dx, dy)`. Nil means he cannot make it: `jumpImpulse`
+    /// is a ceiling on effort, and running out of it *is* the reachability test.
     ///
-    /// For a projectile of speed v at angle t under gravity g:
-    ///     y = x·tan(t) − g·x²·(1 + tan²t) / (2v²)
-    /// Solving for tan(t):
-    ///     tan(t) = ( v² ± √(v⁴ − 2·g·y·v² − g²·x²) ) / (g·x)
+    /// Of the infinitely many arcs through a point, the minimum-energy one is
+    ///     v_min² = g·(dy + r),  θ = atan2(dy + r, |dx|),  r = √(dx² + dy²)
+    /// so speed, apex and hang time all rise with distance and a long jump visibly costs more
+    /// than a short one. Solving instead for the angle at a *fixed* speed inverted that: it
+    /// sent a 60pt hop off at 85°, 189pt into the air for 0.87s, against 98pt and 0.63s for a
+    /// 380pt leap — a hop that outclimbed and outhung the leap, which is the same defect as
+    /// v1's constant arc height with the sign flipped.
     ///
-    /// The **high root** is taken: steeper, slower, more readable, and what cats do.
+    /// `v_min ≤ jumpImpulse` is algebraically the old discriminant: solving
+    /// `v⁴ − 2g·dy·v² − g²dx² ≥ 0` for v² gives exactly `v² ≥ g(dy + r)`. So the set of
+    /// reachable targets, `reachX` and `canReach` are all unchanged by the switch — only the
+    /// `(speed, angle)` pair chosen inside it is.
     ///
-    /// Note that a *downward* target grows the discriminant, so deep drops are more
-    /// reachable, not less. That is physically right, and it is why the reluctance to make
-    /// a big drop lives in the hesitation at the edge rather than in a constant here.
+    /// The error is on the **speed**, not the angle. At the minimum-energy solution the target
+    /// sits at a tangency, so angular error is second-order and he would never miss; and
+    /// `min(v, …)` means the jumps at the very edge of his reach can only ever fall short.
+    /// A cat misjudges how hard to push off. It does not misjudge which way is up.
+    ///
+    /// Note that a *downward* target lowers `v_min`, so deep drops are more reachable, not
+    /// less. That is physically right, and it is why the reluctance to make a big drop lives
+    /// in the hesitation at the edge rather than in a constant here.
     public static func launch(dx: CGFloat, dy: CGFloat,
                               speed v: CGFloat = Feel.Physics.jumpImpulse,
                               g: CGFloat = Feel.Physics.gravity,
                               jitter: CGFloat = Feel.Physics.aimError) -> CGVector? {
+        // r ≥ |dy|, so dy + r ≥ 0 and neither root can be NaN. atan2 also handles dx = 0,
+        // which is why this needs no straight-up special case and no angle clamp: θ lands in
+        // [0, π/2] by construction and nothing perturbs it.
+        let r = (dx * dx + dy * dy).squareRoot()
+        let vMin = (g * (dy + r)).squareRoot()
+        guard vMin <= v else { return nil }
+
         let noise = jitter > 0 ? CGFloat.random(in: -jitter...jitter) : 0
-
-        // Straight up, where the general form divides by zero.
-        guard abs(dx) > 0.5 else {
-            guard v * v >= 2 * g * max(dy, 0) else { return nil }
-            return CGVector(dx: 0, dy: v)
-        }
-
-        let x = abs(dx)
-        let disc = v * v * v * v - 2 * g * dy * v * v - g * g * x * x
-        guard disc >= 0 else { return nil }
-
-        let theta = atan((v * v + disc.squareRoot()) / (g * x)) + noise
-        // Clamp so a bad roll near the vertical cannot send him backwards.
-        let t = max(0.05, min(.pi / 2 - 0.05, theta))
-        return CGVector(dx: cos(t) * v * (dx < 0 ? -1 : 1), dy: sin(t) * v)
+        let t = atan2(dy + r, abs(dx))
+        let speed = min(v, vMin * (1 + noise))
+        return CGVector(dx: cos(t) * speed * (dx < 0 ? -1 : 1), dy: sin(t) * speed)
     }
 
     /// How far he can throw himself sideways to arrive `dy` above his feet (negative for a
-    /// drop). Zero means that height is out of reach at any angle. Same discriminant `launch`
-    /// tests, solved for x instead of for yes-or-no, so a landing spot can be *chosen* from
-    /// the reachable interval rather than proposed and rejected.
+    /// drop). Zero means that height is out of reach at any angle. Same limit `launch` tests,
+    /// solved for x instead of for yes-or-no, so a landing spot can be *chosen* from the
+    /// reachable interval rather than proposed and rejected.
     ///
     /// Flat that is v²/g = 380pt; straight up, v²/2g = 190pt.
     static func reachX(dy: CGFloat, v: CGFloat = Feel.Physics.jumpImpulse,

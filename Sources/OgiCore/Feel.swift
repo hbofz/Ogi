@@ -42,14 +42,26 @@ public enum Feel {
         /// flat range of v²/g = 380pt, which reproduces v1's stated envelope (190 up, 420
         /// across) almost exactly. Keep the ceiling roughly here: raising it lets him climb
         /// out of places he should be stuck in, and lowering it lets him ratchet steadily
-        /// downward over a session, since a downward target grows the discriminant and so is
-        /// always easier to reach than the way back up.
+        /// downward over a session, since a downward target is cheaper to reach than the
+        /// way back up.
+        ///
+        /// A ceiling, not the speed he always uses: every launch is the cheapest one that
+        /// reaches its target, so what he actually spends rises with the distance.
         public static let jumpImpulse: CGFloat = 872
         public static let jumpChance = 0.55
-        /// Deliberate aiming error, in **radians** on the launch angle. A cat that always
-        /// sticks the landing reads as a machine. This one can genuinely fall short, which
-        /// v1's version could not: it scaled a horizontal velocity that was already exactly
-        /// right for the target.
+        /// Deliberate aiming error, as a **fraction of the launch speed**. A cat that always
+        /// sticks the landing reads as a machine.
+        ///
+        /// On the speed rather than the angle because every launch is the minimum-energy one,
+        /// where the target sits at a tangency and angular error is second-order: ±0.06 rad
+        /// moves a 60pt hop by half a point, so he would never miss at all. Speed error puts
+        /// range ∝ (1+ε)², which scatters a 60pt hop over [53, 67] and a 300pt jump over
+        /// [265, 337] — proportional to the distance, and signed both ways.
+        ///
+        /// v1 scaled horizontal speed against a fixed flight time, which also gave a signed
+        /// error proportional to distance; in that one respect v1's model was the same shape
+        /// as this one and better than the angular form that briefly replaced it. What v1
+        /// could not do was fail to reach the target at all.
         public static let aimError: CGFloat = 0.06
         /// However hard you flick him, he does not become a projectile.
         public static let maxThrow: CGFloat = 1500
