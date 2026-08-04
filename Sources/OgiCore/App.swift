@@ -635,6 +635,9 @@ public final class OgiApp: NSObject, NSApplicationDelegate {
             headHome(because: "something went fullscreen, heading home")
         }
         wasFullscreen = fullscreen
+        // Level-triggered where the retreat is edge-triggered, because they answer different
+        // questions: the retreat is "go now", this is "keep to yourself while it lasts".
+        cat.screenCovered = fullscreen
     }
 
     /// Send him home, if there is a home. The stimulus point is the doorway on the menu bar

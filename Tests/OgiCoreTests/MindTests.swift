@@ -576,6 +576,39 @@ private func twoLedges() -> Skyline {
     #expect(cat.intent?.destinationX == 1000)
 }
 
+@Test func aCoveredScreenGetsNoStrolls() {
+    // After the retreat the world is still there — the fullscreen window's top edge, the menu
+    // bar, the floor — and ordinary boredom would put him back on top of the movie within a
+    // rest or two. While the screen is covered he keeps to himself. Presentations must never
+    // gain a cat.
+    let bar = surface(.menuBar, y: 1205, from: 0, to: 1920, z: -1)
+    let face = win(7, y: 1205, from: 0, to: 1920)
+    let floor = surface(.floor, y: 90, from: 0, to: 1920, z: .max)
+    var cat = CatState(position: CGPoint(x: 1000, y: 1205))
+    cat.support = .grounded(Perch(id: .menuBar, dx: 1000))
+    cat.screenCovered = true
+    cat.restLeft = 0.1
+
+    for _ in 0..<(120 * 60) { cat = Cat.step(cat, world: sky([bar, face, floor]), dt: dt) }
+    #expect(abs(cat.position.x - 1000) < 1, "he went for a stroll across a covered screen")
+}
+
+@Test func aWindowOpeningOverACoveredScreenIsOnlyALook() {
+    // A floating panel over fullscreen video is a real window and a real stimulus. He may
+    // look; crossing the movie to investigate is what the gate exists to refuse.
+    let bar = surface(.menuBar, y: 1205, from: 0, to: 1920, z: -1)
+    let panel = win(9, y: 800, from: 600, to: 1000)
+    var cat = CatState(position: CGPoint(x: 1000, y: 1205))
+    cat.support = .grounded(Perch(id: .menuBar, dx: 1000))
+    cat.screenCovered = true
+    cat.arousal = 1
+    cat.stimulus = Stimulus(kind: .windowOpened, at: CGPoint(x: 800, y: 800))
+
+    cat = Cat.step(cat, world: sky([bar, panel]), dt: dt)
+    #expect(cat.lookingAt != nil, "he should still look")
+    #expect(cat.intent == nil, "he set out across a covered screen to investigate")
+}
+
 @Test func aRetreatCannotBeEatenByALesserStimulus() {
     // The slot is one deep and App writes it from three places. An app activating between the
     // fullscreen retreat being written and the next tick would silently replace it — and apps

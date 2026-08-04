@@ -286,6 +286,12 @@ public struct CatState: Sendable {
     /// 0..1. Low battery or Low Power Mode. He moves less and settles sooner.
     public var languor: Double = 0
 
+    /// The whole screen is one window right now. Set by `App` from the same signal as the
+    /// fullscreen retreat; while it holds, boredom never becomes a trip and a stimulus never
+    /// becomes an investigation, so a movie — or a presentation — does not gain a cat
+    /// strolling across it. He still glances, still yields, and still answers a retreat.
+    public var screenCovered = false
+
     /// 0...1. How stirred up he is. Rises when something happens, decays with quiet.
     ///
     /// Two invariants hold this honest, and both are tested:
@@ -450,7 +456,11 @@ public enum Cat {
             // Never while he already has an intent: a trip that every new window re-targets is
             // a trip he never finishes. He still looks, which is the whole point of the glance
             // being the cheap half.
+            // ...unless the screen is covered, in which case looking is the whole of it:
+            // a floating panel over fullscreen video is a real stimulus, and crossing the
+            // movie to sniff it is exactly what `screenCovered` exists to refuse.
             if stim.canTravel, s.arousal >= Feel.Mind.investigateAbove, s.intent == nil,
+               !s.screenCovered,
                case .grounded(let perch) = s.support,
                let here = world.surface(perch.id),
                let dest = surfaceAt(stim.at, in: world),
@@ -1080,7 +1090,8 @@ public enum Cat {
                 if Double.random(in: 0...1) < inPlace {
                     s.activity = .groom
                     s.activityElapsed = 0
-                } else if let idea = pickIntent(from: s, on: surface, world: world) {
+                } else if !s.screenCovered,
+                          let idea = pickIntent(from: s, on: surface, world: world) {
                     s.intent = idea
                     if case .jump = idea.move { s.activity = .crouch } else { s.activity = .walk }
                     s.activityElapsed = 0
