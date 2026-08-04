@@ -142,6 +142,12 @@ public enum Feel {
         /// How fast he slides down a face he cannot hold, px/s. Deliberately slow: this is
         /// a moment, not a transition.
         public static let clingSlideSpeed: CGFloat = 34
+        /// ...and how fast he goes UP one, px/s. A separate number because they are not the
+        /// same event: the slide is something happening to him, the climb is something he is
+        /// doing. Sharing the slide's 34 made a full-height window a twenty-second climb,
+        /// which is not a cat going up a curtain, it is a progress bar. First knob to turn if
+        /// the climb reads slow or frantic.
+        public static let clingClimbSpeed: CGFloat = 110
         /// Within this far of the top edge he climbs up and mantles onto it instead of
         /// sliding down.
         public static let mantleReach: CGFloat = 90

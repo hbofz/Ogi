@@ -914,6 +914,59 @@ private func landing(fromHeight h: CGFloat, routing: Bool = false) -> (Activity,
     #expect(cat.position.x >= 410, "he is standing where no window is drawn")
 }
 
+/// A real skyline with one window on it, built through `World.build` rather than hand-stubbed,
+/// because the property under test IS what `carve` does to the floor's `spans`.
+private func desktop(with w: CGRect) -> Skyline {
+    World.build(windows: [RawWindow(id: 1, pid: 2, layer: 0, rect: w, alpha: 1, owner: "Safari")],
+                screen: screen, ownPID: 99)
+}
+
+@Test func heClimbsRatherThanSlidingSomewhereHeCannotBeSeen() {
+    // Complaint 1, from watching the real app: held over a fullscreen window and let go, he
+    // slid down its face and dropped to the desktop BEHIND it, where he cannot be seen.
+    //
+    // The rule needs no fullscreen check. `spans` is exactly "where he is visible" — `solid`
+    // minus everything in front — so the question is only ever whether the spot he would land
+    // on has a span at his x.
+    func gripped(_ world: Skyline, dy: CGFloat) -> CatState {
+        let face = world.surface(.window(1))!
+        var cat = CatState(position: CGPoint(x: 900, y: face.y - dy))
+        cat.support = .clinging(Grip(id: .window(1), dx: 900 - face.rect!.minX, dy: dy))
+        return cat
+    }
+
+    // Fullscreen: its bottom edge sits ON the floor, so the floor is carved away entirely.
+    let full = desktop(with: CGRect(x: 0, y: 90, width: 1920, height: 1115))
+    #expect(full.surface(.floor)?.spans.isEmpty == true, "the floor is still visible; fixture is wrong")
+    var cat = gripped(full, dy: 505)          // far past mantleReach: today he slides
+    for _ in 0..<(120 * 30) {
+        cat = Cat.step(cat, world: full, dt: dt)
+        if case .grounded = cat.support { break }
+    }
+    guard case .grounded(let p) = cat.support else {
+        Issue.record("he slid into somewhere invisible instead of climbing, got \(cat.support)")
+        return
+    }
+    #expect(p.id == .window(1))
+    #expect(abs(cat.position.y - 1205) < 0.001, "he did not mantle onto the top edge")
+
+    // The same window lifted off the desktop. Now the floor below him IS visible, so the slide
+    // is still the right answer — a cat slipping down a curtain is the behaviour that earned
+    // the sheet, and this is what stops the new rule from eating it.
+    let floating = desktop(with: CGRect(x: 0, y: 300, width: 1920, height: 900))
+    #expect(floating.surface(.floor)?.spans.isEmpty == false, "the floor vanished; fixture is wrong")
+    var slider = gripped(floating, dy: 505)
+    for _ in 0..<(120 * 30) {
+        slider = Cat.step(slider, world: floating, dt: dt)
+        if case .falling = slider.support { break }
+    }
+    guard case .falling = slider.support else {
+        Issue.record("he climbed a face he should have slid down, got \(slider.support)")
+        return
+    }
+    #expect(slider.position.y < 1200 - 505, "he let go without ever sliding down")
+}
+
 // MARK: - The tell
 
 /// He is on the ledge at 700 with a reason to be on the floor. `stepOffLip` picks the right-hand

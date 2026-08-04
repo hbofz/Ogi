@@ -299,9 +299,12 @@ public enum Cat {
             s.perchSpeed = 0
 
             if s.activityElapsed > Feel.Timing.clingHold {
-                if grip.dy <= Feel.Physics.mantleReach {
-                    // Close enough to the top: he climbs it and mantles onto the ledge.
-                    grip.dy -= Feel.Physics.clingSlideSpeed * CGFloat(dt)
+                let at = CGPoint(x: rect.minX + grip.dx, y: surface.y - grip.dy)
+                if grip.dy <= Feel.Physics.mantleReach || !landsInView(at, world: world) {
+                    // Close enough to the top, or letting go would put him down somewhere
+                    // nobody could see him. Either way the only way is up: he climbs and
+                    // mantles onto the ledge.
+                    grip.dy -= Feel.Physics.clingClimbSpeed * CGFloat(dt)
                     if grip.dy <= 0 {
                         // The column he climbed is not necessarily somewhere he can stand: a
                         // top edge is inset by the corner radius and clipped to the visible
@@ -484,6 +487,23 @@ public enum Cat {
             s.activityElapsed = 0
         }
         return s
+    }
+
+    /// Would letting go from here put him down somewhere he can actually be seen?
+    ///
+    /// This is the whole of the climb-or-slide rule, and it deliberately never asks whether
+    /// anything is fullscreen. `spans` already answers exactly this question — it is `solid`
+    /// minus everything drawn in front of it — so under a fullscreen window the floor has no
+    /// span beneath his grip and he climbs, while a window merely floating above the desktop
+    /// leaves the desktop visible and he still slides down it. It degrades the right way for
+    /// a maximized-but-not-fullscreen window for the same reason, with no third case.
+    ///
+    /// Nothing below him at all is also "no", and for the same reason rather than by accident:
+    /// letting go there is a fall out of the world.
+    static func landsInView(_ p: CGPoint, world: Skyline) -> Bool {
+        guard let below = world.supportBelow(x: p.x, from: p.y, to: -.greatestFiniteMagnitude)
+        else { return false }
+        return below.spans.contains { $0.contains(p.x) }
     }
 
     /// Picked up. He goes limp rather than struggling, because that is what cats do.
