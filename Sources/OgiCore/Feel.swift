@@ -172,6 +172,59 @@ public enum Feel {
         public static let maxLean: CGFloat = 0.30
     }
 
+    /// What he notices, and how strongly he responds to it.
+    ///
+    /// One scalar, `arousal`, rises with stimulus and decays with quiet. It is deliberately
+    /// additive: at zero he behaves exactly as he did before there was a mind, which is what
+    /// makes the whole layer testable against the tests that came before it.
+    public enum Mind {
+        /// Seconds for excitement to halve. Sets the whole rhythm of the layer.
+        ///
+        /// The tuning below is chosen so that **one thing happening is a look and several
+        /// things happening is a decision**: a single window opening reaches 0.30 against a
+        /// 0.45 threshold and can only ever be a glance, while two openings ten seconds apart
+        /// reach 0.30 * 2^(-0.5) + 0.30 = 0.51 and become a trip. If any of these three
+        /// numbers move, that relationship is the thing that has to survive, and
+        /// `oneWindowIsAGlanceAndTwoIsATrip` fails if it does not.
+        public static let arousalHalfLife: Double = 20
+        public static let arousalWindowOpened: Double = 0.30
+        public static let arousalAppSwitched: Double = 0.12
+        /// Above this, a signal that would have earned a glance earns a destination instead.
+        public static let investigateAbove: Double = 0.45
+
+        /// How long he keeps looking at a thing before his eyes go back to your cursor.
+        /// Long enough to read as a look rather than a twitch, short enough that he is not
+        /// staring at a window while you move the mouse.
+        public static let glanceSeconds: TimeInterval = 1.2
+
+        /// Keystrokes per minute at which he snaps alert and holds still, and the lower
+        /// figure he has to fall back to before he relaxes. Two numbers, because one would
+        /// flicker him in and out of the pose at every pause for breath.
+        ///
+        /// 240 kpm is roughly 48 words per minute, which is a person typing rather than a
+        /// person poking at a keyboard. `Signals` smooths the rate with a 0.35 EMA already.
+        public static let typingAlert: Double = 240
+        public static let typingCalm: Double = 140
+
+        /// How long your cursor has to sit still, and how close to him, before he comes over.
+        public static let cursorStillSeconds: TimeInterval = 60
+        public static let cursorNearby: CGFloat = 400
+        /// Clearance between his hit rect and your cursor when he settles beside it.
+        ///
+        /// He must never come to rest ON the cursor. `Overlay.setInteractive` toggles
+        /// `ignoresMouseEvents` from exactly one condition, whether the cursor is inside his
+        /// hit rect, because Apple's per-pixel alpha hit testing regressed again on 26.5.1.
+        /// A cat parked on your cursor is a cat swallowing every click you make.
+        public static let cursorGap: CGFloat = 8
+
+        /// `restLeft` drains at `1 + arousal * this`, so a fully roused cat has an idea about
+        /// two and a half times sooner.
+        public static let restUrgency: Double = 1.5
+        /// `inPlaceChance` scales by `1 - arousal * this`, so a roused cat travels rather than
+        /// washing. Below 1 on purpose: even at full tilt a wash stays possible.
+        public static let travelUrgency: Double = 0.6
+    }
+
     public enum Timing {
         public static let fixedDT: TimeInterval = 1.0 / 120
         /// Without this clamp the first tick after the display link resumes from screen

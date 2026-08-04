@@ -220,6 +220,15 @@ public struct CatState: Sendable {
     public var righting: CGFloat = 1
     /// 0..1. Low battery or Low Power Mode. He moves less and settles sooner.
     public var languor: Double = 0
+
+    /// 0...1. How stirred up he is. Rises when something happens, decays with quiet.
+    ///
+    /// Two invariants hold this honest, and both are tested:
+    /// - it never reaches `Repose.from` or the slumber gate, so the sleep ladder stays driven
+    ///   by YOUR idle time and the zero-wakeup guarantee cannot be touched from here
+    /// - at zero he behaves exactly as he did before the mind existed, so every test written
+    ///   for v2a is a regression test for v2b
+    public var arousal: Double = 0
     /// Covering a long distance, so he trots instead of strolling.
     public var hurrying = false
 
@@ -272,6 +281,7 @@ public enum Cat {
         var s = state
         s.activityElapsed += dt
         s.squashElapsed += dt
+        s.arousal = max(0, min(1, s.arousal * pow(0.5, dt / Feel.Mind.arousalHalfLife)))
         // Never carried across a tick. Cleared here rather than in each of the branches that
         // leaves the ground, because two of them (the vanished platform, the shrunken window)
         // return before the grounded branch ever gets to recompute it, and a cat one tick into
@@ -751,12 +761,16 @@ public enum Cat {
             // Nothing to do. Sit still until boredom wins.
             // Low battery makes him idle longer. A sluggish cat means plug in.
             // Settledness stretches the same timer rather than stopping it.
-            s.restLeft -= dt * (1 - s.languor * 0.6) / s.repose.restMultiplier
+            // ...and stirred up, he gets to the end of that timer sooner.
+            s.restLeft -= dt * (1 - s.languor * 0.6)
+                * (1 + s.arousal * Feel.Mind.restUrgency) / s.repose.restMultiplier
             if s.restLeft <= 0 {
                 // Boredom does not always mean going somewhere. Sometimes he just washes,
                 // which is the difference between a creature and a pathfinding demo. The more
                 // settled he is, the likelier that is what it turns out to be.
-                if Double.random(in: 0...1) < s.repose.inPlaceChance {
+                // ...and a stirred-up cat is likelier to go somewhere than to wash.
+                let inPlace = s.repose.inPlaceChance * (1 - s.arousal * Feel.Mind.travelUrgency)
+                if Double.random(in: 0...1) < inPlace {
                     s.activity = .groom
                     s.activityElapsed = 0
                 } else if let idea = pickIntent(from: s, on: surface, world: world) {

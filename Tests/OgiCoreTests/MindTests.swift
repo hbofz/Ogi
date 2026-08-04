@@ -76,3 +76,95 @@ private let dt = Feel.Timing.fixedDT
                             world: world, mayWalk: false)
     #expect(move == nil)
 }
+
+// MARK: - Task 2: the scalar
+
+@Test func excitementFadesOnItsOwnSchedule() {
+    let ground = surface(.floor, y: 90, from: 0, to: 1920, z: .max)
+    var cat = CatState(position: CGPoint(x: 300, y: 90))
+    cat.support = .grounded(Perch(id: .floor, dx: 300))
+    cat.arousal = 1
+
+    for _ in 0..<Int(Feel.Mind.arousalHalfLife / dt) {
+        cat = Cat.step(cat, world: sky([ground]), dt: dt)
+    }
+    #expect(abs(cat.arousal - 0.5) < 0.02, "one half-life should halve it, got \(cat.arousal)")
+}
+
+@Test func arousalNeverGoesNegativeOrAboveOne() {
+    let ground = surface(.floor, y: 90, from: 0, to: 1920, z: .max)
+    var cat = CatState(position: CGPoint(x: 300, y: 90))
+    cat.support = .grounded(Perch(id: .floor, dx: 300))
+    cat.arousal = 1
+    for _ in 0..<(120 * 600) { cat = Cat.step(cat, world: sky([ground]), dt: dt) }
+    #expect(cat.arousal >= 0)
+    #expect(cat.arousal <= 1)
+}
+
+@Test func aRousedCatHasIdeasSooner() {
+    // The first of arousal's two everywhere-effects. Measured as elapsed time to the first
+    // intent, over many trials, because restLeft is randomised per settle.
+    func timeToFirstIdea(arousal: Double) -> Double {
+        let ground = surface(.floor, y: 90, from: 0, to: 1920, z: .max)
+        var total = 0.0
+        for _ in 0..<60 {
+            var cat = CatState(position: CGPoint(x: 300, y: 90))
+            cat.support = .grounded(Perch(id: .floor, dx: 300))
+            var t = 0.0
+            for _ in 0..<(120 * 120) {
+                cat.arousal = arousal          // held, so decay does not confound the measurement
+                cat = Cat.step(cat, world: sky([ground]), dt: dt)
+                t += dt
+                if cat.intent != nil { break }
+            }
+            total += t
+        }
+        return total / 60
+    }
+    let calm = timeToFirstIdea(arousal: 0)
+    let roused = timeToFirstIdea(arousal: 1)
+    #expect(roused < calm * 0.75, "roused \(roused)s vs calm \(calm)s: not visibly sooner")
+}
+
+@Test func aRousedCatGoesSomewhereRatherThanWashing() {
+    // The second everywhere-effect. A CURLED cat is used deliberately: inPlaceChance is 0.95
+    // there, so if arousal cannot move this number it cannot move any of them.
+    func tripShare(arousal: Double) -> Double {
+        let ground = surface(.floor, y: 90, from: 0, to: 1920, z: .max)
+        var trips = 0, bouts = 0
+        for _ in 0..<200 {
+            var cat = CatState(position: CGPoint(x: 300, y: 90))
+            cat.support = .grounded(Perch(id: .floor, dx: 300))
+            cat.repose = .curled
+            for _ in 0..<(120 * 600) {
+                cat.arousal = arousal
+                cat = Cat.step(cat, world: sky([ground]), dt: dt)
+                if cat.intent != nil { trips += 1; bouts += 1; break }
+                if cat.activity == .groom { bouts += 1; break }
+            }
+        }
+        return Double(trips) / Double(max(bouts, 1))
+    }
+    #expect(tripShare(arousal: 1) > tripShare(arousal: 0),
+            "arousal does not tip boredom toward travelling")
+}
+
+// MARK: - Invariant I1
+
+@Test func nothingHappeningOnScreenCanKeepHimAwake() {
+    // I1. repose is driven by YOUR idle time and nothing else, so arousal must not be able to
+    // reach the sleep ladder. This is what protects the 0.0% idle headline.
+    let ground = surface(.floor, y: 90, from: 0, to: 1920, z: .max)
+    var cat = CatState(position: CGPoint(x: 300, y: 90))
+    cat.support = .grounded(Perch(id: .floor, dx: 300))
+    cat.repose = Repose.from(idleSeconds: 700)
+    #expect(cat.repose == .asleep, "fixture: 700s of idle has to be the asleep rung")
+
+    for _ in 0..<(120 * 60) {
+        cat.arousal = 1                        // pegged, as if something happened every tick
+        cat = Cat.step(cat, world: sky([ground]), dt: dt)
+    }
+    #expect(cat.activity == .sleep, "he woke up because things were happening on screen")
+    #expect(cat.intent == nil)
+    #expect(cat.isMoving == false, "enterSlumber is unreachable while isMoving is true")
+}
