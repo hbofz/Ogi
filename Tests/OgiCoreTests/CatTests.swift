@@ -227,16 +227,21 @@ private let notched = ScreenGeometry(frame: CGRect(x: 0, y: 0, width: 1920, heig
     // The cutout is a hole in the MIDDLE of the menu bar, not the end of it, and the desktop
     // visible through it makes it look exactly like a ledge. It is a trap: he cannot jump the
     // gap (pickGoal refuses the surface he is already standing on) and he cannot climb back up
-    // from the floor a thousand points below (way past maxJumpDrop), so one step in and he is
-    // off the menu bar for the rest of the session. An interior gap has to be a wall.
+    // from the floor a thousand points below (his whole impulse buys 190pt of rise), so one
+    // step in and he is off the menu bar for the rest of the session. An interior gap has to
+    // be a wall.
     let world = World.build(windows: [], screen: notched, ownPID: 99)
     let bar = world.surface(.menuBar)!
     let notch = notched.notch!
     var cat = CatState(position: CGPoint(x: 1200, y: bar.y))
     cat.support = .grounded(Perch(id: .menuBar, dx: 1200 - bar.extent.lowerBound))
-    cat.goal = .walkTo(400)          // straight across the cutout
 
     for _ in 0..<Int(10 / dt) {
+        // Re-issued every time he gives up, so he spends the whole ten seconds shoving at the
+        // far side of the cutout instead of idling. Idling is no longer inert: a deep drop is
+        // easier to reach than a shallow one, so left alone he now deliberately leaps off the
+        // menu bar to the desktop, which is a feature and not what this test is about.
+        if cat.goal == nil { cat.goal = .walkTo(400) }   // straight across the cutout
         cat = Cat.step(cat, world: world, dt: dt)
         guard case .grounded(let p) = cat.support, p.id == .menuBar else {
             Issue.record("he stepped into the notch at x=\(Int(cat.position.x)) and cannot get back")

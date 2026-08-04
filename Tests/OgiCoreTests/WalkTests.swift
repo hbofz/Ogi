@@ -91,7 +91,9 @@ private func standing(at x: CGFloat, on s: Surface) -> CatState {
     let here = surface(.window(1), y: 500, from: 0, to: 400)
     let there = surface(.window(2), y: 560, from: 500, to: 900, z: 1)
     var cat = standing(at: 300, on: here)
-    cat.goal = .jumpTo(.window(2), 700)
+    // 300pt across and 60 up. His whole impulse is 380pt flat, and a 60pt rise costs some of
+    // that, so this sits near the edge of what he can do without being outside it.
+    cat.goal = .jumpTo(.window(2), 600)
 
     for _ in 0..<Int(6 / dt) {
         cat = Cat.step(cat, world: sky([here, there]), dt: dt)
@@ -103,7 +105,7 @@ private func standing(at x: CGFloat, on s: Surface) -> CatState {
     }
     #expect(perch.id == .window(2), "the arc missed the target surface entirely")
     // Aim error is deliberate, so this is a loose bound on purpose.
-    #expect(abs(cat.position.x - 700) < 120)
+    #expect(abs(cat.position.x - 600) < 120)
 }
 
 @Test func aJumpToAVanishedSurfaceDoesNotStrandHim() {

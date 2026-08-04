@@ -28,17 +28,29 @@ public enum Feel {
         /// He never arrives exactly on the mark.
         public static let arrivalSlop: CGFloat = 3
 
-        /// How high he clears the higher end of a jump.
-        public static let jumpArc: CGFloat = 58
-        public static let maxJumpRise: CGFloat = 190       // how far UP he will jump
-        /// How far DOWN he will drop. Much further than he can jump up, because falling is
-        /// free — and without this he almost never jumps at all, since on a normal desktop
-        /// the only things below him are a long way down.
-        public static let maxJumpDrop: CGFloat = 700
-        public static let maxJumpReach: CGFloat = 420      // horizontal reach
+        /// The whole jump budget: his launch speed, in px/s. Distance is an *output* of
+        /// this and the angle, not an input.
+        ///
+        /// v1 solved the ballistic exactly for whatever target it was handed, so a 40pt hop
+        /// and a 420pt leap had identical arc height and neither could fail. Three separate
+        /// constants (maxJumpRise, maxJumpDrop, maxJumpReach) tried to fence that in from
+        /// outside and were ignored by the solver. Fixing the speed collapses all three into
+        /// one physically meaningful number, and makes the discriminant the reachability
+        /// test rather than an assertion.
+        ///
+        /// 872 px/s against 2000 px/s² gives a maximum rise of v²/2g = 190pt and a maximum
+        /// flat range of v²/g = 380pt, which reproduces v1's stated envelope (190 up, 420
+        /// across) almost exactly. Keep the ceiling roughly here: raising it lets him climb
+        /// out of places he should be stuck in, and lowering it lets him ratchet steadily
+        /// downward over a session, since a downward target grows the discriminant and so is
+        /// always easier to reach than the way back up.
+        public static let jumpImpulse: CGFloat = 872
         public static let jumpChance = 0.55
-        /// Deliberate aiming error. A cat that always sticks the landing reads as a machine.
-        public static let aimError: CGFloat = 0.09
+        /// Deliberate aiming error, in **radians** on the launch angle. A cat that always
+        /// sticks the landing reads as a machine. This one can genuinely fall short, which
+        /// v1's version could not: it scaled a horizontal velocity that was already exactly
+        /// right for the target.
+        public static let aimError: CGFloat = 0.06
         /// However hard you flick him, he does not become a projectile.
         public static let maxThrow: CGFloat = 1500
 

@@ -459,7 +459,13 @@ public enum Cat {
                 s.goal = nil; s.activity = .idle; s.restLeft = 0.5
                 break
             }
-            s.velocity = launchVelocity(from: s.position, toX: destX, toY: dest.y)
+            guard let v = launch(dx: destX - s.position.x, dy: dest.y - s.position.y) else {
+                // The window moved while he was winding up and it is out of reach now.
+                // Give up rather than teleporting.
+                s.goal = nil; s.activity = .idle; s.restLeft = 0.5
+                break
+            }
+            s.velocity = v
             s.facing = s.velocity.dx >= 0 ? 1 : -1
             s.support = .falling
             s.activity = .airborne
@@ -473,18 +479,21 @@ public enum Cat {
     /// Where he'd like to go next. Deliberately dumb: no A*, no navigation mesh.
     /// A cat that pathfinds perfectly reads as a robot.
     private static func pickGoal(from s: CatState, on surface: Surface, world: Skyline) -> Goal? {
-        let reach = (s.position.x - Feel.Physics.maxJumpReach)...(s.position.x + Feel.Physics.maxJumpReach)
-        let reachable = world.surfaces.filter { other in
-            other.id != surface.id && other.targetable && !other.spans.isEmpty
-                && (other.y - surface.y < Feel.Physics.maxJumpRise)
-                && (surface.y - other.y < Feel.Physics.maxJumpDrop)
-                && other.extent.overlaps(reach)
+        let jumps = world.surfaces.compactMap { other -> Goal? in
+            guard other.id != surface.id, other.targetable,
+                  let x = landingX(on: other, from: s.position) else { return nil }
+            // He cannot fall through the ledge he launched from. Every jump starts upward, so
+            // a target below his own surface is only reachable where that surface is not in
+            // the way. Without this he "jumps to the desktop" from a full-width menu bar and
+            // comes straight back down onto the menu bar, over and over.
+            guard other.y > surface.y || !surface.solid.contains(where: { $0.contains(x) }) else {
+                return nil
+            }
+            return .jumpTo(other.id, x)
         }
 
-        if !reachable.isEmpty, Double.random(in: 0...1) < Feel.Physics.jumpChance,
-           let target = reachable.randomElement(),
-           let span = target.spans.randomElement() {
-            return .jumpTo(target.id, CGFloat.random(in: span.lowerBound...span.upperBound))
+        if let jump = jumps.randomElement(), Double.random(in: 0...1) < Feel.Physics.jumpChance {
+            return jump
         }
 
         guard let span = surface.spans.randomElement(), span.length > Feel.World.minStandWidth else {
@@ -494,21 +503,76 @@ public enum Cat {
         return abs(x - s.position.x) < Feel.Physics.arrivalSlop * 2 ? nil : .walkTo(x)
     }
 
-    /// A real ballistic arc, with a deliberate aiming error.
+    /// A random point on that surface he can actually get to, uniform over the reachable
+    /// part of it. Nil means none of it is in range.
     ///
-    /// The error is the point. A cat that always sticks the landing reads as a machine;
-    /// one that occasionally misjudges, slips and recovers reads as a cat. Preserve it.
-    private static func launchVelocity(from: CGPoint, toX: CGFloat, toY: CGFloat) -> CGVector {
-        let g = Feel.Physics.gravity
-        let dy = toY - from.y
-        // Clear the higher of the two ends by a comfortable margin.
-        let rise = max(dy, 0) + Feel.Physics.jumpArc
-        let vy = (2 * g * rise).squareRoot()
-        let timeUp = vy / g
-        let timeDown = (2 * max(rise - dy, 1) / g).squareRoot()
-        let flight = timeUp + timeDown
-        let error = CGFloat.random(in: -Feel.Physics.aimError...Feel.Physics.aimError)
-        return CGVector(dx: (toX - from.x) / flight * (1 + error), dy: vy)
+    /// Choosing and filtering are the same question, so they are the same call. v1 asked them
+    /// separately — filter on `extent` overlap, then pick a landing point at random from
+    /// `spans` — so it could select a jump it had just declared out of range, and the solver
+    /// would take it anyway. Picking uniformly rather than at the near corner also matters:
+    /// the aim error is symmetric about wherever he aims, so aiming at the lip of a ledge is
+    /// a coin flip on falling short of it.
+    static func landingX(on surface: Surface, from: CGPoint) -> CGFloat? {
+        let reach = reachX(dy: surface.y - from.y)
+        guard reach > 0 else { return nil }
+        let window = (from.x - reach)...(from.x + reach)
+        guard let span = surface.spans.filter({ $0.overlaps(window) }).randomElement() else {
+            return nil
+        }
+        return CGFloat.random(in: span.clamped(to: window))
+    }
+
+    /// Solve for a launch that hits `(dx, dy)` at a **fixed speed**. Nil means he cannot
+    /// make it: the discriminant *is* the reachability test.
+    ///
+    /// For a projectile of speed v at angle t under gravity g:
+    ///     y = x·tan(t) − g·x²·(1 + tan²t) / (2v²)
+    /// Solving for tan(t):
+    ///     tan(t) = ( v² ± √(v⁴ − 2·g·y·v² − g²·x²) ) / (g·x)
+    ///
+    /// The **high root** is taken: steeper, slower, more readable, and what cats do.
+    ///
+    /// Note that a *downward* target grows the discriminant, so deep drops are more
+    /// reachable, not less. That is physically right, and it is why the reluctance to make
+    /// a big drop lives in the hesitation at the edge rather than in a constant here.
+    public static func launch(dx: CGFloat, dy: CGFloat,
+                              speed v: CGFloat = Feel.Physics.jumpImpulse,
+                              g: CGFloat = Feel.Physics.gravity,
+                              jitter: CGFloat = Feel.Physics.aimError) -> CGVector? {
+        let noise = jitter > 0 ? CGFloat.random(in: -jitter...jitter) : 0
+
+        // Straight up, where the general form divides by zero.
+        guard abs(dx) > 0.5 else {
+            guard v * v >= 2 * g * max(dy, 0) else { return nil }
+            return CGVector(dx: 0, dy: v)
+        }
+
+        let x = abs(dx)
+        let disc = v * v * v * v - 2 * g * dy * v * v - g * g * x * x
+        guard disc >= 0 else { return nil }
+
+        let theta = atan((v * v + disc.squareRoot()) / (g * x)) + noise
+        // Clamp so a bad roll near the vertical cannot send him backwards.
+        let t = max(0.05, min(.pi / 2 - 0.05, theta))
+        return CGVector(dx: cos(t) * v * (dx < 0 ? -1 : 1), dy: sin(t) * v)
+    }
+
+    /// How far he can throw himself sideways to arrive `dy` above his feet (negative for a
+    /// drop). Zero means that height is out of reach at any angle. Same discriminant `launch`
+    /// tests, solved for x instead of for yes-or-no, so a landing spot can be *chosen* from
+    /// the reachable interval rather than proposed and rejected.
+    ///
+    /// Flat that is v²/g = 380pt; straight up, v²/2g = 190pt.
+    static func reachX(dy: CGFloat, v: CGFloat = Feel.Physics.jumpImpulse,
+                       g: CGFloat = Feel.Physics.gravity) -> CGFloat {
+        max(0, v * v * v * v - 2 * g * dy * v * v).squareRoot() / g
+    }
+
+    /// Can he make this jump at all? Derived from physics, not asserted by a constant.
+    /// Aimed soberly on purpose: he judges without the jitter and then executes with it,
+    /// which is what lets him commit to a jump and still fall short of it.
+    public static func canReach(from: CGPoint, to: CGPoint) -> Bool {
+        launch(dx: to.x - from.x, dy: to.y - from.y, jitter: 0) != nil
     }
 
     /// Where solid ground runs out in the direction he is facing, in world x.
@@ -535,8 +599,8 @@ public enum Cat {
     /// gap, not a cliff, and a gap is a wall (`isGap`). The notch is the only one that exists —
     /// windows produce a single solid run and the floor is uncarved — and it is a trap rather
     /// than a ledge: he cannot jump to the surface he is standing on (`pickGoal` excludes it),
-    /// and the desktop a thousand points below is far past `maxJumpDrop`, so stepping into it
-    /// is one-way.
+    /// and his whole impulse buys 190pt of rise against the thousand points back up from the
+    /// desktop, so stepping into it is one-way.
     static func landing(past x: CGFloat, facing: CGFloat,
                         on surface: Surface, world: Skyline) -> Surface? {
         if isGap(at: x, facing: facing, on: surface) { return nil }
