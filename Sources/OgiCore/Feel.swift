@@ -224,6 +224,11 @@ public enum Feel {
         /// New surfaces occlude immediately but aren't walk targets yet, so he doesn't
         /// chase menus and sheets.
         public static let minAgePolls = 2
+        /// A Space change replaces the entire window list in one go. For this many polls
+        /// afterwards every known surface is held regardless of misses: two polls of ordinary
+        /// hysteresis is nowhere near enough, and without it the turnover reads as every
+        /// platform in the world vanishing at once and he falls.
+        public static let spaceChangeHoldOffPolls = 4
         public static let minStandWidth: CGFloat = 24
         /// Rounded window corners eat the walkable part of the top edge.
         public static let cornerInset: CGFloat = 10

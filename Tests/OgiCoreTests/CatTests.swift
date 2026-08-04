@@ -336,6 +336,55 @@ private let notched = ScreenGeometry(frame: CGRect(x: 0, y: 0, width: 1920, heig
 }
 
 @MainActor
+@Test func aSmallerScreenDoesNotStrandHimOutsideIt() {
+    // Unplug the 4K and the desktop shrinks under him. Everything he could stand on is now
+    // to his left, so he slips off his perch, falls past a floor whose `solid` no longer
+    // contains his x, and keeps falling forever somewhere off the side of the screen.
+    let small = CGRect(x: 0, y: 90, width: 1440, height: 800)
+    var cat = CatState(position: CGPoint(x: 3200, y: 900))
+    cat.support = .grounded(Perch(id: .menuBar, dx: 3200))
+
+    let moved = OgiApp.reseat(cat, into: small)
+    #expect(moved.position.x < small.maxX && moved.position.x > small.minX,
+            "he is still off the side of the new screen")
+    guard case .falling = moved.support else {
+        Issue.record("he kept a perch that no longer exists under him")
+        return
+    }
+
+    // ...and he actually lands, rather than falling through a world that has no ground at
+    // the x he was teleported to.
+    let world = World.build(windows: [], screen: ScreenGeometry(
+        frame: CGRect(x: 0, y: 0, width: 1440, height: 900), visibleFrame: small, notch: nil),
+                            ownPID: 99)
+    // Stop at the first landing rather than simulating on: given a few seconds of freedom he
+    // goes for a walk, and catching him mid-jump would fail this for the wrong reason.
+    var c = moved
+    var landed = false
+    for _ in 0..<Int(5 / dt) where !landed {
+        c = Cat.step(c, world: world, dt: dt)
+        if case .grounded = c.support { landed = true }
+    }
+    #expect(landed, "he never found the ground again, at x=\(Int(c.position.x))")
+}
+
+@MainActor
+@Test func aScreenChangeLeavesHimAloneIfHeIsStillOnIt() {
+    // Reconfiguration fires for a brightness change on an external display too. Dropping him
+    // off his perch every time one arrives would be a worse bug than the one being fixed.
+    let visible = CGRect(x: 0, y: 90, width: 1920, height: 1115)
+    var cat = CatState(position: CGPoint(x: 800, y: 1205))
+    cat.support = .grounded(Perch(id: .menuBar, dx: 800))
+
+    let after = OgiApp.reseat(cat, into: visible)
+    #expect(after.position == cat.position)
+    guard case .grounded = after.support else {
+        Issue.record("he was dropped for no reason")
+        return
+    }
+}
+
+@MainActor
 @Test func heArrivesStandingOnSolidGround() {
     // The notch is a hole in the menu bar's `solid` — a hardware cutout with no pixels
     // behind it — so the doorway he steps out of is its *edge*. Grounding him at its centre

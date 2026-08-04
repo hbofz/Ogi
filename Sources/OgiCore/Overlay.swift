@@ -45,6 +45,13 @@ public final class Overlay {
 
     public var windowNumber: Int { window.windowNumber }
 
+    /// The display changed shape under him. Without this the window keeps the old
+    /// configuration's size and he is drawn outside it, which looks exactly like a crash.
+    public func setFrame(_ r: CGRect) {
+        window.setFrame(r, display: false)
+        view.frame = CGRect(origin: .zero, size: r.size)
+    }
+
     public func start() { view.startLink() }
 
     /// You left. Stop the clock entirely rather than ticking at a low rate: a paused

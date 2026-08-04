@@ -271,6 +271,39 @@ private let screen = ScreenGeometry(
     #expect(gone.surface(.window(1)) == nil)
 }
 
+@Test func aSpaceChangeDoesNotDropEverySurface() {
+    // Switching Spaces turns the entire window list over at once. Ordinary hysteresis is two
+    // polls deep, so without a hold-off he reads the turnover as every platform vanishing
+    // and falls off the one he is standing on.
+    var tracker = WorldTracker()
+    let w = win(1, CGRect(x: 100, y: 300, width: 600, height: 400))
+    _ = tracker.ingest(World.build(windows: [w], screen: screen, ownPID: 99))
+    _ = tracker.ingest(World.build(windows: [w], screen: screen, ownPID: 99))
+
+    tracker.holdOff(polls: Feel.World.spaceChangeHoldOffPolls)
+    for poll in 1...Feel.World.spaceChangeHoldOffPolls {
+        let held = tracker.ingest(World.build(windows: [], screen: screen, ownPID: 99))
+        #expect(held.surface(.window(1)) != nil, "he lost his platform on hold-off poll \(poll)")
+    }
+}
+
+@Test func theHoldOffExpiresAndAClosedWindowStillGoesAway() {
+    // Otherwise the fix is worse than the bug: he'd stand on the ghost of a window that was
+    // genuinely closed during the Space change.
+    var tracker = WorldTracker()
+    let w = win(1, CGRect(x: 100, y: 300, width: 600, height: 400))
+    _ = tracker.ingest(World.build(windows: [w], screen: screen, ownPID: 99))
+
+    tracker.holdOff(polls: 2)
+    for _ in 0..<2 { _ = tracker.ingest(World.build(windows: [], screen: screen, ownPID: 99)) }
+
+    var last = tracker.ingest(World.build(windows: [], screen: screen, ownPID: 99))
+    for _ in 1..<Feel.World.vanishConfirmPolls {
+        last = tracker.ingest(World.build(windows: [], screen: screen, ownPID: 99))
+    }
+    #expect(last.surface(.window(1)) == nil, "the hold-off never ended")
+}
+
 @Test func newSurfacesAreNotImmediatelyTargetable() {
     var tracker = WorldTracker()
     let w = win(1, CGRect(x: 100, y: 300, width: 600, height: 400))

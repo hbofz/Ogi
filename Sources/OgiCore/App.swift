@@ -31,6 +31,10 @@ public final class OgiApp: NSObject, NSApplicationDelegate {
     /// window" and changes when you click an app on another display, which silently
     /// rebuilt the entire skyline against different geometry every poll.
     private var homeScreen: NSScreen!
+    /// ...and the same screen by display ID, because AppKit rebuilds the `NSScreen` array on
+    /// every reconfiguration. The pinned object survives as a stale husk whose `frame` no
+    /// longer describes anything, so it has to be re-resolved rather than retained.
+    private var homeDisplay: CGDirectDisplayID = 0
 
     /// OGI_DEBUG=1 narrates what he is doing. Off, he is silent.
     private let debug = ProcessInfo.processInfo.environment["OGI_DEBUG"] != nil
@@ -44,6 +48,7 @@ public final class OgiApp: NSObject, NSApplicationDelegate {
 
         guard let screen = NSScreen.main else { return }
         homeScreen = screen
+        homeDisplay = OgiApp.displayID(screen)
         flipOrigin = NSScreen.screens[0].frame.maxY
 
         setupStatusItem()
@@ -65,8 +70,25 @@ public final class OgiApp: NSObject, NSApplicationDelegate {
                                           NSWorkspace.activeSpaceDidChangeNotification] {
             NSWorkspace.shared.notificationCenter.addObserver(
                 forName: name, object: nil, queue: .main) { [weak self] _ in
-                MainActor.assumeIsolated { self?.leaveSlumber() }
+                MainActor.assumeIsolated {
+                    guard let self else { return }
+                    self.leaveSlumber()
+                    // A Space change replaces every window on screen at once. Held, he keeps
+                    // the world he had until the new one has arrived; unheld, he reads the
+                    // turnover as every platform vanishing and falls.
+                    if name == NSWorkspace.activeSpaceDidChangeNotification {
+                        self.tracker.holdOff(polls: Feel.World.spaceChangeHoldOffPolls)
+                    }
+                }
             }
+        }
+
+        // The displays changed shape. Not waking him for it is deliberate: the window and the
+        // geometry are rebuilt where he sleeps, and he finds out when he next opens his eyes.
+        NotificationCenter.default.addObserver(
+            forName: NSApplication.didChangeScreenParametersNotification,
+            object: nil, queue: .main) { [weak self] _ in
+            MainActor.assumeIsolated { self?.screensChanged() }
         }
 
         signals.onWake = { [weak self] in
@@ -93,6 +115,61 @@ public final class OgiApp: NSObject, NSApplicationDelegate {
 
         let g = ScreenGeometry(screen)
         log("screen=\(g.frame) visible=\(g.visibleFrame) notch=\(g.notch.map { "\($0)" } ?? "none")")
+    }
+
+    private static func displayID(_ s: NSScreen) -> CGDirectDisplayID {
+        s.deviceDescription[NSDeviceDescriptionKey("NSScreenNumber")] as? CGDirectDisplayID ?? 0
+    }
+
+    /// A display was connected, disconnected, or changed resolution. Every cached piece of
+    /// screen geometry is now a lie: the overlay window is sized for the old configuration
+    /// and he is drawn outside it, `flipOrigin` belongs to a primary display that may not be
+    /// the primary any more, and `homeScreen` is a stale `NSScreen` — worse than out of date,
+    /// because AppKit has already replaced the object and its frame feeds `World.build`,
+    /// which builds a world with nothing to stand on out of degenerate geometry.
+    private func screensChanged() {
+        guard overlay != nil, !NSScreen.screens.isEmpty else { return }
+        // His display if it is still attached; otherwise he moves in with whatever is left.
+        let screen = NSScreen.screens.first { OgiApp.displayID($0) == homeDisplay }
+            ?? NSScreen.main ?? NSScreen.screens[0]
+        homeScreen = screen
+        homeDisplay = OgiApp.displayID(screen)
+        flipOrigin = NSScreen.screens[0].frame.maxY     // the primary display can be a new one
+        overlay.setFrame(screen.frame)
+        poll(force: true)
+        cat = OgiApp.reseat(cat, into: screen.visibleFrame)
+        // The doorway he came out of may not be on this screen any more. Better an instant
+        // goodbye than an eight-second walk toward an x that no longer exists.
+        if let h = homeX, !(screen.visibleFrame.minX...screen.visibleFrame.maxX).contains(h) {
+            homeX = nil
+        }
+        // He is not woken for this. If he was asleep the world is rebuilt around him and he
+        // finds out when he next opens his eyes; one redraw keeps the picture honest until
+        // then, without restarting the clock.
+        renderNow()
+        log("screens changed -> \(screen.frame)")
+    }
+
+    /// Where he goes when the desktop shrinks out from under him. Unplug a display and the x
+    /// he is standing at can stop existing: he slips off a perch that got shorter, falls past
+    /// a floor whose `solid` does not contain him, and falls forever off the side of the
+    /// world. Pure and static so the one branch in it is testable without an NSApplication.
+    static func reseat(_ cat: CatState, into visible: CGRect) -> CatState {
+        let margin = Feel.Shape.width / 2
+        let x = min(max(cat.position.x, visible.minX + margin), visible.maxX - margin)
+        let y = min(cat.position.y, visible.maxY)
+        guard x != cat.position.x || y != cat.position.y else { return cat }
+        var s = cat
+        s.position = CGPoint(x: x, y: y)
+        // Whatever he was standing on was measured against geometry that is gone, so the
+        // perch cannot survive the move. Drop him and let the ordinary fall find him ground.
+        s.support = .falling
+        s.velocity = .zero
+        s.activity = .airborne
+        s.activityElapsed = 0
+        s.intent = nil
+        s.lastPerchOrigin = nil
+        return s
     }
 
     /// First launch: the notch opens and a cat walks out. That is the entire onboarding.

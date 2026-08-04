@@ -268,8 +268,17 @@ public struct WorldTracker {
     private var missCount: [SurfaceID: Int] = [:]
     private var age: [SurfaceID: Int] = [:]
     private var lastKnown: [SurfaceID: Surface] = [:]
+    private var holdOffLeft = 0
 
     public init() {}
+
+    /// Ignore disappearances for the next `polls` ingests. For a Space change, where the
+    /// whole window list turns over at once and ordinary two-poll hysteresis is nowhere
+    /// near deep enough. Misses are not counted while it holds, so the world he had before
+    /// the switch survives intact rather than expiring on the first poll after.
+    public mutating func holdOff(polls: Int) {
+        holdOffLeft = max(holdOffLeft, polls)
+    }
 
     public mutating func ingest(_ fresh: Skyline) -> Skyline {
         var out: [Surface] = []
@@ -285,8 +294,15 @@ public struct WorldTracker {
             out.append(s)
         }
 
+        let holding = holdOffLeft > 0
+        if holding { holdOffLeft -= 1 }
+
         // Re-insert recently vanished surfaces so a one-frame dropout doesn't drop him.
         for (id, surface) in lastKnown where !seen.contains(id) {
+            if holding {
+                out.append(surface)
+                continue
+            }
             let misses = (missCount[id] ?? 0) + 1
             missCount[id] = misses
             if misses < Feel.World.vanishConfirmPolls {
