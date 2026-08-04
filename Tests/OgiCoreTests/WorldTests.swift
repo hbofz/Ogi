@@ -310,6 +310,36 @@ private let screen = ScreenGeometry(
     #expect(last.surface(.window(1)) == nil, "the hold-off never ended")
 }
 
+@Test func aSpaceChangeIsNotNewFurniture() {
+    // Switching Spaces expires one cast and ages in another, and the newcomers all cross the
+    // age threshold together. Reporting them hands the mind a windowOpened per switch — 0.30
+    // of arousal, canTravel, two inside a half-life is a trip — which is exactly what app
+    // switches were deliberately barred from doing, smuggled in through the window channel.
+    // Furniture the new Space always had is not news.
+    #expect(Feel.World.spaceChangeHoldOffPolls >= Feel.World.minAgePolls,
+            "the hold must outlast the age threshold or the suppression cannot work")
+
+    var tracker = WorldTracker()
+    let a = win(1, CGRect(x: 100, y: 300, width: 600, height: 400))
+    let b = win(2, CGRect(x: 800, y: 300, width: 600, height: 400))
+    for _ in 0..<3 { _ = tracker.ingest(World.build(windows: [a], screen: screen, ownPID: 99)) }
+
+    // The switch: the hold arrives, then the other Space's window list.
+    tracker.holdOff(polls: Feel.World.spaceChangeHoldOffPolls)
+    for poll in 1...(Feel.World.spaceChangeHoldOffPolls + Feel.World.vanishConfirmPolls) {
+        _ = tracker.ingest(World.build(windows: [b], screen: screen, ownPID: 99))
+        #expect(!tracker.justAppeared.contains(.window(2)),
+                "the new Space's own furniture was reported as news on poll \(poll)")
+    }
+
+    // A window that opens once the dust has settled is real news again.
+    for i in 1...Feel.World.minAgePolls {
+        _ = tracker.ingest(World.build(windows: [b, a], screen: screen, ownPID: 99))
+        #expect(tracker.justAppeared.contains(.window(1)) == (i == Feel.World.minAgePolls),
+                "a genuinely new window on poll \(i) after the switch")
+    }
+}
+
 @Test func newSurfacesAreNotImmediatelyTargetable() {
     var tracker = WorldTracker()
     let w = win(1, CGRect(x: 100, y: 300, width: 600, height: 400))

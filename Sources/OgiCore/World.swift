@@ -293,6 +293,17 @@ public struct WorldTracker {
         var out: [Surface] = []
         var seen = Set<SurfaceID>()
 
+        // Read before the newcomers are aged, because it gates their reporting as well as
+        // the misses below: a Space change replaces the whole cast at once, and the other
+        // Space's furniture crossing the age threshold together is not news. Reported, it
+        // would hand the mind a `windowOpened` per switch — 0.30 of arousal, `canTravel`,
+        // two inside a half-life is a trip — which is exactly what app switches were
+        // deliberately barred from doing, smuggled in through the window channel. The new
+        // cast crosses `minAgePolls` while the hold is still counting, since the hold is
+        // deeper by design, so keeping quiet during it is the whole fix.
+        let holding = holdOffLeft > 0
+        if holding { holdOffLeft -= 1 }
+
         justAppeared.removeAll(keepingCapacity: true)
         for var s in fresh.surfaces {
             seen.insert(s.id)
@@ -301,13 +312,10 @@ public struct WorldTracker {
             age[s.id] = a
             s.targetable = a >= Feel.World.minAgePolls
             // Exactly on the transition, so it reports once rather than on every poll after.
-            if a == Feel.World.minAgePolls { justAppeared.append(s.id) }
+            if a == Feel.World.minAgePolls, !holding { justAppeared.append(s.id) }
             lastKnown[s.id] = s
             out.append(s)
         }
-
-        let holding = holdOffLeft > 0
-        if holding { holdOffLeft -= 1 }
 
         // Re-insert recently vanished surfaces so a one-frame dropout doesn't drop him.
         for (id, surface) in lastKnown where !seen.contains(id) {
