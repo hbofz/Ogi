@@ -316,3 +316,60 @@ private func twoLedges() -> Skyline {
     #expect(cat.lookingAt != nil)
     #expect(cat.intent == nil, "he set off for the menu bar from the floor again")
 }
+
+// MARK: - Task 6: switching apps
+
+@Test func switchingAppsStirsHimLessThanNewFurniture() {
+    // Both are glances, but they are not equally interesting, and the ordering is what stops a
+    // busy hour of alt-tabbing from reading the same as a window actually appearing.
+    #expect(Feel.Mind.arousalAppSwitched < Feel.Mind.arousalWindowOpened)
+    #expect(Feel.Mind.arousalAppSwitched > 0, "an app switch he cannot feel is not a signal")
+}
+
+@Test func anAppSwitchMakesHimLookAtThatWindow() {
+    let world = twoLedges()
+    var cat = CatState(position: CGPoint(x: 300, y: 1205))
+    cat.support = .grounded(Perch(id: .menuBar, dx: 300))
+    cat.stimulus = Stimulus(kind: .appSwitched, at: CGPoint(x: 650, y: 1100))
+
+    cat = Cat.step(cat, world: world, dt: dt)
+    #expect(cat.lookingAt == CGPoint(x: 650, y: 1100))
+    #expect(cat.arousal > 0)
+}
+
+@Test func altTabbingAloneCannotSendHimAcrossTheScreen() {
+    // Four switches back to back stay under the trip threshold, so flicking between two apps
+    // is a cat glancing rather than a cat pacing after you.
+    let world = twoLedges()
+    var cat = CatState(position: CGPoint(x: 300, y: 1205))
+    cat.support = .grounded(Perch(id: .menuBar, dx: 300))
+    cat.restLeft = .infinity          // so any intent must come from the switches
+
+    for _ in 0..<4 {
+        cat.stimulus = Stimulus(kind: .appSwitched, at: CGPoint(x: 650, y: 1100))
+        cat = Cat.step(cat, world: world, dt: dt)
+    }
+    #expect(cat.intent == nil, "four alt-tabs sent him walking; arousal \(cat.arousal)")
+}
+
+@Test func flittingAroundStillMakesTheNextWindowWorthGettingUpFor() {
+    // The other half of `canTravel`. An app switch cannot move him on its own, but it still
+    // contributes, so a window opening while you have been busy is likelier to be worth a trip
+    // than the same window opening into a quiet room. That contribution is the whole reason the
+    // weight is not simply zero.
+    let world = twoLedges()
+    func went(afterSwitches n: Int) -> Bool {
+        var cat = CatState(position: CGPoint(x: 300, y: 1205))
+        cat.support = .grounded(Perch(id: .menuBar, dx: 300))
+        cat.restLeft = .infinity
+        for _ in 0..<n {
+            cat.stimulus = Stimulus(kind: .appSwitched, at: CGPoint(x: 650, y: 1100))
+            cat = Cat.step(cat, world: world, dt: dt)
+        }
+        cat.stimulus = Stimulus(kind: .windowOpened, at: CGPoint(x: 650, y: 1100))
+        cat = Cat.step(cat, world: world, dt: dt)
+        return cat.intent != nil
+    }
+    #expect(went(afterSwitches: 0) == false, "one window into a quiet room should be a glance")
+    #expect(went(afterSwitches: 2), "a window opening after you had been busy should be worth a trip")
+}

@@ -74,7 +74,11 @@ public final class OgiApp: NSObject, NSApplicationDelegate {
                                           NSWorkspace.didLaunchApplicationNotification,
                                           NSWorkspace.activeSpaceDidChangeNotification] {
             NSWorkspace.shared.notificationCenter.addObserver(
-                forName: name, object: nil, queue: .main) { [weak self] _ in
+                forName: name, object: nil, queue: .main) { [weak self] note in
+                // Read out of the notification here rather than inside the isolated block: an
+                // NSNotification is not Sendable and cannot cross the boundary, but a pid is.
+                let switchedTo = (note.userInfo?[NSWorkspace.applicationUserInfoKey]
+                                    as? NSRunningApplication)?.processIdentifier
                 MainActor.assumeIsolated {
                     guard let self else { return }
                     self.leaveSlumber()
@@ -83,6 +87,17 @@ public final class OgiApp: NSObject, NSApplicationDelegate {
                     // turnover as every platform vanishing and falls.
                     if name == NSWorkspace.activeSpaceDidChangeNotification {
                         self.tracker.holdOff(polls: Feel.World.spaceChangeHoldOffPolls)
+                    } else if let pid = switchedTo,
+                              let w = self.lastRaw.first(where: {
+                                  $0.pid == pid && $0.layer == 0
+                              }) {
+                        // Cats notice when you move rooms. The activated app is matched to one
+                        // of its windows through the last raw snapshot, because `Surface`
+                        // deliberately does not carry a pid and adding one would be a second
+                        // copy of something the snapshot already knows.
+                        self.cat.stimulus = Stimulus(kind: .appSwitched,
+                                                     at: CGPoint(x: w.rect.midX, y: w.rect.maxY))
+                        self.log("you switched to \(w.owner)")
                     }
                 }
             }

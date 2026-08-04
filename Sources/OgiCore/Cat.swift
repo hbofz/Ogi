@@ -146,6 +146,21 @@ public struct Stimulus: Sendable, Equatable {
         case .goHome: return 0
         }
     }
+
+    /// Whether this is the kind of thing he will get up and walk over for, given enough
+    /// arousal, or only ever the kind of thing he looks at.
+    ///
+    /// Only new furniture. An app switch is you moving around your own machine rather than the
+    /// world changing, and it fires dozens of times an hour against a window's handful, so
+    /// letting it promote makes him follow you around: four switches in a row clear the
+    /// threshold on their own, and sustained switching pegs arousal at 1 for as long as you
+    /// keep working. It still *contributes*, which is the useful part and the legible one. A
+    /// window opening while you have been flitting about is worth getting up for; the flitting
+    /// on its own is not.
+    ///
+    /// `goHome` is excluded for the opposite reason: it does not need the gate, and routes
+    /// directly below.
+    public var canTravel: Bool { kind == .windowOpened }
 }
 
 /// How settled he is, from the machine's point of view.
@@ -342,7 +357,7 @@ public enum Cat {
             // Never while he already has an intent: a trip that every new window re-targets is
             // a trip he never finishes. He still looks, which is the whole point of the glance
             // being the cheap half.
-            if s.arousal >= Feel.Mind.investigateAbove, s.intent == nil,
+            if stim.canTravel, s.arousal >= Feel.Mind.investigateAbove, s.intent == nil,
                case .grounded(let perch) = s.support,
                let here = world.surface(perch.id),
                let dest = surfaceAt(stim.at, in: world),
