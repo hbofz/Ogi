@@ -373,6 +373,24 @@ public enum Cat {
             s.lookingAt = stim.at
             s.glanceLeft = Feel.Mind.glanceSeconds
 
+            // Home is not a suggestion. It routes to the menu bar directly rather than through
+            // the arousal gate, and it is allowed to replace an intent, because whatever he was
+            // doing is on furniture that is about to be gone or covered.
+            //
+            // If he cannot reach it, no intent forms and he settles where he is. From the floor
+            // the notch is 1115pt up against 190pt of rise and inventing a route would be
+            // inventing physics, so the honest outcome is that he sprawls on the desktop, which
+            // is a behaviour in its own right and the one the manifesto asks for on a bare
+            // screen anyway.
+            if stim.kind == .goHome, case .grounded(let perch) = s.support,
+               let here = world.surface(perch.id),
+               let move = nextMove(from: s, on: here, toward: .menuBar, x: stim.at.x,
+                                   world: world) {
+                s.intent = Intent(destination: .menuBar, destinationX: stim.at.x, move: move)
+                if case .jump = move { s.activity = .crouch } else { s.activity = .walk }
+                s.activityElapsed = 0
+            }
+
             // ...and if he is stirred up enough, he goes and has a proper look.
             //
             // The bump is applied BEFORE this test, so the event that crosses the line is the

@@ -557,3 +557,58 @@ private func twoLedges() -> Skyline {
     #expect(abs(cat.position.x - 900) < 1, "he moved during a call")
     #expect(cat.activity == .alert)
 }
+
+// MARK: - Task 10: going home
+
+@Test func whenTheWorldGoesFullscreenHeHeadsHome() {
+    let bar = surface(.menuBar, y: 1205, from: 0, to: 1920, z: -1)
+    let ledge = win(7, y: 1100, from: 400, to: 900)
+    let floor = surface(.floor, y: 90, from: 0, to: 1920, z: .max)
+    var cat = CatState(position: CGPoint(x: 650, y: 1100))
+    cat.support = .grounded(Perch(id: .window(7), dx: 250))
+    cat.stimulus = Stimulus(kind: .goHome, at: CGPoint(x: 1000, y: 1205))
+
+    cat = Cat.step(cat, world: sky([bar, ledge, floor]), dt: dt)
+    #expect(cat.intent?.destination == .menuBar, "he did not head home")
+    #expect(cat.intent?.destinationX == 1000)
+}
+
+@Test func goingHomeDoesNotStirHimUp() {
+    // .goHome is an instruction, not a surprise. If it could raise arousal it could push him
+    // over investigateAbove and make the NEXT window that opens a trip, which is a reaction
+    // to the wrong thing.
+    let bar = surface(.menuBar, y: 1205, from: 0, to: 1920, z: -1)
+    var cat = CatState(position: CGPoint(x: 300, y: 1205))
+    cat.support = .grounded(Perch(id: .menuBar, dx: 300))
+    cat.stimulus = Stimulus(kind: .goHome, at: CGPoint(x: 1000, y: 1205))
+    cat = Cat.step(cat, world: sky([bar]), dt: dt)
+    #expect(cat.arousal == 0)
+}
+
+@Test func goingHomeOverridesWhateverHeWasDoing() {
+    // Unlike a window opening, which never re-targets a trip already underway. The furniture he
+    // was heading for is the thing that is about to be covered.
+    let bar = surface(.menuBar, y: 1205, from: 0, to: 1920, z: -1)
+    let ledge = win(7, y: 1100, from: 400, to: 900)
+    var cat = CatState(position: CGPoint(x: 650, y: 1100))
+    cat.support = .grounded(Perch(id: .window(7), dx: 250))
+    cat.intent = Intent(destination: .window(7), destinationX: 500, move: .walk(500))
+    cat.stimulus = Stimulus(kind: .goHome, at: CGPoint(x: 1000, y: 1205))
+
+    cat = Cat.step(cat, world: sky([bar, ledge]), dt: dt)
+    #expect(cat.intent?.destination == .menuBar)
+}
+
+@Test func heSprawlsRatherThanPacingWhenHomeIsOutOfReach() {
+    // From the floor the notch is 1115pt up against 190pt of rise. Task 1 makes that
+    // unroutable, so no intent forms and he settles instead of walking back and forth
+    // underneath it for ever, which is what he used to do.
+    let bar = surface(.menuBar, y: 1205, from: 0, to: 1920, z: -1)
+    let floor = surface(.floor, y: 90, from: 0, to: 1920, z: .max)
+    var cat = CatState(position: CGPoint(x: 300, y: 90))
+    cat.support = .grounded(Perch(id: .floor, dx: 300))
+    cat.stimulus = Stimulus(kind: .goHome, at: CGPoint(x: 1000, y: 1205))
+
+    cat = Cat.step(cat, world: sky([bar, floor]), dt: dt)
+    #expect(cat.intent?.destination != .menuBar, "he set out for a menu bar he cannot reach")
+}

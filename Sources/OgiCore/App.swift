@@ -15,6 +15,9 @@ public final class OgiApp: NSObject, NSApplicationDelegate {
     /// When `cursorStill` was last advanced. `tick` has no fixed rate, so this is measured
     /// against the clock rather than counted in ticks.
     private var lastCursorSample: CFTimeInterval = 0
+    /// Edge-triggered: the retreat fires when the world BECOMES fullscreen, not on every poll
+    /// for as long as it stays that way.
+    private var wasFullscreen = false
     private var skyline = Skyline(surfaces: [], occluders: [],
                                   screen: ScreenGeometry(frame: .zero, visibleFrame: .zero, notch: nil))
     private var cat = CatState(position: .zero)
@@ -103,6 +106,17 @@ public final class OgiApp: NSObject, NSApplicationDelegate {
                         self.log("you switched to \(w.owner)")
                     }
                 }
+            }
+        }
+
+        // The machine is going to sleep, so he settles first. Same stimulus as the fullscreen
+        // retreat: the destination is home either way and only the prompt differs.
+        NSWorkspace.shared.notificationCenter.addObserver(
+            forName: NSWorkspace.willSleepNotification, object: nil, queue: .main) { [weak self] _ in
+            MainActor.assumeIsolated {
+                guard let self, let homeX = self.homeX else { return }
+                self.cat.stimulus = Stimulus(kind: .goHome, at: CGPoint(x: homeX, y: 0))
+                self.log("machine is sleeping, heading home")
             }
         }
 
@@ -602,6 +616,24 @@ public final class OgiApp: NSObject, NSApplicationDelegate {
             log("noticed a window at \(Int(x)),\(Int(s.y))")
         }
         if !tracker.justAppeared.isEmpty { sawLaunchWorld = true }
+
+        // An app went fullscreen and his whole world is about to be covered, so he retreats to
+        // the notch. Read off the raw snapshot rather than off the skyline, because a fullscreen
+        // window is ITSELF a walkable surface: its top edge sits above the menu bar, so "his
+        // furniture disappeared" is the wrong question and would miss the case entirely.
+        //
+        // Edge-triggered. Level-triggered it would re-issue the retreat on every poll for as
+        // long as the window stayed fullscreen, which is a cat who cannot be anywhere else.
+        let frame = ScreenGeometry(screen).frame
+        let fullscreen = raw.contains { w in
+            w.layer == 0 && w.pid != ownPID
+                && w.rect.width >= frame.width * 0.98 && w.rect.height >= frame.height * 0.98
+        }
+        if fullscreen, !wasFullscreen, let homeX {
+            cat.stimulus = Stimulus(kind: .goHome, at: CGPoint(x: homeX, y: 0))
+            log("something went fullscreen, heading home")
+        }
+        wasFullscreen = fullscreen
     }
 
     /// His depth in the window stack, which decides what is allowed to occlude him.
