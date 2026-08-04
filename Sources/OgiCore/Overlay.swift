@@ -269,6 +269,18 @@ final class OgiView: NSView {
         eyesLayer.path = nil
         pupilLayer.path = nil
 
+        // The contact shadow. Tightens and darkens on the ground, softens and separates in
+        // the air; it sells "he is standing on that window" more than anything else in the
+        // app — and it died silently in the switch to drawn frames: nothing set this layer's
+        // path, so `heightAboveGround` was computed every frame to position an empty box.
+        // Procedural for the same reason the z's are: it tracks his height continuously, and
+        // an ellipse needs no sheet. It sits inside the mask container, so the occlusion
+        // clips it exactly as it clips him.
+        shadowLayer.path = Body.shadow(width: size.width, height: h)
+        shadowLayer.position = CGPoint(x: cat.position.x - origin.x,
+                                       y: cat.position.y - h - origin.y)
+        shadowLayer.opacity = Float(Body.shadowOpacity(height: h))
+
         drawSleepiness(cat, size: size, in: padded)
 
         applyOcclusion(occluders, in: padded)
