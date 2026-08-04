@@ -120,6 +120,42 @@ private let dt = Feel.Timing.fixedDT
     #expect(lounges < 195, "the lounge never loses; he would never stroll at all")
 }
 
+// MARK: - The lounge
+
+@Test func aLoungeIsASpellNotAPose() {
+    let floor = surface(.floor, y: 90, from: 0, to: 1920, z: .max)
+    var cat = CatState(position: CGPoint(x: 900, y: 90))
+    cat.support = .grounded(Perch(id: .floor, dx: 900))
+    cat.activity = .lounge
+    cat.activityElapsed = 0
+    cat.restLeft = .greatestFiniteMagnitude
+    // Half the spell: still sprawled.
+    for _ in 0..<Int(Feel.Taste.loungeSeconds / 2 / dt) {
+        cat = Cat.step(cat, world: sky([floor]), dt: dt)
+    }
+    #expect(cat.activity == .lounge, "he got up half-way through the spell")
+    #expect(!cat.isMoving, "a lounging cat must not hold the render rate up")
+    // Past the end he settles back into an ordinary rest — detected as leaving the pose at
+    // least once, not as the final state, because a later bout of boredom on this bare
+    // floor may legitimately elect a fresh lounge.
+    var ended = false
+    for _ in 0..<Int(Feel.Taste.loungeSeconds / dt) {
+        cat = Cat.step(cat, world: sky([floor]), dt: dt)
+        if cat.activity != .lounge { ended = true; break }
+    }
+    #expect(ended, "the lounge never ends")
+}
+
+@Test func theFreezeOutranksTheLounge() {
+    let floor = surface(.floor, y: 90, from: 0, to: 1920, z: .max)
+    var cat = CatState(position: CGPoint(x: 900, y: 90))
+    cat.support = .grounded(Perch(id: .floor, dx: 900))
+    cat.activity = .lounge
+    cat.listening = true
+    cat = Cat.step(cat, world: sky([floor]), dt: dt)
+    #expect(cat.activity == .alert, "a hot mic must interrupt a lounge")
+}
+
 // MARK: - Task 1: session memory
 
 @Test func theLaunchWorldIsNeverNovel() {

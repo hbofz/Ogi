@@ -63,6 +63,7 @@ public enum Activity: Sendable, Equatable {
     case sit        // no input for a while; cats settle when the room goes quiet
     case curl
     case sleep
+    case lounge     // sprawled flat, head up, watching the room: "nothing to do here" as a behaviour
     case alert      // frozen and listening: the mic went live
     case scruffed   // limp, legs tucked, dangling
     case righting   // the twist, mid-air
@@ -1058,7 +1059,7 @@ public enum Cat {
             // the room went quiet sits down rather than only settling into it after his next
             // idea. Only ever swaps one waiting pose for another: a wash or a walk still wins.
             switch s.activity {
-            case .groom, .land, .landHard, .brace: break   // busy; each times out on its own
+            case .groom, .lounge, .land, .landHard, .brace: break   // busy; each times out on its own
             // Mid-glance at something that just appeared. `glanceLeft` is what tells this apart
             // from a STALE alert left over after the mic went quiet, which this branch has to go
             // on clearing: the hold-still branch returns early, so without that reset he stayed
@@ -1071,6 +1072,17 @@ public enum Cat {
             // and overrides it, which is the right precedence.
             if s.activity == .groom {
                 if s.activityElapsed > Feel.Timing.groomSeconds {
+                    s.activity = s.repose.restingActivity
+                    s.activityElapsed = 0
+                    s.restLeft = Feel.Timing.restMin + Double.random(in: 0...Feel.Timing.restJitter)
+                }
+                return s
+            }
+            // Already sprawled: hold the lounge for its spell, then settle back. The same
+            // shape as the wash above, and everything that matters more — the freeze, the
+            // yield, sleep, being hidden — already returned before this.
+            if s.activity == .lounge {
+                if s.activityElapsed > Feel.Taste.loungeSeconds {
                     s.activity = s.repose.restingActivity
                     s.activityElapsed = 0
                     s.restLeft = Feel.Timing.restMin + Double.random(in: 0...Feel.Timing.restJitter)
@@ -1151,9 +1163,8 @@ public enum Cat {
                         else { s.activity = .walk }
                         s.activityElapsed = 0
                     case .lounge:
-                        // The v2c plan's Task 5 gives this its own pose; until then a won
-                        // lounge is an ordinary rest.
-                        s.restLeft = Feel.Timing.restMin
+                        s.activity = .lounge
+                        s.activityElapsed = 0
                     }
                 } else {
                     // Nothing worth doing. Wait before asking again rather than re-rolling

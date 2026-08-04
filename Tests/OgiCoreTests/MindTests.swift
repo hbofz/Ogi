@@ -103,7 +103,11 @@ private let dt = Feel.Timing.fixedDT
 
 @Test func aRousedCatHasIdeasSooner() {
     // The first of arousal's two everywhere-effects. Measured as elapsed time to the first
-    // intent, over many trials, because restLeft is randomised per settle.
+    // bout of boredom, over many trials, because restLeft is randomised per settle. An idea
+    // is any of the timer's outcomes — an intent, a wash, or (since v2c) a won lounge —
+    // and it must be all three: on a bare floor the election mostly elects the lounge, so
+    // counting intents alone adds whole lounge spells to the clock and measures the
+    // election's taste rather than the timer this test is about.
     func timeToFirstIdea(arousal: Double) -> Double {
         let ground = surface(.floor, y: 90, from: 0, to: 1920, z: .max)
         var total = 0.0
@@ -115,7 +119,9 @@ private let dt = Feel.Timing.fixedDT
                 cat.arousal = arousal          // held, so decay does not confound the measurement
                 cat = Cat.step(cat, world: sky([ground]), dt: dt)
                 t += dt
-                if cat.intent != nil { break }
+                if cat.intent != nil || cat.activity == .groom || cat.activity == .lounge {
+                    break
+                }
             }
             total += t
         }

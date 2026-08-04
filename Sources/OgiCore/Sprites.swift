@@ -170,6 +170,9 @@ public enum Sprites {
         case .sit:                  return .sitdown
         case .curl:                 return .curl
         case .sleep:                return .sleep
+        // Placeholder until the lounge sheet lands (v2c plan, Task 7): a sprawled cat
+        // borrowing the curled one reads as napping, which is wrong in the right direction.
+        case .lounge:               return .curl
         case .alert, .brace:        return .alert
         case .groom:                return .groom
         case .idle:                 return .idle
