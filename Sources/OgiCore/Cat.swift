@@ -331,6 +331,27 @@ public enum Cat {
             s.arousal = min(1, s.arousal + stim.weight)
             s.lookingAt = stim.at
             s.glanceLeft = Feel.Mind.glanceSeconds
+
+            // ...and if he is stirred up enough, he goes and has a proper look.
+            //
+            // The bump is applied BEFORE this test, so the event that crosses the line is the
+            // one that acts on it. Tested first, a signal could never respond to itself and the
+            // SECOND window in a burst would be the one that moved him, which reads as a
+            // delayed reaction to the wrong thing.
+            //
+            // Never while he already has an intent: a trip that every new window re-targets is
+            // a trip he never finishes. He still looks, which is the whole point of the glance
+            // being the cheap half.
+            if s.arousal >= Feel.Mind.investigateAbove, s.intent == nil,
+               case .grounded(let perch) = s.support,
+               let here = world.surface(perch.id),
+               let dest = surfaceAt(stim.at, in: world),
+               let x = nearestSpanX(to: stim.at.x, in: dest.spans),
+               let move = nextMove(from: s, on: here, toward: dest.id, x: x, world: world) {
+                s.intent = Intent(destination: dest.id, destinationX: x, move: move)
+                if case .jump = move { s.activity = .crouch } else { s.activity = .walk }
+                s.activityElapsed = 0
+            }
         }
         if s.glanceLeft > 0 {
             s.glanceLeft -= dt
@@ -1452,6 +1473,23 @@ public enum Cat {
         let x = CGFloat.random(in: span.lowerBound...span.upperBound)
         return abs(x - s.position.x) < Feel.Physics.arrivalSlop * 2
             ? nil : Intent(destination: surface.id, destinationX: x, move: .walk(x))
+    }
+
+    /// Which walkable surface a stimulus at this point belongs to, if any.
+    ///
+    /// Matched on the top edge, because that is what a stimulus carries and what he can
+    /// actually stand on: a window opening reports its own `y`, and an app activation reports
+    /// its window's `maxY`, which is the same line. Nearest rather than exact, with the same
+    /// tolerance that decides whether two ledges are one shelf, so a point or two of drift
+    /// between the raw snapshot and the built skyline cannot lose the match.
+    ///
+    /// Nil is a legitimate answer and not a failure. It means a thing he can look at but not
+    /// visit, which is most of what happens on a screen.
+    static func surfaceAt(_ p: CGPoint, in world: Skyline) -> Surface? {
+        world.surfaces
+            .filter { $0.targetable && !$0.spans.isEmpty }
+            .min { abs($0.y - p.y) < abs($1.y - p.y) }
+            .flatMap { abs($0.y - p.y) <= Feel.World.coplanarTolerance ? $0 : nil }
     }
 
     /// The point on these spans closest to `x`. Deterministic, unlike `landingX`: the router

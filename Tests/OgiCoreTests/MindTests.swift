@@ -251,3 +251,68 @@ private func win(_ id: CGWindowID, y: CGFloat, from: CGFloat, to: CGFloat) -> Su
     for _ in 0..<Feel.World.minAgePolls { _ = tracker.ingest(sky([floor, w])) }
     #expect(tracker.justAppeared == [.window(7)])
 }
+
+// MARK: - Task 5: promotion
+
+/// A world where the stimulus is somewhere he can actually get to, so a refusal to travel is
+/// about arousal rather than about routing.
+private func twoLedges() -> Skyline {
+    sky([surface(.menuBar, y: 1205, from: 0, to: 1920, z: -1),
+         win(7, y: 1100, from: 400, to: 900),
+         surface(.floor, y: 90, from: 0, to: 1920, z: .max)])
+}
+
+@Test func aCalmCatOnlyLooks() {
+    let world = twoLedges()
+    var cat = CatState(position: CGPoint(x: 300, y: 1205))
+    cat.support = .grounded(Perch(id: .menuBar, dx: 300))
+    cat.arousal = 0
+    cat.stimulus = Stimulus(kind: .windowOpened, at: CGPoint(x: 650, y: 1100))
+
+    cat = Cat.step(cat, world: world, dt: dt)
+    #expect(cat.lookingAt != nil, "he did not even look")
+    #expect(cat.intent == nil, "a calm cat set off after it; the dial does nothing")
+}
+
+@Test func aRousedCatGoesToLookProperly() {
+    let world = twoLedges()
+    var cat = CatState(position: CGPoint(x: 300, y: 1205))
+    cat.support = .grounded(Perch(id: .menuBar, dx: 300))
+    cat.arousal = 1
+    cat.stimulus = Stimulus(kind: .windowOpened, at: CGPoint(x: 650, y: 1100))
+
+    cat = Cat.step(cat, world: world, dt: dt)
+    #expect(cat.lookingAt != nil)
+    #expect(cat.intent?.destination == .window(7),
+            "a roused cat did not set off, got \(String(describing: cat.intent))")
+}
+
+@Test func heDoesNotAbandonWhatHeIsAlreadyDoing() {
+    // A stimulus arriving mid-trip must not re-target him, or he never completes anything and
+    // every window that opens resets him.
+    let world = twoLedges()
+    var cat = CatState(position: CGPoint(x: 300, y: 1205))
+    cat.support = .grounded(Perch(id: .menuBar, dx: 300))
+    cat.arousal = 1
+    cat.intent = Intent(destination: .floor, destinationX: 1700, move: .stepOff)
+    cat.stimulus = Stimulus(kind: .windowOpened, at: CGPoint(x: 650, y: 1100))
+
+    cat = Cat.step(cat, world: world, dt: dt)
+    #expect(cat.intent?.destination == .floor, "the new window hijacked a trip already underway")
+    #expect(cat.lookingAt != nil, "he should still have LOOKED at it")
+}
+
+@Test func heDoesNotSetOffForSomewhereHeCannotReach() {
+    // Task 1's fix, seen from the mind rather than from the router: a stimulus on an
+    // unreachable surface earns a look and nothing more.
+    let bar = surface(.menuBar, y: 1205, from: 0, to: 1920, z: -1)
+    let floor = surface(.floor, y: 90, from: 0, to: 1920, z: .max)
+    var cat = CatState(position: CGPoint(x: 300, y: 90))
+    cat.support = .grounded(Perch(id: .floor, dx: 300))
+    cat.arousal = 1
+    cat.stimulus = Stimulus(kind: .windowOpened, at: CGPoint(x: 1500, y: 1205))
+
+    cat = Cat.step(cat, world: sky([bar, floor]), dt: dt)
+    #expect(cat.lookingAt != nil)
+    #expect(cat.intent == nil, "he set off for the menu bar from the floor again")
+}

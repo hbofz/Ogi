@@ -260,3 +260,47 @@ func PROBE_heLooksAtWindowsThatOpen() {
     print(String(format: "glanced at %.1f%% of windows that opened", rate * 100))
     #expect(rate >= 0.90, "he ignored more than one window in ten")
 }
+
+/// B1's acceptance, roused half.
+///
+/// Measured against the windows that opened **while he was free to act**, not against every
+/// window. Most openings land while he is already on a trip, and the rule that a stimulus never
+/// re-targets a trip already underway is deliberate, so counting those as misses would be
+/// measuring how busy he happens to be rather than whether the gate works. The absolute rate is
+/// printed for information: it came out at 27.8% roused against 0% calm, which is the honest
+/// on-screen figure for how often a window opening actually moves him.
+@Test(.enabled(if: ProcessInfo.processInfo.environment["OGI_PROBE"] != nil))
+func PROBE_aRousedCatGoesToLook() {
+    let dt = Feel.Timing.fixedDT
+    func rates(arousal: Double) -> (all: Double, whenFree: Double) {
+        var approached = 0, opened = 0, free = 0
+        for run in 0..<40 {
+            let world = realDesktop()
+            var cat = CatState(position: CGPoint(x: 400 + CGFloat(run % 5) * 100, y: 1205))
+            cat.support = .grounded(Perch(id: .menuBar, dx: cat.position.x))
+            for tick in 0..<(120 * 600) {
+                cat.arousal = arousal            // held, so the measurement is about the gate
+                if tick % (120 * 60) == 0, tick > 0 {
+                    let wasFree = cat.intent == nil
+                    cat.stimulus = Stimulus(kind: .windowOpened, at: CGPoint(x: 650, y: 1110))
+                    opened += 1
+                    if wasFree { free += 1 }
+                    cat = Cat.step(cat, world: world, dt: dt)
+                    if wasFree, cat.intent?.destination == .window(1) { approached += 1 }
+                    continue
+                }
+                cat = Cat.step(cat, world: world, dt: dt)
+            }
+        }
+        return (Double(approached) / Double(max(opened, 1)),
+                Double(approached) / Double(max(free, 1)))
+    }
+    let calm = rates(arousal: 0)
+    let roused = rates(arousal: 1)
+    print(String(format: "approach rate: calm %.1f%%  roused %.1f%% (%.1f%% of those he was free for)",
+                 calm.all * 100, roused.all * 100, roused.whenFree * 100))
+    #expect(calm.all == 0, "a calm cat chased a window")
+    #expect(roused.whenFree >= 0.90,
+            "a roused and idle cat ignored a window he could have gone to look at")
+    #expect(roused.all > 0.20, "a roused cat almost never actually moves; the dial is decorative")
+}
