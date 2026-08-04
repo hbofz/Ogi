@@ -21,6 +21,28 @@ private func surface(_ id: SurfaceID, y: CGFloat, from: CGFloat, to: CGFloat, z:
 
 private let dt = Feel.Timing.fixedDT
 
+// MARK: - The anchors
+
+@Test func noveltyOutranksHabit() {
+    // A new window must beat any stale, familiar perch. Staleness and familiarity are the
+    // two urges a long-lived perch can max out; novelty must outweigh their sum, or a
+    // creature of habit is all he can ever be.
+    #expect(Feel.Taste.wNovelty > Feel.Taste.wStale + Feel.Taste.wFamiliar)
+}
+
+@Test func theLoungeWinsBareDesksButNotAlways() {
+    // The typical bare-floor stroll: no novelty, no height, no cursor, staleness half
+    // recovered, a few visits of familiarity, a middling walk. The lounge has to beat it,
+    // or the bare desktop stays a pacing pen — and by less than two temperatures, or it
+    // always wins and he never strolls at all.
+    let stroll = Feel.Taste.wStale * 0.5
+        + Feel.Taste.wFamiliar * 0.5
+        - Feel.Taste.wEffort * 0.3
+    let edge = Feel.Taste.loungeBase - stroll
+    #expect(edge > 0, "the lounge loses to an ordinary bare-floor stroll")
+    #expect(edge < 2 * Feel.Taste.temperature, "the lounge always wins; he would never stroll")
+}
+
 // MARK: - Task 1: session memory
 
 @Test func theLaunchWorldIsNeverNovel() {
