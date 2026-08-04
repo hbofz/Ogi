@@ -46,12 +46,17 @@ He still **goes behind windows that are in front of him**, which nothing else on
 does. He still falls when you close the window under him. He settles when you stop typing, and
 freezes when your microphone goes live.
 
-**None of the new behaviour has been seen on a screen yet.** It is covered by 152 unit tests
-and by simulation (the descent was soaked at 400 runs of 600 seconds, and he was stranded in
-none of them), but every timing was tuned against that simulation rather than against watching
-him, so some of it will read wrong and need retuning. He also still lives on one display: he
-survives a monitor being plugged in, unplugged, or rearranged, and he survives a Space change,
-but he does not cross to another screen.
+Set him down on a window's face and he **grabs it and climbs**, whatever your cursor was doing
+at the time. He can climb to get back up, too: jump at a face, catch it on the way past, and
+haul himself onto the ledge. He will not grab a face he is *falling* past, which is deliberate,
+because catching every fall at the first window would kill the fall.
+
+It is covered by 169 unit tests and by simulation (the descent was soaked at 400 runs of 600
+seconds, and he was stranded in none of them). The first pass was tuned entirely against that
+simulation; watching him for fifteen minutes then corrected four things it could not see, and
+more of it will need the same. He also still lives on one display: he survives a monitor being
+plugged in, unplugged, or rearranged, and he survives a Space change, but he does not cross to
+another screen.
 
 He is a ginger tabby, drawn across 79 frames in seventeen animations. Cursor-tracking eyes are
 built and currently switched off: painting a live pupil needs an empty socket in the artwork,
