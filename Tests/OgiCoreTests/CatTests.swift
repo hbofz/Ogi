@@ -93,6 +93,85 @@ private let dt = Feel.Timing.fixedDT
     #expect(cat.support == .falling)
 }
 
+// MARK: - Edges
+
+/// A ledge from x=400 to x=900 at y=600, with the floor a long way below it at y=100.
+private func ledgeWorld() -> Skyline {
+    sky([surface(.window(1), y: 600, from: 400, to: 900),
+         surface(.floor, y: 100, from: 0, to: 1920, z: .max)])
+}
+
+@Test func heWalksOffTheEndOfALedgeAndFalls() {
+    let world = ledgeWorld()
+    var cat = CatState(position: CGPoint(x: 880, y: 600))
+    cat.support = .grounded(Perch(id: .window(1), dx: 480))
+    cat.facing = 1
+    cat.goal = .walkTo(1200)          // past the right-hand end at 900
+
+    for _ in 0..<600 {
+        cat = Cat.step(cat, world: world, dt: dt)
+        if case .falling = cat.support { break }
+    }
+
+    guard case .falling = cat.support else {
+        Issue.record("still grounded at x=\(Int(cat.position.x)); clampToSurface is still pinning him")
+        return
+    }
+}
+
+@Test func heTurnsAroundAtAWallInsteadOfStopping() {
+    // The floor's left edge has nothing below it, so it is a wall, not a cliff.
+    let world = ledgeWorld()
+    var cat = CatState(position: CGPoint(x: 30, y: 100))
+    cat.support = .grounded(Perch(id: .floor, dx: 30))
+    cat.facing = -1
+    cat.goal = .walkTo(-500)
+
+    for _ in 0..<600 { cat = Cat.step(cat, world: world, dt: dt) }
+
+    guard case .grounded = cat.support else {
+        Issue.record("he fell off the bottom of the world")
+        return
+    }
+    #expect(cat.position.x >= 0)
+    #expect(cat.facing == 1)          // turned around
+}
+
+@Test func edgeAheadFindsTheEndOfSolidGround() {
+    let s = ledgeWorld().surface(.window(1))!
+    #expect(Cat.edgeAhead(from: 500, facing: 1, on: s) == 900)
+    #expect(Cat.edgeAhead(from: 500, facing: -1, on: s) == 400)
+    #expect(Cat.edgeAhead(from: 5000, facing: 1, on: s) == nil)
+}
+
+@MainActor
+@Test func heArrivesStandingOnSolidGround() {
+    // The notch is a hole in the menu bar's `solid` — a hardware cutout with no pixels
+    // behind it — so the doorway he steps out of is its *edge*. Grounding him at its centre
+    // stands him on nothing, and the edge test drops him on the first tick after launch.
+    let notched = ScreenGeometry(frame: CGRect(x: 0, y: 0, width: 1920, height: 1243),
+                                 visibleFrame: CGRect(x: 0, y: 90, width: 1920, height: 1115),
+                                 notch: CGRect(x: 830, y: 1205, width: 200, height: 38))
+    let world = World.build(windows: [], screen: notched, ownPID: 0)
+    let bar = world.surface(.menuBar)!
+    var cat = OgiApp.arrival(notch: notched.notch!, bar: bar, screenMaxX: notched.frame.maxX)
+
+    guard case .grounded(let perch) = cat.support else {
+        Issue.record("he arrives in mid-air")
+        return
+    }
+    #expect(bar.solid.contains { $0.contains(bar.extent.lowerBound + perch.dx) },
+            "he was placed where the menu bar has no pixels behind it")
+
+    // ...and he walks out of the doorway rather than dropping straight through it.
+    for _ in 0..<Int(2 / dt) { cat = Cat.step(cat, world: world, dt: dt) }
+    guard case .grounded = cat.support else {
+        Issue.record("he fell out of the world on launch, at x=\(Int(cat.position.x))")
+        return
+    }
+    #expect(cat.position.x > notched.notch!.maxX, "he never left the doorway")
+}
+
 @Test func squashDepthIsMonotonicInImpactSpeed() {
     let ground = surface(.window(1), y: 100, from: 0, to: 500)
     let world = sky([ground])
@@ -212,6 +291,9 @@ private let dt = Feel.Timing.fixedDT
     let ground = surface(.window(1), y: 500, from: 0, to: 900)
     var cat = CatState(position: CGPoint(x: 400, y: 500))
     cat.support = .grounded(Perch(id: .window(1), dx: 400))
+    // He must not invent plans of his own here: an idea five seconds in changes his activity
+    // and resets the very clock this test needs to be stale. That was a 1-in-10 flake.
+    cat.restLeft = .greatestFiniteMagnitude
     for _ in 0..<600 { cat = Cat.step(cat, world: sky([ground]), dt: dt) }   // let time pile up
     #expect(cat.activityElapsed > 1, "needed a stale clock to make this test mean anything")
 

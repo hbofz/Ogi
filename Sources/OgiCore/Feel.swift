@@ -14,6 +14,9 @@ public enum Feel {
         public static let terminalVelocity: CGFloat = 1400
         /// Sideways nudge when the ground vanishes underfoot, so he doesn't drop straight down.
         public static let slipKick: CGFloat = 40
+        /// How far past the edge his centre travels before the ground is considered gone.
+        /// Small: a cat's centre of mass crosses the lip before he commits.
+        public static let edgeTolerance: CGFloat = 2
 
         public static let walkSpeed: CGFloat = 46          // px/s
         public static let runSpeed: CGFloat = 118

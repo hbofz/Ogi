@@ -188,8 +188,11 @@ public enum Cat {
                 s.lastPerchOrigin = nil
                 return s
             }
-            // Walked off, or the window shrank out from under him.
-            guard perch.dx >= 0, perch.dx <= surface.extent.length else {
+            // The window shrank out from under him. A backstop: walking off is handled at
+            // the edge itself, below, so what reaches this is a surface that moved rather
+            // than a cat that did.
+            let standingOn = surface.extent.lowerBound + perch.dx
+            guard surface.solid.contains(where: { $0.contains(standingOn) }) else {
                 s.support = .falling
                 s.activity = .slip
                 s.activityElapsed = 0
@@ -349,18 +352,46 @@ public enum Cat {
                 s.activity = .idle
                 s.activityElapsed = 0
                 s.restLeft = Feel.Timing.restMin + Double.random(in: 0...Feel.Timing.restJitter)
-            } else {
-                s.facing = dx > 0 ? 1 : -1
-                // Long trips are covered at a trot. A cat crossing a room does not stroll,
-                // and it is also the only thing that ever plays the run frames.
-                s.hurrying = abs(dx) > Feel.Physics.hurryDistance && s.languor < 0.5
-                let base = s.hurrying ? Feel.Physics.runSpeed : Feel.Physics.walkSpeed
-                let speed = base * (1 - CGFloat(s.languor) * 0.45)
-                let step = min(abs(dx), speed * CGFloat(dt)) * s.facing
-                perch.dx = clampToSurface(perch.dx + step, surface)
-                s.support = .grounded(perch)
-                s.activity = .walk
+                break
             }
+            s.facing = dx > 0 ? 1 : -1
+            // Long trips are covered at a trot. A cat crossing a room does not stroll,
+            // and it is also the only thing that ever plays the run frames.
+            s.hurrying = abs(dx) > Feel.Physics.hurryDistance && s.languor < 0.5
+            let base = s.hurrying ? Feel.Physics.runSpeed : Feel.Physics.walkSpeed
+            let speed = base * (1 - CGFloat(s.languor) * 0.45)
+            let step = min(abs(dx), speed * CGFloat(dt)) * s.facing
+
+            let worldX = surface.extent.lowerBound + perch.dx
+            let nextX = worldX + step
+            if let edge = edgeAhead(from: worldX, facing: s.facing, on: surface),
+               (s.facing > 0 ? nextX > edge : nextX < edge) {
+                if isCliff(at: edge, below: surface.y, world: world) {
+                    // He walked off. Gravity was always there; nothing was ever allowed
+                    // to reach it.
+                    s.support = .falling
+                    s.activity = .slip
+                    s.activityElapsed = 0
+                    s.velocity = CGVector(dx: s.facing * Feel.Physics.slipKick, dy: 0)
+                    s.position.x = edge + s.facing * Feel.Physics.edgeTolerance
+                    s.goal = nil
+                    s.drift = 0
+                    s.lastPerchOrigin = nil
+                } else {
+                    // Nothing below. The end of the world, not a ledge: he turns around.
+                    perch.dx = edge - surface.extent.lowerBound
+                    s.support = .grounded(perch)
+                    s.facing = -s.facing
+                    s.goal = nil
+                    s.activity = .idle
+                    s.activityElapsed = 0
+                    s.restLeft = Feel.Timing.restMin
+                }
+                break
+            }
+            perch.dx += step
+            s.support = .grounded(perch)
+            s.activity = .walk
 
         case .jumpTo(let destID, let destX):
             // The 100ms crouch. Non-negotiable: it is the entire difference between a cat
@@ -425,8 +456,20 @@ public enum Cat {
         return CGVector(dx: (toX - from.x) / flight * (1 + error), dy: vy)
     }
 
-    private static func clampToSurface(_ dx: CGFloat, _ surface: Surface) -> CGFloat {
-        min(max(dx, 0), surface.extent.length)
+    /// Where solid ground runs out in the direction he is facing, in world x.
+    /// Nil means he is not standing on solid ground at all.
+    ///
+    /// This replaces `clampToSurface`, which pinned him inside `extent` and thereby made the
+    /// fall-off guard in `step` unreachable. He could not walk off anything.
+    public static func edgeAhead(from worldX: CGFloat, facing: CGFloat,
+                                 on surface: Surface) -> CGFloat? {
+        guard let range = surface.solid.first(where: { $0.contains(worldX) }) else { return nil }
+        return facing > 0 ? range.upperBound : range.lowerBound
+    }
+
+    /// Is there anywhere to land past that edge? Cliff if yes, wall if no.
+    static func isCliff(at x: CGFloat, below y: CGFloat, world: Skyline) -> Bool {
+        world.supportBelow(x: x, from: y - 1, to: -.greatestFiniteMagnitude) != nil
     }
 }
 

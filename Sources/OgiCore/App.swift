@@ -96,12 +96,6 @@ public final class OgiApp: NSObject, NSApplicationDelegate {
     }
 
     /// First launch: the notch opens and a cat walks out. That is the entire onboarding.
-    ///
-    /// He cannot be *rendered* inside the notch — it is a hardware cutout with no pixels
-    /// behind it — but he does not need to be. He is near-black and the cutout is black, so
-    /// parking him at the notch's centre makes him genuinely invisible, and walking sideways
-    /// brings him out into the lit menu bar strip. A black cat leaving a black doorway,
-    /// achieved by the geometry rather than in spite of it.
     private func arrival(on screen: NSScreen) -> CatState {
         // OGI_START="x,y" drops him somewhere specific instead. Test scaffolding.
         if let env = ProcessInfo.processInfo.environment["OGI_START"] {
@@ -117,15 +111,29 @@ public final class OgiApp: NSObject, NSApplicationDelegate {
             return CatState(position: CGPoint(x: screen.frame.midX, y: screen.frame.maxY - 60))
         }
 
-        var c = CatState(position: CGPoint(x: notch.midX, y: bar.y))
-        c.support = .grounded(Perch(id: .menuBar, dx: notch.midX - bar.extent.lowerBound))
-        c.activity = .walk
+        let c = OgiApp.arrival(notch: notch, bar: bar, screenMaxX: screen.frame.maxX)
+        homeX = c.position.x        // the doorway he came out of is the one he goes back into
+        return c
+    }
+
+    /// He steps out of the doorway, not out of the middle of it. The notch is a hardware
+    /// cutout with no pixels behind it, which is precisely why it is a hole in the menu
+    /// bar's `solid`: standing at its centre is standing on nothing, and he falls on the
+    /// first tick. So he starts on its lip, half in the black, and walks out into the lit
+    /// strip — a black cat leaving a black doorway, achieved by the geometry rather than in
+    /// spite of it.
+    ///
+    /// Pure and static so the launch placement is testable without an NSApplication.
+    static func arrival(notch: CGRect, bar: Surface, screenMaxX: CGFloat) -> CatState {
         // Out the side with more room, and far enough to clear the cutout entirely.
-        let goRight = (screen.frame.maxX - notch.maxX) > notch.minX
+        let goRight = (screenMaxX - notch.maxX) > notch.minX
+        let doorway = goRight ? notch.maxX : notch.minX
+        var c = CatState(position: CGPoint(x: doorway, y: bar.y))
+        c.support = .grounded(Perch(id: .menuBar, dx: doorway - bar.extent.lowerBound))
+        c.activity = .walk
         c.goal = .walkTo(goRight ? notch.maxX + Feel.Shape.width : notch.minX - Feel.Shape.width)
         c.facing = goRight ? 1 : -1
         c.restLeft = Feel.Timing.restMin
-        homeX = notch.midX
         return c
     }
 
@@ -158,9 +166,13 @@ public final class OgiApp: NSObject, NSApplicationDelegate {
         cat.listening = false
         cat.repose = .awake
         cat.goal = .walkTo(homeX)
-        cat.support = .grounded(Perch(id: .menuBar,
-                                      dx: cat.position.x - (skyline.surface(.menuBar)?.extent.lowerBound ?? 0)))
-        cat.position.y = skyline.surface(.menuBar)?.y ?? cat.position.y
+        let bar = skyline.surface(.menuBar)
+        // He steps onto the bar wherever he happens to be — unless that is under the notch,
+        // which is a hole in it. From there there is nothing to step onto, so he is already
+        // at the doorway as far as the walk home is concerned.
+        let startX = bar?.solid.contains { $0.contains(cat.position.x) } == true ? cat.position.x : homeX
+        cat.support = .grounded(Perch(id: .menuBar, dx: startX - (bar?.extent.lowerBound ?? 0)))
+        cat.position = CGPoint(x: startX, y: bar?.y ?? cat.position.y)
         log("going home")
         // Never hang on the way out. Generous enough to cover the longest walk home from
         // anywhere on a wide screen, because quitting must never wait on the animation.

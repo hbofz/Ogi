@@ -52,8 +52,10 @@ private func standing(at x: CGFloat, on s: Surface) -> CatState {
     #expect(cat.facing == 1)
 }
 
-@Test func walkingIsClampedToTheSurface() {
-    // He should never walk off the end just because a destination was out of bounds.
+@Test func walkingIntoAWallKeepsHimOnTheSurface() {
+    // Nothing is below this ledge, so both its ends are walls rather than cliffs: he turns
+    // around instead of stepping off, however far out of bounds the destination is, and he
+    // stays inside it for the whole half-minute of wandering that follows.
     let ledge = surface(.window(1), y: 500, from: 100, to: 300)
     var cat = standing(at: 200, on: ledge)
     cat.goal = .walkTo(9999)
