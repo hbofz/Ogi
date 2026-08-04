@@ -19,7 +19,19 @@ public enum Feel {
         /// mass has only just crossed.
         public static let edgeTolerance: CGFloat = 2
         /// How close to the edge counts as "at the edge" for the approach and the tell.
+        ///
+        /// Also where he stops to look: it is roughly half his drawn width, so a cat whose
+        /// midline is this far back has his nose over the lip and his paws on solid ground.
         public static let edgeApproach: CGFloat = 26
+        /// Drop at which the hesitation is longest and the reluctance strongest.
+        public static let edgeHesitationDrop: CGFloat = 800
+        /// How often he turns down a drop that deep, having walked over to look at it. Below
+        /// half on purpose: the reluctance has to be visible without stranding him up there,
+        /// and he can always change his mind a minute later.
+        public static let edgeRefusal: Double = 0.45
+        /// How far back along the ledge he retreats when he thinks better of it. Far enough
+        /// that the next idea starts from somewhere that is not the lip.
+        public static let edgeRetreat: CGFloat = 70
 
         public static let walkSpeed: CGFloat = 46          // px/s
         public static let runSpeed: CGFloat = 118
@@ -123,6 +135,14 @@ public enum Feel {
         public static let righting: TimeInterval = 0.18
         /// How long he holds still after grabbing on. The "oh no" beat.
         public static let clingHold: TimeInterval = 0.7
+
+        /// The hold at the lip, before and after scaling with the drop. This is the same idea
+        /// as `anticipation` one level up: the crouch is the difference between a cat and a
+        /// teleporting rectangle, and this is the difference between the cat jumped and the
+        /// cat decided to jump. Long enough to read as thinking, short enough not to look
+        /// broken. Tune these before anything else if the hold does not land.
+        public static let edgeHesitationMin: TimeInterval = 0.35
+        public static let edgeHesitationMax: TimeInterval = 1.6
 
         /// OGI_RESTLESS=1 collapses these so his behaviour can actually be watched.
         /// Living with him wants long pauses; testing him does not.

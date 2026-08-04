@@ -127,6 +127,7 @@ public enum Sprites {
         if dangling { return .held }
         switch activity {
         case .walk:                 return hurrying ? .run : .walk
+        case .edgeLook:             return .lookDown
         case .crouch:               return .jump      // the wind-up frames
         case .airborne:             return .jump
         // Both ways he leaves the ground without choosing to: his platform vanished, or you

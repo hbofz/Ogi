@@ -352,6 +352,14 @@ private func bareDesktop() -> Skyline {
     var sawStepOff = false, launched = false
     var landedOn: SurfaceID?
     for _ in 0..<Int(60 / dt) {
+        // Re-issued every time he gives up on it, like the notch test above. Wanting to be on
+        // the floor is now something he can think better of at the lip — that is the tell, and
+        // the reluctance in it is deliberate — so what has to be tested here is that WHEN he
+        // goes down, he goes down by stepping off. A cat who asks once and is talked out of it
+        // by his own better judgement would fail this for the wrong reason.
+        if cat.intent == nil {
+            cat.intent = Intent(destination: .floor, destinationX: 200, move: .walk(cat.position.x))
+        }
         cat = Cat.step(cat, world: world, dt: dt)
         if cat.intent?.move == .stepOff { sawStepOff = true }
         if cat.velocity.dy > 0 { launched = true }

@@ -1,4 +1,5 @@
 import Testing
+import Foundation
 import CoreGraphics
 @testable import OgiCore
 
@@ -675,4 +676,189 @@ private let notched = ScreenGeometry(frame: CGRect(x: 0, y: 0, width: 1920, heig
     }
     #expect(p.id == .window(1))
     #expect(cat.position.x >= 410, "he is standing where no window is drawn")
+}
+
+// MARK: - The tell
+
+/// He is on the ledge at 700 with a reason to be on the floor. `stepOffLip` picks the right-hand
+/// lip at 900, since that is the one on the way to x=1200.
+private func steppingOff() -> CatState {
+    var cat = CatState(position: CGPoint(x: 700, y: 600))
+    cat.support = .grounded(Perch(id: .window(1), dx: 300))
+    cat.facing = 1
+    cat.intent = Intent(destination: .floor, destinationX: 1200, move: .stepOff)
+    return cat
+}
+
+@Test func heLooksBeforeHeStepsOff() {
+    // The whole point of the task. Approach, slow, stop SHORT of the lip, put his head over
+    // and hold — and only then go. It is the difference between the cat jumped and the cat
+    // decided to jump.
+    let world = ledgeWorld()
+    var cat = steppingOff()
+
+    // The first look only. He may turn this drop down and come back to it, and a second
+    // episode is a second decision rather than more of this one.
+    var looked = 0, lookedAt: CGFloat = 0, movedWhileLooking: CGFloat = 0
+    for _ in 0..<1800 {
+        cat = Cat.step(cat, world: world, dt: dt)
+        if cat.activity == .edgeLook {
+            if looked == 0 { lookedAt = cat.position.x }
+            looked += 1
+            movedWhileLooking = max(movedWhileLooking, abs(cat.position.x - lookedAt))
+        } else if looked > 0 {
+            break
+        }
+        if case .falling = cat.support { break }
+    }
+
+    #expect(looked > 0, "he walked straight off the lip without a moment's thought")
+    // Long enough to read as thinking, at the 500pt drop this ledge has.
+    #expect(Double(looked) * dt >= Cat.hesitation(forDrop: 500) - 2 * dt)
+    // Stopped short of the lip at 900, on the ledge, not hanging over it.
+    #expect(lookedAt < 900 && lookedAt > 900 - Feel.Physics.edgeApproach * 2,
+            "he looked from x=\(Int(lookedAt)); the lip is at 900")
+    #expect(movedWhileLooking < 0.01, "he is still drifting toward the edge while looking")
+}
+
+@Test func aDeeperDropGetsALongerLook() {
+    #expect(Cat.hesitation(forDrop: 60) < Cat.hesitation(forDrop: 900))
+    #expect(Cat.hesitation(forDrop: 0) == Feel.Timing.edgeHesitationMin)
+    #expect(Cat.hesitation(forDrop: 99_999) == Feel.Timing.edgeHesitationMax)
+}
+
+@Test func aDeeperDropIsLessLikelyToBeTaken() {
+    // This is where the reluctance lives. The solver has no maximum drop on purpose — a deeper
+    // target is physically MORE reachable — so the judgement has to be behavioural.
+    #expect(Cat.commitChance(forDrop: 40) > 0.9)
+    #expect(Cat.commitChance(forDrop: 40) > Cat.commitChance(forDrop: 900))
+    #expect(Cat.commitChance(forDrop: 99_999) > 0, "he would never come down off anything")
+}
+
+@Test func heSometimesBacksOffAHighDrop() {
+    let world = ledgeWorld()
+    var backedOff = 0
+    for _ in 0..<60 {
+        var cat = steppingOff()
+        for _ in 0..<2400 {
+            cat = Cat.step(cat, world: world, dt: dt)
+            if case .falling = cat.support { break }
+        }
+        if case .grounded = cat.support { backedOff += 1 }
+    }
+    // A 500pt drop should be declined sometimes, and taken sometimes.
+    #expect(backedOff > 2, "he took every single one; the reluctance does nothing")
+    #expect(backedOff < 58, "he never goes anywhere")
+}
+
+@Test func backingOffDoesNotBecomeAPacingLoop() {
+    // A cat pacing to the same lip for ever is worse than one that jumps. Two things have to
+    // hold: a refusal has to put a real gap before the next approach (he goes and does
+    // something else), and he has to get down eventually.
+    let world = ledgeWorld()
+    var looks = 0, left = 0, tightest = TimeInterval.infinity, closest: CGFloat = 0
+    for _ in 0..<40 {
+        var cat = steppingOff()
+        var wasLooking = false, sinceLook = TimeInterval.infinity
+        for _ in 0..<Int(40 / dt) {
+            cat = Cat.step(cat, world: world, dt: dt)
+            sinceLook += dt
+            let looking = cat.activity == .edgeLook
+            if looking, !wasLooking {
+                looks += 1
+                tightest = min(tightest, sinceLook)
+                sinceLook = 0
+            }
+            wasLooking = looking
+            if case .falling = cat.support { left += 1; break }
+            if !looking { closest = max(closest, cat.position.x) }
+        }
+    }
+    #expect(looks > 40, "nobody refused, so the loop this guards against never happened")
+    #expect(tightest > Feel.Timing.restMin,
+            "he went back to the lip \(tightest)s after turning it down: that is pacing")
+    #expect(left > 20, "\(left)/40 got down; a refusal has become a dead end")
+    #expect(closest <= 900, "he wandered off the ledge somewhere he was not deciding to")
+}
+
+@Test func theHoldYieldsToTheMicGoingLive() {
+    // Everything that already interrupts him has to keep interrupting him. `listening` and
+    // `.asleep` both return before the movement code, so the hold must sit behind them.
+    let world = ledgeWorld()
+    var cat = steppingOff()
+    for _ in 0..<1800 {
+        cat = Cat.step(cat, world: world, dt: dt)
+        if cat.activity == .edgeLook { break }
+    }
+    #expect(cat.activity == .edgeLook, "he never got to the lip, so this proves nothing")
+
+    cat.listening = true
+    cat = Cat.step(cat, world: world, dt: dt)
+    #expect(cat.activity == .alert)
+    #expect(cat.intent == nil)
+
+    var asleep = steppingOff()
+    for _ in 0..<1800 {
+        asleep = Cat.step(asleep, world: world, dt: dt)
+        if asleep.activity == .edgeLook { break }
+    }
+    asleep.repose = .asleep
+    asleep = Cat.step(asleep, world: world, dt: dt)
+    #expect(asleep.activity == .sleep)
+    #expect(asleep.intent == nil)
+}
+
+@Test func heNeverLooksOverTheNotch() {
+    // The interior gap is a trap, not a ledge: there is a floor a thousand points under it, so
+    // a drop measured directly reports a cliff. He must never hesitate at one, because
+    // hesitating at one means considering it.
+    let world = World.build(windows: [], screen: notched, ownPID: 99)
+    let bar = world.surface(.menuBar)!
+    let notch = notched.notch!
+    var cat = CatState(position: CGPoint(x: notch.maxX + 40, y: bar.y))
+    cat.support = .grounded(Perch(id: .menuBar, dx: notch.maxX + 40 - bar.extent.lowerBound))
+    cat.facing = -1
+    // Aimed at the floor *under the cutout*: the nearest way down is through it.
+    cat.intent = Intent(destination: .floor, destinationX: notch.midX, move: .stepOff)
+
+    var lookedNear = CGFloat.greatestFiniteMagnitude
+    var westmost = CGFloat.greatestFiniteMagnitude
+    for _ in 0..<Int(60 / dt) {
+        cat = Cat.step(cat, world: world, dt: dt)
+        // Until he leaves the bar, however he leaves it. Threading a jump down through the
+        // doorway is legal and is not what this is about.
+        guard case .grounded(let p) = cat.support, p.id == .menuBar else { break }
+        westmost = min(westmost, cat.position.x)
+        if cat.activity == .edgeLook { lookedNear = min(lookedNear, cat.position.x) }
+    }
+    #expect(westmost >= notch.maxX, "he stood in the cutout at x=\(Int(westmost))")
+    #expect(lookedNear < .greatestFiniteMagnitude, "he never looked at anything")
+    #expect(lookedNear > notch.maxX + Feel.Physics.edgeApproach,
+            "he put his head over the cutout at x=\(Int(lookedNear))")
+}
+
+@MainActor
+@Test func theLookPlaysTheWholeLookDownSheetAndThenHolds() {
+    // Checked frame by frame because the alternative is watching it. A non-looping clip handed
+    // a stale clock renders its last frame immediately, which is how `sitdown` and `curl` both
+    // shipped having never once played: here that would mean he is already leaning over the
+    // edge on the tick he arrives at it, and the lean is the tell.
+    let world = ledgeWorld()
+    var cat = steppingOff()
+    var indices: [Int] = []
+    var clips: Set<Sprites.Clip> = []
+    for _ in 0..<1800 {
+        cat = Cat.step(cat, world: world, dt: dt)
+        guard cat.activity == .edgeLook else {
+            if !indices.isEmpty { break }       // the first look only
+            continue
+        }
+        let f = Sprites.frame(for: cat, pose: Body.Pose())
+        clips.insert(f.clip)
+        indices.append(f.index)
+    }
+    #expect(clips == [.lookDown])
+    #expect(indices.first == 0, "he snapped straight to a leaning frame")
+    #expect(indices.last == Sprites.Clip.lookDown.count - 1, "the sheet never reached the hold")
+    #expect(indices == indices.sorted(), "the frames played out of order")
 }

@@ -69,6 +69,7 @@ public enum Activity: Sendable, Equatable {
     case scruffed   // limp, legs tucked, dangling
     case righting   // the twist, mid-air
     case walk
+    case edgeLook   // stopped at the lip, head over the side, deciding
     case crouch     // the 100ms wind-up before every jump
     case brace      // riding a window that is being dragged
     case slip       // the ground just went away
@@ -605,6 +606,13 @@ public enum Cat {
         // A step-off is a walk that does not stop, so it is resolved into one here and the
         // walking code stays in one place. Resolved fresh each tick rather than written back,
         // so a lip that stops being a lip — the window under it closing, say — is noticed.
+        //
+        // ...but not immediately. He walks to the lip, stops short of it, puts his head over
+        // and HOLDS, and only then commits or thinks better of it. That hold is the same idea
+        // as the crouch before a jump, one level up: it is the difference between the cat
+        // jumped and the cat decided to jump. `stepOffLip` has already refused every lip with
+        // nothing under it, so he can only ever hesitate at a real drop — never at a wall, and
+        // never at the interior gap, which he must not so much as consider.
         var move = intent.move
         if case .stepOff = move {
             guard let lip = stepOffLip(from: s, on: surface, toward: intent.destinationX,
@@ -612,10 +620,64 @@ public enum Cat {
                 settle(&s)      // walls both ways: there is no way down from here after all
                 return s
             }
-            // Aimed past the lip rather than at it, by more than `arrivalSlop`: aim AT it and
-            // the arrival check fires first, he re-plans, gets `.stepOff` back, and stands
-            // there deciding to step off for ever.
-            move = .walk(lip.x + lip.dir * Feel.Physics.edgeApproach)
+            let toLip = abs(lip.x - s.position.x)
+
+            if s.activity == .edgeLook {
+                s.perchSpeed = 0
+                // The drop he is weighing, measured this tick by the same rule that chose the
+                // lip. A deeper one is looked at for longer.
+                let drop = s.footing.dropAhead ?? 0
+                guard s.activityElapsed >= hesitation(forDrop: drop) else { return s }
+
+                guard Double.random(in: 0...1) < commitChance(forDrop: drop) else {
+                    // Thought better of it. He turns, walks a little way back along the ledge
+                    // and sits down pretending he was never considering it.
+                    //
+                    // The retreat is a destination on his OWN surface, and that is what stops a
+                    // refusal from becoming a pace: `advance` re-plans toward whatever the
+                    // intent says, so a retreat that kept the old destination would route him
+                    // straight back to the lip he just turned down, for ever. Giving the trip up
+                    // is the honest reading anyway — he decided not to go — and the walk back
+                    // plus the rest at the end of it is what puts a real gap before he next
+                    // thinks about it.
+                    s.facing = -lip.dir
+                    let back = lip.x - lip.dir * Feel.Physics.edgeRetreat
+                    if let x = nearestSpanX(to: back, in: surface.solid),
+                       abs(x - s.position.x) > Feel.Physics.arrivalSlop * 3 {
+                        s.intent = Intent(destination: surface.id, destinationX: x, move: .walk(x))
+                        s.activity = .walk
+                    } else {
+                        settle(&s)          // nowhere to retreat to; he just turns round
+                    }
+                    return s
+                }
+                // Committed, and written back rather than re-resolved, because it is a decision
+                // and not a reading: leave it as `.stepOff` and the next tick finds him at the
+                // lip again and he stands there deciding for ever. Aimed past the lip, so the
+                // fall starts through the same code as any other walked-off edge.
+                move = .walk(lip.x + lip.dir * Feel.Physics.edgeApproach)
+                s.intent?.move = move
+                s.activity = .walk
+
+            } else if toLip <= Feel.Physics.edgeApproach + Feel.Physics.brakingDistance {
+                // Close enough. He plants and puts his head over the side.
+                s.facing = lip.dir
+                s.perchSpeed = 0
+                s.activity = .edgeLook
+                return s
+
+            } else {
+                // The approach, aimed to stop `edgeApproach` SHORT of the lip — roughly half
+                // his drawn width, so he ends up with his nose over the edge and his paws on
+                // solid ground. It is the ordinary walk, so the ramp and the braking are the
+                // ordinary ones and there is no second notion of speed anywhere.
+                //
+                // The plant above intercepts one braking distance outside that mark, so the
+                // walk can never actually *arrive*. That matters: arriving calls `advance`, and
+                // from this close to a lip a jump down suddenly clears his own ledge, so
+                // re-planning here would quietly turn the whole tell into a leap.
+                move = .walk(lip.x - lip.dir * Feel.Physics.edgeApproach)
+            }
         }
 
         switch move {
@@ -749,6 +811,32 @@ public enum Cat {
             break   // resolved into a walk above; unreachable
         }
         return s
+    }
+
+    /// How long he looks before he decides. Scales with the drop, because a cat weighs a big
+    /// one for longer.
+    public static func hesitation(forDrop drop: CGFloat) -> TimeInterval {
+        Feel.Timing.edgeHesitationMin
+            + (Feel.Timing.edgeHesitationMax - Feel.Timing.edgeHesitationMin) * ramp(drop)
+    }
+
+    /// Chance he goes through with it. Short drops nearly always; long ones sometimes not.
+    ///
+    /// **This is where the reluctance lives.** The physics deliberately has no maximum drop —
+    /// under a minimum-energy launch a deeper target is *more* reachable, not less — so the
+    /// judgement has to be behavioural. A cat that cannot make the jump is a platformer
+    /// character; a cat that can and declines is a cat.
+    ///
+    /// Never zero, deliberately: a drop he will not take under any circumstances is a cat
+    /// stranded on the menu bar for the rest of the session, and the way down from there is
+    /// the app's entire demo.
+    public static func commitChance(forDrop drop: CGFloat) -> Double {
+        1 - Feel.Physics.edgeRefusal * ramp(drop)
+    }
+
+    /// 0 at no drop at all, 1 at the drop where he is as wary as he ever gets.
+    private static func ramp(_ drop: CGFloat) -> Double {
+        Double(min(1, max(0, drop / Feel.Physics.edgeHesitationDrop)))
     }
 
     /// Which lip to walk off, given where he is ultimately trying to end up: the nearest one to
