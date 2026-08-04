@@ -204,3 +204,31 @@ func PROBE_currentBehaviour() {
     report("a busier desktop (4 windows)", busyDesktop(), runs: 40, seconds: 600)
     report("a bare desktop", bareDesktop(), runs: 40, seconds: 600)
 }
+
+/// Task 1's acceptance. Baseline before the fix, measured 2026-08-04 over 40 x 600s:
+/// `floor -> menuBar` was 49.1% of every decision, and 47.4% of intents reached the surface
+/// they named. Both are properties of a whole simulated run and cannot be asserted from a
+/// single call to `nextMove`.
+@Test(.enabled(if: ProcessInfo.processInfo.environment["OGI_PROBE"] != nil))
+func PROBE_heDoesNotPaceTowardTheUnreachable() {
+    var impossible = 0, total = 0, arrived = 0
+    for i in 0..<40 {
+        let starts: [(CGPoint, SurfaceID)] = [
+            (CGPoint(x: 400, y: 1205), .menuBar), (CGPoint(x: 900, y: 90), .floor),
+        ]
+        var (p, id) = starts[i % starts.count]
+        let world = bareDesktop()
+        if let s = world.surface(id) { p.y = s.y }
+        let r = simulate(world, seconds: 600, startAt: p, startPerch: id)
+        arrived += r.arrived
+        for d in r.decisions {
+            total += 1
+            if d.from == .floor && d.to == .menuBar { impossible += 1 }
+        }
+    }
+    let impossibleRate = Double(impossible) / Double(max(total, 1))
+    let arrivalRate = Double(arrived) / Double(max(total, 1))
+    print(String(format: "impossible %.1f%%  arrived %.1f%%", impossibleRate * 100, arrivalRate * 100))
+    #expect(impossibleRate == 0, "he still sets out for the menu bar from the floor")
+    #expect(arrivalRate >= 0.80, "under 80% of his intents reach the surface they named")
+}

@@ -1131,7 +1131,7 @@ public enum Cat {
     /// **This is final.** v2b's mind replaces only the code that chooses a destination.
     public static func nextMove(from s: CatState, on surface: Surface,
                                 toward destID: SurfaceID, x destX: CGFloat,
-                                world: Skyline) -> Move? {
+                                world: Skyline, mayWalk: Bool = true) -> Move? {
         // Already there: just walk.
         if destID == surface.id { return .walk(destX) }
 
@@ -1205,9 +1205,28 @@ public enum Cat {
         // `spans`, not `solid`, for the same reason the stride above uses it: he is choosing
         // where to put himself, and the hidden part of his own ledge is a legal place to stand
         // and an absurd place to walk to on purpose.
-        if let x = nearestSpanX(to: destX, in: surface.spans),
+        //
+        // But only if standing there would open a route he does not have now. Unconditional,
+        // this branch accepts destinations that no impulse can ever reach: he walks to the spot
+        // underneath, arrives, re-plans, and does it again for ever. Measured at 49.1% of every
+        // decision on a bare desktop, where the menu bar is 1115pt up and `jumpImpulse` buys
+        // 190pt of rise, with under half of all intents ever reaching the surface they named.
+        //
+        // The question is asked by moving him there hypothetically and re-routing. `mayWalk`
+        // makes the depth exactly one: the re-ask cannot reach this branch, so the recursion
+        // terminates by construction rather than by an argument about the geometry.
+        //
+        // Note this branch is only ever reached for an upward destination with nothing to
+        // climb, since `climbTarget` does not depend on where he is standing.
+        if mayWalk,
+           let x = nearestSpanX(to: destX, in: surface.spans),
            abs(x - here.x) > Feel.Physics.arrivalSlop * 2 {
-            return .walk(x)
+            var there = s
+            there.position.x = x
+            if nextMove(from: there, on: surface, toward: destID, x: destX,
+                        world: world, mayWalk: false) != nil {
+                return .walk(x)
+            }
         }
         return nil
     }
