@@ -172,7 +172,7 @@ public enum World {
                 && w.rect.intersects(screen.frame)
         }
 
-        let windows = visible.enumerated().map { Occluder(rect: $1.rect, z: $0, layer: $1.layer) }
+        let fromWindows = visible.enumerated().map { Occluder(rect: $1.rect, z: $0, layer: $1.layer) }
 
         // The notch is a hardware cutout with no pixels behind it, so anything drawn there is
         // invisible. Modelling it as a permanent occluder in front of everything — z = -2, ahead
@@ -184,17 +184,20 @@ public enum World {
         // `layer: 0` is load-bearing, not decoration: `occluders(above:intersecting:)` filters on
         // `isRealWindow`, so at any other layer this would be silently ignored.
         //
-        // Deliberately NOT in `windows`, which is what `carve` reads. It covers no surface's top
-        // edge — its underside IS the menu bar line, and the bar's own hole is cut structurally
-        // out of `solid` below — so letting it carve walkable spans would delete ground for no
-        // reason beyond the array it happened to be added to.
-        let occluders = screen.notch.map { [Occluder(rect: $0, z: -2, layer: 0)] + windows } ?? windows
+        // Deliberately NOT in `fromWindows`, which is what `carve` reads — and that array is
+        // named for where it comes from rather than for what it holds, so that appending to the
+        // wrong one is a visible mistake rather than a natural-looking one. The notch covers no
+        // surface's top edge (its underside is the menu bar line, and the bar's own hole is cut
+        // structurally out of `solid` below), so letting it carve walkable spans would delete
+        // ground for no reason beyond which array it happened to be added to.
+        let occluders = screen.notch.map { [Occluder(rect: $0, z: -2, layer: 0)] + fromWindows }
+            ?? fromWindows
         let screenSpan = screen.visibleFrame.minX...screen.visibleFrame.maxX
 
         /// Cuts every occluder in front of `z` whose body straddles the line at `y`.
         func carve(_ initial: [ClosedRange<CGFloat>], y: CGFloat, z: Int) -> [ClosedRange<CGFloat>] {
             var spans = initial
-            for o in windows where o.isRealWindow && o.z < z {
+            for o in fromWindows where o.isRealWindow && o.z < z {
                 // `>` and not `>=`: coplanar top edges must not erase each other.
                 guard o.rect.minY <= y, o.rect.maxY > y + Feel.World.coplanarEpsilon else { continue }
                 guard o.rect.minX <= o.rect.maxX else { continue }

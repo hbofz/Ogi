@@ -225,9 +225,16 @@ private func ledgeWorld() -> Skyline {
 }
 
 /// A 1920-wide screen with a 200pt cutout at 830...1030, as a notched Mac reports it.
+///
+/// The cutout's bottom edge is one point ABOVE the menu bar line, which is what the machine
+/// actually reports: `safeAreaInsets.top` is 37 while the menu bar is 38 tall, so
+/// `visibleFrame.maxY` is 1205 and the notch runs 1206...1243. Measured on the real display
+/// (`notch=(856.0, 1206.0, 208.0, 37.0)`), and `WorldTests` uses the same offset. A fixture
+/// flush at 1205 is one point kinder than the hardware, and the point it forgives is exactly
+/// the row of him that the occluder cannot cover.
 private let notched = ScreenGeometry(frame: CGRect(x: 0, y: 0, width: 1920, height: 1243),
                                      visibleFrame: CGRect(x: 0, y: 90, width: 1920, height: 1115),
-                                     notch: CGRect(x: 830, y: 1205, width: 200, height: 38))
+                                     notch: CGRect(x: 830, y: 1206, width: 200, height: 37))
 
 @Test func heDoesNotWalkIntoTheNotch() {
     // The cutout is a hole in the MIDDLE of the menu bar, not the end of it, and the desktop

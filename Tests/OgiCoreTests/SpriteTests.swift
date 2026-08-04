@@ -11,6 +11,32 @@ private let redrawnClips: Set<String> = ["walk", "fall", "land", "idle", "jump",
 /// sizes, so `Sprites` rescales each clip to make him one cat. These check that it works,
 /// because when it does not the failure is subtle on any single frame and glaring in motion.
 
+/// Eye width as a fraction of his ink height, in one frame. The yardstick both size checks
+/// use: his eye is a fixed fraction of *him* whatever pose he is in, so a bad eye reading
+/// shows up here without punishing an honest crouch. Nil when the frame has no findable eye
+/// or is mostly empty band.
+@MainActor
+private func eyeToInk(_ clip: Sprites.Clip, _ i: Int) -> Double? {
+    guard let img = Sprites.image(clip, i), let eye = Sprites.eyes(clip, i).first else { return nil }
+    let w = img.width, h = img.height
+    var px = [UInt8](repeating: 0, count: w * h * 4)
+    px.withUnsafeMutableBytes { buf in
+        CGContext(data: buf.baseAddress, width: w, height: h, bitsPerComponent: 8,
+                  bytesPerRow: w * 4, space: CGColorSpaceCreateDeviceRGB(),
+                  bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue)?
+            .draw(img, in: CGRect(x: 0, y: 0, width: w, height: h))
+    }
+    var top = h, bottom = 0
+    for y in 0..<h {
+        for x in 0..<w where px[(y * w + x) * 4 + 3] > 128 {
+            top = min(top, y); bottom = max(bottom, y); break
+        }
+    }
+    let inkHeight = bottom - top + 1
+    guard inkHeight > 20 else { return nil }
+    return Double(eye.width * CGFloat(w) / CGFloat(inkHeight))
+}
+
 @MainActor
 @Test func everyClipMeasuresHisEyeConsistently() {
     // `clipScale` divides a reference width by the measured eye, so a clip whose eye is
@@ -38,27 +64,7 @@ private let redrawnClips: Set<String> = ["walk", "fall", "land", "idle", "jump",
     where redrawnClips.contains(clip.rawValue) {
         // Median across frames. One frame is a bad sample for the same reason clipScale takes
         // a median: a squash frame is legitimately short and would read as an oversized eye.
-        var perFrame: [Double] = []
-        for i in 0..<clip.count {
-            guard let img = Sprites.image(clip, i), let eye = Sprites.eyes(clip, i).first else { continue }
-            let w = img.width, h = img.height
-            var px = [UInt8](repeating: 0, count: w * h * 4)
-            px.withUnsafeMutableBytes { buf in
-                CGContext(data: buf.baseAddress, width: w, height: h, bitsPerComponent: 8,
-                          bytesPerRow: w * 4, space: CGColorSpaceCreateDeviceRGB(),
-                          bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue)?
-                    .draw(img, in: CGRect(x: 0, y: 0, width: w, height: h))
-            }
-            var top = h, bottom = 0
-            for y in 0..<h {
-                for x in 0..<w where px[(y * w + x) * 4 + 3] > 128 {
-                    top = min(top, y); bottom = max(bottom, y); break
-                }
-            }
-            let inkHeight = bottom - top + 1
-            guard inkHeight > 20 else { continue }
-            perFrame.append(Double(eye.width * CGFloat(w) / CGFloat(inkHeight)))
-        }
+        var perFrame = (0..<clip.count).compactMap { eyeToInk(clip, $0) }
         guard !perFrame.isEmpty else { continue }
         perFrame.sort()
         ratios.append((clip.rawValue, perFrame[perFrame.count / 2]))
@@ -69,6 +75,26 @@ private let redrawnClips: Set<String> = ["walk", "fall", "land", "idle", "jump",
         .map { "\($0.0) \(String(format: "%.3f", $0.1))" }.joined(separator: ", ")
     #expect(vals.max()! / vals.min()! < 2.0,
             "one of these clips is mis-measuring his eye, so it renders at the wrong size: \(report)")
+}
+
+@MainActor
+@Test func peeksEmergedFrameIsMeasuredLikeEveryOtherClip() {
+    // `peek` is out of the aggregate check above because its median lands on a crouch, and
+    // leaving it at that would give the clip NO size coverage at all — which is the exact hole
+    // this project has fallen down twice (`idle` 44% off its own median; `curl` at nearly half
+    // size because the eye finder caught a closed lid reading 5px).
+    //
+    // The last frame is the one to pin: it is the emerged pose that hands straight off to
+    // `walk`, so it is the frame that has to agree with everyone else. It measures 0.093,
+    // between `run`'s 0.087 and `land`'s 0.097.
+    //
+    // The bounds are deliberately looser than that 0.061-0.097 population band. What this
+    // catches is a mis-measurement — a lid or a highlight instead of the eye, which is off by
+    // three to six times and rescales the whole clip — not a 10% drift in honest new art.
+    let clip = Sprites.Clip.peek
+    let r = try! #require(eyeToInk(clip, clip.count - 1))
+    #expect(r > 0.05 && r < 0.11,
+            "peek's emerged frame measures \(r) against the other clips' 0.061-0.097, so the whole clip renders at the wrong size")
 }
 
 @MainActor
