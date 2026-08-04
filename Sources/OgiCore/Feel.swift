@@ -160,6 +160,15 @@ public enum Feel {
         public static let edgeHesitationMin: TimeInterval = 0.5
         public static let edgeHesitationMax: TimeInterval = 1.6
 
+        /// How long the pivot takes, and for that whole time nothing else moves him. 4 frames
+        /// at the `turn` clip's 12fps: he does not flip like a sprite, and a flip is one of the
+        /// top-three tells that something is a drawing rather than an animal.
+        ///
+        /// `theTurnAlwaysPlaysAllTheWayThrough` derives the figure from the clip and fails if
+        /// either number moves; it lives in the tests rather than here because `Cat.step`
+        /// cannot see `Sprites`.
+        public static let turnSeconds: TimeInterval = 4.0 / 12
+
         /// How long he creeps out of the notch on launch before he starts walking. The whole
         /// of the first impression, so it is a beat rather than a transition.
         ///

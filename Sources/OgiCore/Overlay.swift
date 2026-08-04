@@ -237,7 +237,10 @@ final class OgiView: NSView {
         // Rotating about the feet is what makes the lean read as bracing rather than
         // sliding: his paws stay put and his body tips.
         let s = cat.scale
-        let lean = -cat.lean * Feel.Physics.maxLean * cat.facing
+        // Not `cat.facing` directly: `turn` is drawn as the transition right -> left, so its
+        // mirror is inverted from every other clip. See `Sprites.mirror`.
+        let mirror = Sprites.mirror(frame.clip, facing: cat.facing)
+        let lean = -cat.lean * Feel.Physics.maxLean * mirror
         bodyLayer.anchorPoint = CGPoint(x: 0.5, y: frame.anchor)
         bodyLayer.contents = Sprites.image(frame.clip, frame.index)
         // Nearest-neighbour: these are pixel art, and smoothing turns crisp edges to mush.
@@ -246,7 +249,7 @@ final class OgiView: NSView {
         bodyLayer.path = nil
         bodyLayer.bounds = CGRect(x: 0, y: 0, width: size.width, height: size.height)
         bodyLayer.transform = CATransform3DConcat(
-            CATransform3DMakeScale(s.width * cat.facing, s.height, 1),
+            CATransform3DMakeScale(s.width * mirror, s.height, 1),
             CATransform3DMakeRotation(lean, 0, 0, 1))
 
         // No live pupils. The drawn frames carry their own eyes and that is deliberate for

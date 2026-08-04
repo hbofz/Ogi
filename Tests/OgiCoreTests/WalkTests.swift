@@ -138,9 +138,16 @@ private func ledgeWorld() -> Skyline {
     cat = Cat.step(cat, world: sky([ledge]), dt: dt)
     #expect(cat.facing == -1)
 
+    // Reversing him no longer happens on the tick it is asked for: he pivots, which takes the
+    // length of the `turn` sheet, and `facing` leads the pivot rather than following it. So the
+    // second half of this is a couple of hundred milliseconds later than the first, and the
+    // interesting claim moved to `heTurnsRatherThanFlipping`.
     cat.intent = strolling(to: 700, on: ledge)
-    cat = Cat.step(cat, world: sky([ledge]), dt: dt)
+    for _ in 0..<Int((Feel.Timing.turnSeconds + 0.1) / dt) {
+        cat = Cat.step(cat, world: sky([ledge]), dt: dt)
+    }
     #expect(cat.facing == 1)
+    #expect(cat.activity == .walk, "he is still pivoting; the walk never resumed")
 }
 
 @Test func walkingIntoAWallKeepsHimOnTheSurface() {
@@ -158,6 +165,119 @@ private func ledgeWorld() -> Skyline {
     }
     #expect(perch.dx <= ledge.extent.length + 0.001)
     #expect(cat.position.x <= 300.001)
+}
+
+// MARK: - The turn
+
+/// Standing at 800 facing right with a reason to be at 500, so the very first thing the walk
+/// asks of him is to reverse. Nothing under either end of the ledge, so a reversal cannot
+/// quietly become a fall and confuse what is being measured.
+private func mustReverse() -> (Skyline, CatState) {
+    let ledge = surface(.window(1), y: 600, from: 400, to: 900)
+    var cat = standing(at: 800, on: ledge)
+    cat.facing = 1
+    cat.intent = strolling(to: 500, on: ledge)
+    return (sky([ledge]), cat)
+}
+
+@Test func heTurnsRatherThanFlipping() {
+    // An instantaneous mirror of `facing` is one of the top-three tells that something is a
+    // sprite rather than an animal. He pivots, and the pivot takes time.
+    let (world, start) = mustReverse()
+    var cat = start
+    var sawTurn = false
+    for _ in 0..<600 {
+        cat = Cat.step(cat, world: world, dt: dt)
+        if cat.activity == .turn { sawTurn = true }
+        if cat.facing == -1 && !sawTurn {
+            Issue.record("facing flipped without a turn")
+            return
+        }
+        if sawTurn && cat.activity == .walk { break }
+    }
+    #expect(sawTurn)
+}
+
+@Test func thePivotHoldsHimStillForTheWholeClip() {
+    let (world, start) = mustReverse()
+    var cat = start
+    var turning = 0, pivotedAt: CGFloat = 0, movedWhilePivoting: CGFloat = 0
+    for _ in 0..<600 {
+        cat = Cat.step(cat, world: world, dt: dt)
+        if cat.activity == .turn {
+            if turning == 0 { pivotedAt = cat.position.x }
+            turning += 1
+            movedWhilePivoting = max(movedWhilePivoting, abs(cat.position.x - pivotedAt))
+        } else if turning > 0 {
+            break
+        }
+    }
+    #expect(Double(turning) * dt >= Feel.Timing.turnSeconds - 2 * dt,
+            "the pivot was cut short, so the last frames of the sheet never play")
+    #expect(movedWhilePivoting < 0.5,
+            "he slid \(movedWhilePivoting)pt sideways while pivoting on the spot")
+    #expect(cat.facing == -1, "he came out of the pivot facing the way he went in")
+}
+
+@Test func aWalkThatReversesStillFinishes() {
+    // The deadlock this guards is circular: the turn stops the walk, and the walk is the only
+    // thing that ends the turn. Break it either way and he stands there for the session.
+    let (world, start) = mustReverse()
+    var cat = start
+    for _ in 0..<Int(20 / dt) {
+        cat = Cat.step(cat, world: world, dt: dt)
+        if cat.intent == nil { break }
+    }
+    #expect(cat.intent == nil, "he never arrived; the pivot deadlocked the walk")
+    #expect(abs(cat.position.x - 500) < Feel.Physics.brakingDistance + Feel.Physics.arrivalSlop)
+    #expect(cat.facing == -1)
+}
+
+@Test func heOnlyPivotsOnceToReverseOnce() {
+    // The failure this guards is a pivot that re-triggers itself. The turn zeroes his surface
+    // speed, and the walk reads `facing` off that speed, so a rule that flipped him back
+    // whenever the speed passed through zero would leave him spinning on the spot for ever.
+    let (world, start) = mustReverse()
+    var cat = start
+    var pivots = 0, wasTurning = false
+    for _ in 0..<Int(20 / dt) {
+        cat = Cat.step(cat, world: world, dt: dt)
+        let turning = cat.activity == .turn
+        if turning && !wasTurning { pivots += 1 }
+        wasTurning = turning
+        if cat.intent == nil { break }
+    }
+    #expect(pivots == 1, "he pivoted \(pivots) times to reverse direction once")
+}
+
+@Test func aWalkTheWayHeAlreadyFacesDoesNotPivot() {
+    // A facing SET is not a facing change. Firing on every assignment rather than on a genuine
+    // reversal would put a third of a second of pivot in front of every walk he ever takes.
+    let ledge = surface(.window(1), y: 600, from: 400, to: 900)
+    var cat = standing(at: 500, on: ledge)
+    cat.facing = 1
+    cat.intent = strolling(to: 800, on: ledge)
+
+    var pivoted = false
+    for _ in 0..<Int(20 / dt) {
+        cat = Cat.step(cat, world: sky([ledge]), dt: dt)
+        if cat.activity == .turn { pivoted = true }
+        if cat.intent == nil { break }
+    }
+    #expect(!pivoted, "he pivoted to face the way he was already facing")
+}
+
+@Test func heDoesNotPivotInMidAir() {
+    // `release` sets `facing` from the throw, and there is nothing under his paws to pivot on.
+    // The fall sheet is the righting reflex and it already carries the reversal.
+    let ledge = surface(.window(1), y: 600, from: 400, to: 900)
+    var cat = standing(at: 700, on: ledge)
+    cat.facing = 1
+    cat = Cat.grab(cat, at: CGPoint(x: 700, y: 900))
+    cat = Cat.release(cat, throwVelocity: CGVector(dx: -900, dy: 0), world: sky([ledge]))
+
+    #expect(cat.facing == -1)
+    #expect(cat.activity == .righting, "he tried to pivot on thin air")
 }
 
 @Test func everyJumpSpendsTheFullAnticipationInCrouch() {

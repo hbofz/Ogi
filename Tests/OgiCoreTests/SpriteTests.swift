@@ -5,7 +5,7 @@ import CoreGraphics
 /// Clips regenerated against the current `art/character.png`. Add each name as its sheet
 /// lands. Kept by hand on purpose: the old version inferred this from eye colour, which
 /// stopped meaning anything the moment the cat himself became ginger.
-private let redrawnClips: Set<String> = ["walk", "fall", "land", "idle", "jump", "run", "sitdown", "sleep", "alert", "held", "groom", "curl", "cling", "lookDown", "peek"]
+private let redrawnClips: Set<String> = ["walk", "fall", "land", "idle", "jump", "run", "sitdown", "sleep", "alert", "held", "groom", "curl", "cling", "lookDown", "peek", "turn"]
 
 /// The drawn frames come from separately-generated sheets that draw him at wildly different
 /// sizes, so `Sprites` rescales each clip to make him one cat. These check that it works,
@@ -60,7 +60,7 @@ private func eyeToInk(_ clip: Sprites.Clip, _ i: Int) -> Double? {
     // `land`'s 0.097, and his measured eye is steady across the four frames at 34/30/28/31px,
     // so the eye is found correctly; only the yardstick fails.
     var ratios: [(String, Double)] = []
-    for clip in [Sprites.Clip.walk, .idle, .jump, .land, .fall, .run, .alert, .sitdown, .sleep, .groom, .curl, .cling, .lookDown]
+    for clip in [Sprites.Clip.walk, .idle, .jump, .land, .fall, .run, .alert, .sitdown, .sleep, .groom, .curl, .cling, .lookDown, .turn]
     where redrawnClips.contains(clip.rawValue) {
         // Median across frames. One frame is a bad sample for the same reason clipScale takes
         // a median: a squash frame is legitimately short and would read as an oversized eye.
@@ -77,8 +77,60 @@ private func eyeToInk(_ clip: Sprites.Clip, _ i: Int) -> Double? {
             "one of these clips is mis-measuring his eye, so it renders at the wrong size: \(report)")
 }
 
+// MARK: - The turn, whose mirror is inverted
+
 @MainActor
-@Test func peeksEmergedFrameIsMeasuredLikeEveryOtherClip() {
+@Test func theTurnSheetIsDrawnRightToLeft() throws {
+    // The mirror rule for `turn` is inverted from every other clip, and this is the fact the
+    // inversion rests on. Read off the art rather than asserted, because nobody can eyeball it
+    // in a unit test: his eye sits on the side of his head he is looking towards, so a cat in
+    // full side view facing right has it in the right-hand half of the frame and a cat turned
+    // to the left has it in the left-hand half.
+    //
+    // If this sheet is ever regenerated the other way round, every turn on screen plays
+    // backwards (he would pivot away from where he is about to walk), and nothing else in the
+    // suite would notice.
+    let clip = Sprites.Clip.turn
+    let first = try #require(Sprites.eyes(clip, 0).first)
+    let last = try #require(Sprites.eyes(clip, clip.count - 1).first)
+    #expect(first.midX > 0.5,
+            "frame 0 has to be a cat in side view facing RIGHT; his eye reads \(first.midX) across the frame")
+    #expect(last.midX < 0.5,
+            "the last frame has to have him facing LEFT; his eye reads \(last.midX) across the frame")
+}
+
+@MainActor
+@Test func theTurnIsTheOneClipWhoseMirrorIsInverted() {
+    // Every other sheet is drawn facing right and flipped when he faces left. `turn` cannot
+    // work that way, because for a turn the transition IS the content: it is drawn once as
+    // right -> left (which `theTurnSheetIsDrawnRightToLeft` pins to the pixels), so playing it
+    // as drawn turns him LEFT and mirroring it turns him right.
+    //
+    // `facing` is already the DESTINATION throughout a turn, so the flag is the opposite of it.
+    #expect(Sprites.mirror(.turn, facing: -1) == 1,
+            "turning right -> left must play the sheet as drawn")
+    #expect(Sprites.mirror(.turn, facing: 1) == -1,
+            "turning left -> right must play the sheet mirrored")
+    for clip in [Sprites.Clip.walk, .idle, .run, .land, .peek, .lookDown] {
+        #expect(Sprites.mirror(clip, facing: 1) == 1)
+        #expect(Sprites.mirror(clip, facing: -1) == -1,
+                "\(clip.rawValue) is drawn facing right and mirrors with facing")
+    }
+}
+
+@MainActor
+@Test func theTurnAlwaysPlaysAllTheWayThrough() {
+    // The same floor `edgeHesitationMin` and `peekSeconds` have, for the same reason: the clip
+    // does not loop, so a hold shorter than the sheet cuts him off part-way round and he snaps
+    // through the rest of the pivot, which is the instantaneous flip this whole clip exists to
+    // remove, only later and smaller.
+    let clip = Sprites.Clip.turn
+    #expect(Feel.Timing.turnSeconds >= Double(clip.count) / clip.fps - 0.001,
+            "the pivot ends before its \(clip.count) frames at \(clip.fps)fps have played")
+}
+
+@MainActor
+@Test func peeksEmergedFrameIsMeasuredLikeEveryOtherClip() throws {
     // `peek` is out of the aggregate check above because its median lands on a crouch, and
     // leaving it at that would give the clip NO size coverage at all — which is the exact hole
     // this project has fallen down twice (`idle` 44% off its own median; `curl` at nearly half
@@ -92,7 +144,7 @@ private func eyeToInk(_ clip: Sprites.Clip, _ i: Int) -> Double? {
     // catches is a mis-measurement — a lid or a highlight instead of the eye, which is off by
     // three to six times and rescales the whole clip — not a 10% drift in honest new art.
     let clip = Sprites.Clip.peek
-    let r = try! #require(eyeToInk(clip, clip.count - 1))
+    let r = try #require(eyeToInk(clip, clip.count - 1))
     #expect(r > 0.05 && r < 0.11,
             "peek's emerged frame measures \(r) against the other clips' 0.061-0.097, so the whole clip renders at the wrong size")
 }
@@ -102,7 +154,7 @@ private func eyeToInk(_ clip: Sprites.Clip, _ i: Int) -> Double? {
     // `clipScale` silently falls back to 1.0 when it finds no eyes, which does not crash and
     // does not look obviously wrong in a still — it just renders that clip at the raw pixel
     // size of its sheet. Catching it here is much cheaper than noticing it on screen.
-    for clip in [Sprites.Clip.walk, .idle, .jump, .land, .fall, .run, .alert, .sitdown, .held, .cling, .lookDown, .peek] {
+    for clip in [Sprites.Clip.walk, .idle, .jump, .land, .fall, .run, .alert, .sitdown, .held, .cling, .lookDown, .peek, .turn] {
         let withEyes = (0..<clip.count).filter { !Sprites.eyes(clip, $0).isEmpty }
         #expect(!withEyes.isEmpty, "\(clip.rawValue): no frame has a findable eye")
     }
@@ -110,7 +162,7 @@ private func eyeToInk(_ clip: Sprites.Clip, _ i: Int) -> Double? {
 
 @MainActor
 @Test func everyFrameOfEveryClipLoads() {
-    for clip in [Sprites.Clip.walk, .idle, .jump, .land, .fall, .run, .alert, .sitdown, .held, .sleep, .cling, .lookDown, .peek] {
+    for clip in [Sprites.Clip.walk, .idle, .jump, .land, .fall, .run, .alert, .sitdown, .held, .sleep, .cling, .lookDown, .peek, .turn] {
         for i in 0..<clip.count {
             #expect(Sprites.image(clip, i) != nil, "\(clip.rawValue)\(i).png is missing")
         }

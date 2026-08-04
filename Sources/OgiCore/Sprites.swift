@@ -21,7 +21,7 @@ public enum Sprites {
     /// Ordered frames per animation. Names match the files in Resources/Sprites.
     public enum Clip: String, Sendable {
         case walk, idle, jump, land, fall, run, alert, sitdown, held, sleep, groom, curl, cling
-        case lookDown, peek
+        case lookDown, peek, turn
 
         var count: Int {
             switch self {
@@ -40,6 +40,7 @@ public enum Sprites {
             case .cling: 4
             case .lookDown: 4
             case .peek: 4
+            case .turn: 4
             }
         }
 
@@ -61,6 +62,7 @@ public enum Sprites {
             case .cling: 4      // a slow scrabble, not a flail
             case .lookDown: 6   // head over the side in half a second, then he holds
             case .peek: 5       // creeping out of the doorway; slower than he ever walks
+            case .turn: 12      // a pivot is quick
             }
         }
 
@@ -75,7 +77,9 @@ public enum Sprites {
             // while he thinks. The hold IS the tell, so it must not cycle back to standing.
             // peek holds too: it ends with his front half out and upright, which is exactly the
             // pose the walk starts from. Looping it would put him back on his chest.
-            case .jump, .land, .fall, .sitdown, .curl, .lookDown, .peek: false
+            // turn holds too: it ends on him facing the other way, which is exactly where the
+            // walk that follows picks up. Looping it would spin him.
+            case .jump, .land, .fall, .sitdown, .curl, .lookDown, .peek, .turn: false
             }
         }
     }
@@ -131,6 +135,7 @@ public enum Sprites {
         if dangling { return .held }
         switch activity {
         case .walk:                 return hurrying ? .run : .walk
+        case .turn:                 return .turn
         case .edgeLook:             return .lookDown
         case .peek:                 return .peek
         case .crouch:               return .jump      // the wind-up frames
@@ -170,6 +175,22 @@ public enum Sprites {
             let raw = Int(elapsed * clip.fps)
             return clip.loops ? raw % clip.count : min(raw, clip.count - 1)
         }
+    }
+
+    /// Which way to flip the drawing: +1 for the sheet as drawn, -1 mirrored.
+    ///
+    /// Normally just `facing`, because every sheet is drawn facing right and mirrored when he
+    /// faces left. **`turn` is the one clip whose mirror is inverted**, because for a turn the
+    /// transition IS the content: it can only be drawn once, as right -> left, so playing it as
+    /// drawn turns him LEFT and mirroring it turns him right. `facing` is already the
+    /// DESTINATION throughout a turn, so the flag is the opposite of it.
+    ///
+    /// This is here rather than inline in `Overlay` because it cannot be checked by eye in a
+    /// headless test and getting it backwards is invisible in a still frame: he would pivot
+    /// away from wherever he is about to walk. `theTurnIsTheOneClipWhoseMirrorIsInverted` pins
+    /// the rule and `theTurnSheetIsDrawnRightToLeft` pins the premise to the actual pixels.
+    public static func mirror(_ clip: Clip, facing: CGFloat) -> CGFloat {
+        clip == .turn ? -facing : facing
     }
 
     /// Where his feet are, as a fraction up from the bottom of the frame.

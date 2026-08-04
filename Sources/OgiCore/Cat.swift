@@ -69,6 +69,7 @@ public enum Activity: Sendable, Equatable {
     case scruffed   // limp, legs tucked, dangling
     case righting   // the twist, mid-air
     case walk
+    case turn       // pivoting on the spot to face the other way
     case peek       // creeping out of the notch, low and cautious
     case edgeLook   // stopped at the lip, head over the side, deciding
     case crouch     // the 100ms wind-up before every jump
@@ -508,8 +509,30 @@ public enum Cat {
 
     // MARK: - On the ground
 
+    /// He does not flip like a sprite. Anything that reverses him on solid ground pivots first,
+    /// and everything else waits the pivot out.
+    ///
+    /// One check around the whole of `standing` rather than one at each of the five places that
+    /// assign `facing` (the walk, the plant at a lip, the retreat off one, the wall turn, the
+    /// stride across a crack), because four of those `return` early, and because a sixth cannot
+    /// then be added without it. It reads the facing he came in with against the facing he
+    /// leaves with, so a *set* to the direction he already faces is correctly not a turn.
+    ///
+    /// Deliberately not applied to `release` (mid-air, from a throw) or to the jump launch:
+    /// both end with him off the ground, and `case .grounded` is what excludes them. There is
+    /// nothing under his paws to pivot on, and the fall sheet carries the reversal anyway.
     private static func ground(_ state: CatState, on surface: Surface,
                                world: Skyline, dt: TimeInterval) -> CatState {
+        var s = standing(state, on: surface, world: world, dt: dt)
+        if s.facing != state.facing, case .grounded = s.support {
+            s.activity = .turn
+            s.perchSpeed = 0
+        }
+        return s
+    }
+
+    private static func standing(_ state: CatState, on surface: Surface,
+                                 world: Skyline, dt: TimeInterval) -> CatState {
         var s = state
         guard case .grounded(var perch) = s.support else { return s }
 
@@ -543,6 +566,19 @@ public enum Cat {
         // the peek plays while he is already leaving. Above the intent handling rather than
         // inside it for the same reason `edgeLook` holds where it does: the hold IS the beat.
         if s.activity == .peek, s.activityElapsed < Feel.Timing.peekSeconds {
+            s.perchSpeed = 0
+            return s
+        }
+
+        // Mid-pivot. He is turning on the spot and that takes as long as the sheet does, so
+        // nothing else happens until it finishes. The same shape as the peek above and the
+        // hold at a lip below, and for the same reason: the beat IS the animation, and a walk
+        // starting underneath it would slide him sideways through his own turn.
+        //
+        // `facing` is already the destination, so what ends this is simply the clock: whatever
+        // set it has no reason to set it again, and the walk that resumes is now travelling the
+        // way he is pointing. That is what makes it terminate rather than re-arm itself.
+        if s.activity == .turn, s.activityElapsed < Feel.Timing.turnSeconds {
             s.perchSpeed = 0
             return s
         }
