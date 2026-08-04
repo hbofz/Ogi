@@ -243,6 +243,40 @@ if groundAlign {
 }
 print("found \(merged.count) blobs, kept \(kept.count), shared band y=\(sheetTop)...\(sheetBottom)")
 
+/// Where his planted paws are, horizontally: the centroid of the lowest band of ink in a frame.
+///
+/// The twin of the floor that `GROUNDED` already finds vertically, and it exists for the same
+/// reason. Every frame used to be cropped tight to its own ink, so a clip whose silhouette
+/// changes shape changed width, and since the renderer centres the frame on him, his BODY slid
+/// inside the box as his tail moved. Measured across the shipped sheets: `sitdown` ran 468px
+/// down to 223, `lookDown` 537 to 374, and `walk` 357 to 254, which is a 40% pulse on the clip
+/// he plays most. Hamzah saw it as him getting smaller while looking over an edge, and as his
+/// paws sliding back during the lean.
+///
+/// His paws are the right anchor because every grounded prompt in this project already demands
+/// they stay put ("his four paws stay in exactly the same spot in all four frames"). His tail
+/// is the thing that moves, and the tail is what was moving the box.
+func pawCentre(_ b: Blob) -> Int {
+    let band = max(4, (b.maxY - b.minY + 1) / 12)
+    var sum = 0, count = 0
+    for y in max(b.minY, b.maxY - band + 1)...b.maxY {
+        for x in b.minX...b.maxX where isInk(y * w + x) { sum += x; count += 1 }
+    }
+    return count > 0 ? sum / count : (b.minX + b.maxX) / 2
+}
+
+// Anchored only when GROUNDED, for the same reason the floor is: an airborne cat has no planted
+// paw, and the lowest ink on a falling frame is whatever limb happens to be trailing.
+let anchors = kept.map { groundAlign ? pawCentre($0) : ($0.minX + $0.maxX) / 2 }
+let leftOf = zip(kept, anchors).map { $1 - $0.minX }
+let rightOf = zip(kept, anchors).map { $0.maxX - $1 }
+let padLeft = leftOf.max() ?? 0
+let commonWidth = padLeft + (rightOf.max() ?? 0) + 1
+if groundAlign {
+    let widths = kept.map { $0.maxX - $0.minX + 1 }
+    print("anchored: \(commonWidth)px common width, was \(widths.min() ?? 0)-\(widths.max() ?? 0)px")
+}
+
 let out = URL(fileURLWithPath: args[2])
 try? FileManager.default.createDirectory(at: out, withIntermediateDirectories: true)
 
@@ -251,16 +285,22 @@ for (n, blob) in kept.enumerated() {
     // How far this frame's lowest paw sits above the sheet's floor. Sampling the source that
     // much higher up is what drops him onto it, and it is zero unless GROUNDED is set.
     let lift = groundAlign ? sheetBottom - b.maxY : 0
+    // ...and the sideways twin of it: how far this frame's own ink starts from the shared
+    // anchor. Zero drift for a clip whose paws really do stay put, which is the point.
+    let shift = padLeft - leftOf[n]
     b.minY = sheetTop
     b.maxY = sheetBottom
-    let bw = b.maxX - b.minX + 1, bh = b.maxY - b.minY + 1
+    let inkWidth = b.maxX - b.minX + 1
+    let bw = commonWidth, bh = b.maxY - b.minY + 1
     var cropped = [UInt8](repeating: 0, count: bw * bh * 4)
     for y in 0..<bh {
-        for x in 0..<bw {
+        for x in 0..<inkWidth {
             let sy = b.minY + y - lift
             guard sy >= 0, sy < h else { continue }
+            let dx = x + shift
+            guard dx >= 0, dx < bw else { continue }
             let si = sy * w + (b.minX + x)
-            let di = (y * bw + x) * 4
+            let di = (y * bw + dx) * 4
             guard isInk(si) else { continue }
             let (r, g, b) = rgb(si)
             let a = coverage([r, g, b], key)
