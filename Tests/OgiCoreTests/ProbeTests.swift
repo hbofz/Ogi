@@ -304,3 +304,71 @@ func PROBE_aRousedCatGoesToLook() {
             "a roused and idle cat ignored a window he could have gone to look at")
     #expect(roused.all > 0.20, "a roused cat almost never actually moves; the dial is decorative")
 }
+
+/// B4's acceptance, in two independent halves.
+///
+/// This probe took three attempts and the failures were all in the measurement, so the reasons
+/// are worth keeping. Sampling one moment ("the first tick his intent goes nil near the cursor")
+/// caught him in the single-tick gap before the yield rule acts. Matching the exact destination
+/// on the menu bar missed him coming to the equivalent spot on whichever surface he was actually
+/// standing on, which is the same behaviour. And a cursor inside the notch has no spot beside it
+/// at all, which is a property of the cutout rather than of him.
+///
+/// What the feature actually claims is simpler than any of those, so that is what is measured:
+/// **he spends more of his time near your cursor when it has gone still than when it has not.**
+@Test(.enabled(if: ProcessInfo.processInfo.environment["OGI_PROBE"] != nil))
+func PROBE_heComesToYourCursorAndYourClicksStillWork() {
+    let dt = Feel.Timing.fixedDT
+
+    /// Fraction of the run spent within a body length of the cursor, and the longest unbroken
+    /// stretch spent directly under it.
+    func measure(cursorGoesStill: Bool) -> (near: Double, worstSit: Double) {
+        var nearTicks = 0, totalTicks = 0
+        var worstSit = 0.0
+        for run in 0..<40 {
+            let world = realDesktop()
+            guard let bar = world.surface(.menuBar) else { continue }
+            // Clear of the notch, which has no "beside" to offer.
+            let startX = 300 + CGFloat(run % 8) * 40
+            var cat = CatState(position: CGPoint(x: startX, y: bar.y))
+            cat.support = .grounded(Perch(id: .menuBar, dx: startX))
+            let cursor = CGPoint(x: startX + 250, y: bar.y)
+            var sitting = 0.0
+
+            for _ in 0..<(120 * 300) {
+                cat.cursor = cursor
+                // The whole independent variable: has it settled, or is it still moving?
+                cat.cursorStill = cursorGoesStill ? cat.cursorStill + dt : 0
+                cat = Cat.step(cat, world: world, dt: dt)
+
+                totalTicks += 1
+                if abs(cat.position.x - cursor.x) < 60, abs(cat.position.y - cursor.y) < 40 {
+                    nearTicks += 1
+                }
+                let rect = CGRect(x: cat.position.x - Feel.Shape.width / 2, y: cat.position.y,
+                                  width: Feel.Shape.width, height: Feel.Shape.height)
+                sitting = rect.contains(cursor) ? sitting + dt : 0
+                worstSit = max(worstSit, sitting)
+            }
+        }
+        return (Double(nearTicks) / Double(max(totalTicks, 1)), worstSit)
+    }
+
+    let moving = measure(cursorGoesStill: false)
+    let still = measure(cursorGoesStill: true)
+    print(String(format: "near your cursor: %.1f%% of the time when it is still, %.1f%% when it is not",
+                 still.near * 100, moving.near * 100))
+    print(String(format: "longest spell directly under the pointer: %.2fs still, %.2fs moving",
+                 still.worstSit, moving.worstSit))
+
+    #expect(still.near > moving.near * 2,
+            "a cursor going still barely changes where he spends his time; the behaviour is not firing")
+
+    // He gets off within a beat rather than instantly, and that is the yield rule walking rather
+    // than teleporting: the step aside is Shape.width/2 + cursorGap minus his overshoot, about
+    // 31pt, which at walkSpeed 46 through accel 220 is roughly a second, plus the tick he takes
+    // to notice. Two and a half seconds is that with room, and anything beyond it means he has
+    // settled under the pointer rather than passing through.
+    #expect(still.worstSit < 2.5,
+            "he sat under the pointer for \(still.worstSit)s rather than moving aside")
+}

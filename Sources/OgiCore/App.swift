@@ -12,6 +12,9 @@ public final class OgiApp: NSObject, NSApplicationDelegate {
     private var lastRaw: [RawWindow] = []
     /// Whether the desktop he launched into has been reported as new yet. See `poll`.
     private var sawLaunchWorld = false
+    /// When `cursorStill` was last advanced. `tick` has no fixed rate, so this is measured
+    /// against the clock rather than counted in ticks.
+    private var lastCursorSample: CFTimeInterval = 0
     private var skyline = Skyline(surfaces: [], occluders: [],
                                   screen: ScreenGeometry(frame: .zero, visibleFrame: .zero, notch: nil))
     private var cat = CatState(position: .zero)
@@ -346,6 +349,17 @@ public final class OgiApp: NSObject, NSApplicationDelegate {
             ? sense.typingRate > Feel.Mind.typingCalm
             : sense.typingRate > Feel.Mind.typingAlert
         cat.languor = sense.languor
+
+        // Cats approach when you go still, so how long it has NOT moved is the signal.
+        //
+        // Measured against `now` rather than counted in ticks: `tick` runs at whatever the
+        // render-rate ladder is doing, from 60Hz down to 4, so a per-tick increment would make
+        // sixty seconds mean fifteen to a settled cat.
+        let pointer = NSEvent.mouseLocation
+        let moved = cat.cursor.map { hypot(pointer.x - $0.x, pointer.y - $0.y) > 2 } ?? true
+        cat.cursorStill = moved ? 0 : cat.cursorStill + (now - lastCursorSample)
+        lastCursorSample = now
+        cat.cursor = pointer
 
         // You locked the screen, so he goes home and everything suspends. This is the
         // manifesto's "all polling suspends", and it costs one early return.

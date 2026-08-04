@@ -447,3 +447,113 @@ private func twoLedges() -> Skyline {
     #expect(Feel.Mind.typingCalm < Feel.Mind.typingAlert,
             "without hysteresis he flickers in and out of the pose at every pause for breath")
 }
+
+// MARK: - Task 8: coming to your cursor
+
+@Test func heComesOverWhenYourCursorHasSatStillNearHim() {
+    let bar = surface(.menuBar, y: 1205, from: 0, to: 1920, z: -1)
+    var cat = CatState(position: CGPoint(x: 300, y: 1205))
+    cat.support = .grounded(Perch(id: .menuBar, dx: 300))
+    cat.cursor = CGPoint(x: 600, y: 1205)
+    cat.cursorStill = Feel.Mind.cursorStillSeconds + 1
+
+    for _ in 0..<(120 * 2) { cat = Cat.step(cat, world: sky([bar]), dt: dt) }
+    #expect(cat.intent != nil, "your cursor sat still next to him and he ignored it")
+    #expect(cat.intent?.destination == .menuBar)
+}
+
+@Test func heIgnoresACursorAcrossTheScreen() {
+    let bar = surface(.menuBar, y: 1205, from: 0, to: 1920, z: -1)
+    var cat = CatState(position: CGPoint(x: 300, y: 1205))
+    cat.support = .grounded(Perch(id: .menuBar, dx: 300))
+    cat.cursor = CGPoint(x: 300 + Feel.Mind.cursorNearby + 200, y: 1205)
+    cat.cursorStill = Feel.Mind.cursorStillSeconds + 1
+    cat.restLeft = .infinity            // so any intent must be the cursor's doing
+
+    for _ in 0..<(120 * 2) { cat = Cat.step(cat, world: sky([bar]), dt: dt) }
+    #expect(cat.intent == nil, "he crossed the screen for a cursor that was not near him")
+}
+
+@Test func heIgnoresACursorThatIsStillMoving() {
+    let bar = surface(.menuBar, y: 1205, from: 0, to: 1920, z: -1)
+    var cat = CatState(position: CGPoint(x: 300, y: 1205))
+    cat.support = .grounded(Perch(id: .menuBar, dx: 300))
+    cat.cursor = CGPoint(x: 600, y: 1205)
+    cat.cursorStill = 1                 // barely settled
+    cat.restLeft = .infinity
+
+    for _ in 0..<(120 * 2) { cat = Cat.step(cat, world: sky([bar]), dt: dt) }
+    #expect(cat.intent == nil)
+}
+
+@Test func heSettlesBesideYourCursorAndNeverOnIt() {
+    // THE load-bearing assertion of this task. Overlay.setInteractive toggles
+    // ignoresMouseEvents from exactly "is the cursor inside his hit rect", so a cat resting on
+    // your cursor is a cat swallowing every click you make until he moves.
+    let bar = surface(.menuBar, y: 1205, from: 0, to: 1920, z: -1)
+    for startX in stride(from: CGFloat(100), through: 1800, by: 100) {
+        let cursor = CGPoint(x: 900, y: 1205)
+        guard let x = Cat.beside(cursor: cursor, on: bar, from: startX) else { continue }
+        let halfWidth = Feel.Shape.width / 2
+        #expect(abs(x - cursor.x) >= halfWidth + Feel.Mind.cursorGap,
+                "from \(startX) he settles at \(x), which puts the cursor inside his hit rect")
+    }
+}
+
+@Test func heSettlesOnWhicheverSideHeArrivesFrom() {
+    let bar = surface(.menuBar, y: 1205, from: 0, to: 1920, z: -1)
+    let cursor = CGPoint(x: 900, y: 1205)
+    let fromLeft = Cat.beside(cursor: cursor, on: bar, from: 200)
+    let fromRight = Cat.beside(cursor: cursor, on: bar, from: 1600)
+    #expect(fromLeft != nil && fromLeft! < cursor.x, "coming from the left he overshot past it")
+    #expect(fromRight != nil && fromRight! > cursor.x, "coming from the right he overshot past it")
+}
+
+// MARK: - Task 9: he gets out of the way
+
+@Test func heMovesAsideIfYouPutTheCursorOnHim() {
+    let bar = surface(.menuBar, y: 1205, from: 0, to: 1920, z: -1)
+    var cat = CatState(position: CGPoint(x: 900, y: 1205))
+    cat.support = .grounded(Perch(id: .menuBar, dx: 900))
+    cat.restLeft = .infinity              // so any move must be the yield
+    cat.cursor = CGPoint(x: 900, y: 1215) // right on him
+
+    for _ in 0..<(120 * 20) { cat = Cat.step(cat, world: sky([bar]), dt: dt) }
+    let clear = Feel.Shape.width / 2 + Feel.Mind.cursorGap
+    #expect(abs(cat.position.x - 900) >= clear - Feel.Physics.arrivalSlop * 3,
+            "he stayed under the cursor at \(cat.position.x), so his window is eating clicks")
+}
+
+@Test func heDoesNotYieldToACursorThatIsNotOnHim() {
+    let bar = surface(.menuBar, y: 1205, from: 0, to: 1920, z: -1)
+    var cat = CatState(position: CGPoint(x: 900, y: 1205))
+    cat.support = .grounded(Perch(id: .menuBar, dx: 900))
+    cat.restLeft = .infinity
+    cat.cursor = CGPoint(x: 400, y: 1205)
+
+    for _ in 0..<(120 * 20) { cat = Cat.step(cat, world: sky([bar]), dt: dt) }
+    #expect(abs(cat.position.x - 900) < 1, "he wandered off for no reason")
+}
+
+@Test func heDoesNotYieldWhileYouAreHoldingHim() {
+    // Being held puts the cursor on him by definition. Yielding then would fight the drag.
+    var cat = CatState(position: CGPoint(x: 900, y: 1205))
+    cat.support = .held(CGPoint(x: 900, y: 1205))
+    cat.cursor = CGPoint(x: 900, y: 1205)
+    let bar = surface(.menuBar, y: 1205, from: 0, to: 1920, z: -1)
+    cat = Cat.step(cat, world: sky([bar]), dt: dt)
+    #expect(cat.intent == nil, "he tried to walk away while you were holding him")
+}
+
+@Test func aFrozenCatStaysFrozenEvenIfYouPointAtHim() {
+    // Precedence: the freeze is above the yield, so he does not shuffle aside mid-call.
+    let bar = surface(.menuBar, y: 1205, from: 0, to: 1920, z: -1)
+    var cat = CatState(position: CGPoint(x: 900, y: 1205))
+    cat.support = .grounded(Perch(id: .menuBar, dx: 900))
+    cat.listening = true
+    cat.cursor = CGPoint(x: 900, y: 1215)
+
+    for _ in 0..<(120 * 5) { cat = Cat.step(cat, world: sky([bar]), dt: dt) }
+    #expect(abs(cat.position.x - 900) < 1, "he moved during a call")
+    #expect(cat.activity == .alert)
+}

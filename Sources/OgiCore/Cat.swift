@@ -274,6 +274,12 @@ public struct CatState: Sendable {
     /// the mic's value as a privacy indicator, and a second sheet is the fix if that ever
     /// matters more than the sheet costs.
     public var holdingStill: Bool { listening || typingHard }
+
+    /// Your cursor, screen-global, or nil if it is off this screen. Set by `App` each tick.
+    public var cursor: CGPoint?
+    /// How long it has sat within a point or two of where it is now. Cats approach when you
+    /// go still, and this is the "still" half of that.
+    public var cursorStill: TimeInterval = 0
     /// How far through the righting reflex he is, 0..1.
     public var righting: CGFloat = 1
     /// 0..1. Low battery or Low Power Mode. He moves less and settles sooner.
@@ -788,6 +794,26 @@ public enum Cat {
             s.activity = .alert
             return s
         }
+        // Get out of the way. He is a click-through overlay whose window swallows mouse events
+        // for exactly as long as your cursor is inside his hit rect, so a cat sitting under your
+        // pointer is a cat eating your clicks. One guard rather than a rule per behaviour, so
+        // anything that ever puts him on something you use inherits it: coming to your cursor is
+        // careful about where it stops, but an ordinary stroll has no idea you are there.
+        //
+        // Below the freeze on purpose, so he does not shuffle about mid-call, and above the
+        // sleep gate, which has better reasons not to move him. Being held puts the cursor on
+        // him by definition, and `standing` is only reachable while grounded, so the drag is
+        // safe by structure rather than by a check.
+        if s.intent == nil, let cursor = s.cursor,
+           abs(cursor.x - s.position.x) < Feel.Shape.width / 2 + Feel.Mind.cursorGap,
+           let x = beside(cursor: cursor, on: surface, from: s.position.x),
+           abs(x - s.position.x) > Feel.Physics.arrivalSlop {
+            s.intent = Intent(destination: surface.id, destinationX: x, move: .walk(x))
+            s.activity = .walk
+            s.activityElapsed = 0
+            return s
+        }
+
         // Only sleep is a hard stop, and only because the zero-wakeup guarantee lives there.
         // Sitting and curling *bias* him: longer waits, mostly in-place behaviours. A sitting
         // cat still shifts, washes and looks around. Before this he froze into a pose, and
@@ -882,6 +908,19 @@ public enum Cat {
             // Nothing to do. Sit still until boredom wins.
             // Low battery makes him idle longer. A sluggish cat means plug in.
             // Settledness stretches the same timer rather than stopping it.
+            // Cats approach when you go still. Not gated on arousal: this is a condition rather
+            // than an event, and an excited cat coming over is not what it is for. Above the
+            // boredom timer, so a waiting cursor beats an ordinary idea rather than racing it.
+            if let cursor = s.cursor,
+               s.cursorStill >= Feel.Mind.cursorStillSeconds,
+               abs(cursor.x - s.position.x) <= Feel.Mind.cursorNearby,
+               let x = beside(cursor: cursor, on: surface, from: s.position.x),
+               abs(x - s.position.x) > Feel.Physics.arrivalSlop * 3 {
+                s.intent = Intent(destination: surface.id, destinationX: x, move: .walk(x))
+                s.activity = .walk
+                s.activityElapsed = 0
+                return s
+            }
             // ...and stirred up, he gets to the end of that timer sooner.
             s.restLeft -= dt * (1 - s.languor * 0.6)
                 * (1 + s.arousal * Feel.Mind.restUrgency) / s.repose.restMultiplier
@@ -1519,6 +1558,32 @@ public enum Cat {
         let x = CGFloat.random(in: span.lowerBound...span.upperBound)
         return abs(x - s.position.x) < Feel.Physics.arrivalSlop * 2
             ? nil : Intent(destination: surface.id, destinationX: x, move: .walk(x))
+    }
+
+    /// Where to stop so he is beside your cursor rather than on top of it, or nil if there is
+    /// no standable spot on this surface that clears it.
+    ///
+    /// He settles on the side he is arriving from, so he does not walk past the thing he came
+    /// for and turn round. The clearance is his half width plus `cursorGap`, measured against
+    /// `Feel.Shape.width` rather than the drawn sprite because `App.hitRect` is built from the
+    /// same nominal figure, and these two must agree or the guard is measuring the wrong box.
+    ///
+    /// **He must never come to rest ON the cursor.** `Overlay.setInteractive` toggles
+    /// `ignoresMouseEvents` from exactly "is the cursor inside his hit rect", so a cat parked on
+    /// your cursor is a cat swallowing every click you make until he moves. `MANIFESTO.md` §7.3
+    /// asks for him to curl up on it; that is a defect by construction and this refuses it. A
+    /// cat does not sit on your hand, it sits against your hand.
+    public static func beside(cursor: CGPoint, on surface: Surface, from x0: CGFloat) -> CGFloat? {
+        let clear = Feel.Shape.width / 2 + Feel.Mind.cursorGap
+        let near = cursor.x + (x0 < cursor.x ? -clear : clear)
+        let far = cursor.x + (x0 < cursor.x ? clear : -clear)
+        // The near side first, then the far one, so a cursor at the very end of a ledge still
+        // gets him beside it rather than nowhere.
+        for want in [near, far] {
+            guard let x = nearestSpanX(to: want, in: surface.spans) else { continue }
+            if abs(x - cursor.x) >= clear { return x }
+        }
+        return nil
     }
 
     /// Which walkable surface a stimulus at this point belongs to, if any.
