@@ -688,22 +688,30 @@ public enum Cat {
                 // points, is the whole "slows" beat of the tell. It caps the ordinary walk
                 // rather than replacing it: the walk still ramps toward it at `accel`, so this
                 // is one number lower, not a second way of moving.
-                let ease = min(1, max(0, (toLip - plantAt) / Feel.Physics.edgeEase))
-                let cap = Feel.Physics.edgeCreepSpeed
-                    + (Feel.Physics.walkSpeed - Feel.Physics.edgeCreepSpeed) * ease
-                s.perchSpeed = max(-cap, min(cap, s.perchSpeed))
-                move = .walk(lip.x - lip.dir * Feel.Physics.edgeApproach)
+                //
+                // Scaled off the gait he would otherwise be travelling at, not off `walkSpeed`:
+                // a ceiling of `walkSpeed` holds a trotting cat at a walk while `hurrying` is
+                // still true, and `Sprites.clip` reads `hurrying` — so he plays the run frames
+                // at walking speed, which is the gait desync `strideLength` exists to prevent.
+                // Applied only inside the ease itself for the same reason: outside it he is
+                // covering ground, and how he covers ground is not this code's business.
+                let target = lip.x - lip.dir * Feel.Physics.edgeApproach
+                let ease = (toLip - plantAt) / Feel.Physics.edgeEase
+                if ease < 1 {
+                    let top = gait(over: target - s.position.x, languor: s.languor).top
+                    let creep = min(Feel.Physics.edgeCreepSpeed, top)
+                    let cap = creep + (top - creep) * max(0, ease)
+                    s.perchSpeed = max(-cap, min(cap, s.perchSpeed))
+                }
+                move = .walk(target)
             }
         }
 
         switch move {
         case .walk(let targetX):
             let dx = targetX - s.position.x
-            // Long trips are covered at a trot. A cat crossing a room does not stroll,
-            // and it is also the only thing that ever plays the run frames.
-            s.hurrying = abs(dx) > Feel.Physics.hurryDistance && s.languor < 0.5
-            let base = s.hurrying ? Feel.Physics.runSpeed : Feel.Physics.walkSpeed
-            let top = base * (1 - CGFloat(s.languor) * 0.45)
+            let (top, hurrying) = gait(over: dx, languor: s.languor)
+            s.hurrying = hurrying
 
             // The weight, in four lines. One signed surface-local speed ramped toward what he
             // wants gives the wind-up; braking at a fixed distance rather than at the distance
@@ -827,6 +835,20 @@ public enum Cat {
             break   // resolved into a walk above; unreachable
         }
         return s
+    }
+
+    /// What he asks of himself over a walk of `dx`. Long trips are covered at a trot — a cat
+    /// crossing a room does not stroll, and it is also the only thing that ever plays the run
+    /// frames — and a low battery makes whichever gait it is slower.
+    ///
+    /// One function because two callers have to agree: the walk sets `hurrying`, the animation
+    /// picks the run sheet from it, and the ease at a lip has to scale off the same number. A
+    /// second copy of this arithmetic that said `walkSpeed` where this one says `runSpeed` put
+    /// the run frames on screen at walking speed.
+    static func gait(over dx: CGFloat, languor: Double) -> (top: CGFloat, hurrying: Bool) {
+        let hurrying = abs(dx) > Feel.Physics.hurryDistance && languor < 0.5
+        let base = hurrying ? Feel.Physics.runSpeed : Feel.Physics.walkSpeed
+        return (base * (1 - CGFloat(languor) * 0.45), hurrying)
     }
 
     /// How long he looks before he decides. Scales with the drop, because a cat weighs a big

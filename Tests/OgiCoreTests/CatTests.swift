@@ -755,12 +755,17 @@ private func steppingOff() -> CatState {
     // A cat pacing to the same lip for ever is worse than one that jumps. Two things have to
     // hold: a refusal has to put a real gap before the next approach (he goes and does
     // something else), and he has to get down eventually.
+    // 90 seconds each, not 40: an approach is a slow one now (see `edgeEase`), and a refusal
+    // costs a retreat, a rest and a fresh idea before he is back at the lip. At 40s the second
+    // look often fell outside the window, and a trial where he only ever looked once measures
+    // nothing at all — hence the refusal count below, which cannot pass vacuously.
     let world = ledgeWorld()
-    var looks = 0, left = 0, tightest = TimeInterval.infinity, closest: CGFloat = 0
+    var looks = 0, refusals = 0, left = 0
+    var tightest = TimeInterval.infinity, closest: CGFloat = 0
     for _ in 0..<40 {
         var cat = steppingOff()
         var wasLooking = false, sinceLook = TimeInterval.infinity
-        for _ in 0..<Int(40 / dt) {
+        for _ in 0..<Int(90 / dt) {
             cat = Cat.step(cat, world: world, dt: dt)
             sinceLook += dt
             let looking = cat.activity == .edgeLook
@@ -769,12 +774,16 @@ private func steppingOff() -> CatState {
                 tightest = min(tightest, sinceLook)
                 sinceLook = 0
             }
+            // He stopped looking and is still up here: he turned it down. The retreat is a
+            // destination on his own surface, which is exactly what distinguishes it.
+            if wasLooking, !looking, cat.intent?.destination != .floor { refusals += 1 }
             wasLooking = looking
             if case .falling = cat.support { left += 1; break }
             if !looking { closest = max(closest, cat.position.x) }
         }
     }
-    #expect(looks > 40, "nobody refused, so the loop this guards against never happened")
+    #expect(refusals > 0, "nobody refused, so the loop this guards against never happened")
+    #expect(looks > 40, "every refusal was a dead end; he never came back to reconsider")
     #expect(tightest > Feel.Timing.restMin,
             "he went back to the lip \(tightest)s after turning it down: that is pacing")
     #expect(left > 20, "\(left)/40 got down; a refusal has become a dead end")
@@ -890,7 +899,11 @@ private func steppingOff() -> CatState {
     // ...and it is a real slowdown, not one tick of it. He arrives at a creep.
     #expect(speeds.last! < Feel.Physics.walkSpeed * 0.5,
             "he arrived at the lip doing \(speeds.last!) of \(Feel.Physics.walkSpeed)")
-    #expect(ramp.count > 60, "the ease lasted \(ramp.count) ticks; that is not a beat")
+    // ...and the ease is the part BELOW his cruising speed. Counting the whole tail counts the
+    // cruise, which on this ledge is 500 ticks of it, so a single tick stepping straight down
+    // to the creep would have passed.
+    let easing = ramp.filter { $0 < top - 0.5 }
+    #expect(easing.count > 60, "the ease lasted \(easing.count) ticks; that is not a beat")
 }
 
 @MainActor
@@ -901,4 +914,38 @@ private func steppingOff() -> CatState {
     let toHeldFrame = Double(clip.count - 1) / clip.fps
     #expect(Cat.hesitation(forDrop: 0) >= toHeldFrame,
             "the shortest look is \(Cat.hesitation(forDrop: 0))s and the lean takes \(toHeldFrame)s")
+}
+
+@MainActor
+@Test func aLongApproachToALipStillTrots() {
+    // The ease must not clip the trot. `Sprites.clip` picks the run sheet off `hurrying`, so a
+    // ceiling that holds him at a walk while he is still hurrying plays the run frames at
+    // walking speed — a moonwalk, and the same gait desync `strideLength` exists to prevent.
+    let world = ledgeWorld()
+    var cat = CatState(position: CGPoint(x: 410, y: 600))   // 490pt of ledge before the lip
+    cat.support = .grounded(Perch(id: .window(1), dx: 10))
+    cat.facing = 1
+    cat.intent = Intent(destination: .floor, destinationX: 1200, move: .stepOff)
+
+    var topWhileHurrying: CGFloat = 0
+    var clipsWhileHurrying: Set<Sprites.Clip> = []
+    var slowestAfterHurrying = CGFloat.greatestFiniteMagnitude
+    for _ in 0..<1800 {
+        cat = Cat.step(cat, world: world, dt: dt)
+        if cat.activity == .edgeLook { break }
+        if cat.hurrying {
+            topWhileHurrying = max(topWhileHurrying, abs(cat.perchSpeed))
+            clipsWhileHurrying.insert(Sprites.clip(for: cat.activity, dangling: false,
+                                                   hurrying: cat.hurrying))
+        } else if topWhileHurrying > 0 {
+            slowestAfterHurrying = min(slowestAfterHurrying, abs(cat.perchSpeed))
+        }
+    }
+    #expect(cat.activity == .edgeLook, "he never got to the lip")
+    #expect(clipsWhileHurrying == [.run], "half a ledge and he never trotted")
+    #expect(topWhileHurrying > Feel.Physics.runSpeed * 0.9,
+            "he played the run frames at \(topWhileHurrying) px/s against a run of \(Feel.Physics.runSpeed)")
+    // ...and he still arrives at a creep, so the trot is restored without losing the ease.
+    #expect(slowestAfterHurrying < Feel.Physics.edgeCreepSpeed * 1.5,
+            "he stopped easing: slowest after the trot was \(slowestAfterHurrying)")
 }
