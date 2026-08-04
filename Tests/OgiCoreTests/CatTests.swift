@@ -862,3 +862,43 @@ private func steppingOff() -> CatState {
     #expect(indices.last == Sprites.Clip.lookDown.count - 1, "the sheet never reached the hold")
     #expect(indices == indices.sorted(), "the frames played out of order")
 }
+
+@Test func heSlowsDownOnTheApproachInsteadOfArrivingAtAWalk() {
+    // The "slows" beat. It has to be its own thing: the walk's braking acts only inside
+    // `brakingDistance` of its mark, and he plants before ever getting there, so with the walk
+    // alone he holds a flat `walkSpeed` from wherever he set off right up to the lip and then
+    // stops dead in one tick. Two beats collapsed into one, and invisible on screen.
+    let world = ledgeWorld()
+    var cat = steppingOff()          // 700, lip at 900
+
+    var speeds: [CGFloat] = []
+    for _ in 0..<1800 {
+        cat = Cat.step(cat, world: world, dt: dt)
+        if cat.activity == .edgeLook { break }
+        speeds.append(abs(cat.perchSpeed))
+    }
+    guard let top = speeds.max(), cat.activity == .edgeLook else {
+        Issue.record("he never reached the lip; nothing here was measured")
+        return
+    }
+    #expect(top > Feel.Physics.walkSpeed * 0.9, "he never got up to a walk at all")
+    // From the fastest tick onward he only ever slows. Not strictly, because he holds his top
+    // speed for the stretch before the ease begins.
+    let ramp = speeds.drop(while: { $0 < top })
+    #expect(zip(ramp, ramp.dropFirst()).allSatisfy { $0 >= $1 },
+            "he speeds back up on the way in: \(Array(ramp.suffix(12)))")
+    // ...and it is a real slowdown, not one tick of it. He arrives at a creep.
+    #expect(speeds.last! < Feel.Physics.walkSpeed * 0.5,
+            "he arrived at the lip doing \(speeds.last!) of \(Feel.Physics.walkSpeed)")
+    #expect(ramp.count > 60, "the ease lasted \(ramp.count) ticks; that is not a beat")
+}
+
+@MainActor
+@Test func theLeanAlwaysFinishesBeforeHeCanCommit() {
+    // A non-looping clip holds its last frame, so the lean is only ever *seen* if the shortest
+    // hold outlasts the sheet. Derived from the clip so it tracks a change to either number.
+    let clip = Sprites.Clip.lookDown
+    let toHeldFrame = Double(clip.count - 1) / clip.fps
+    #expect(Cat.hesitation(forDrop: 0) >= toHeldFrame,
+            "the shortest look is \(Cat.hesitation(forDrop: 0))s and the lean takes \(toHeldFrame)s")
+}

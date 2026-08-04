@@ -621,6 +621,9 @@ public enum Cat {
                 return s
             }
             let toLip = abs(lip.x - s.position.x)
+            // Where he plants: one braking distance outside the mark he is walking to, so the
+            // approach can never actually *arrive* (see the approach branch).
+            let plantAt = Feel.Physics.edgeApproach + Feel.Physics.brakingDistance
 
             if s.activity == .edgeLook {
                 s.perchSpeed = 0
@@ -659,7 +662,7 @@ public enum Cat {
                 s.intent?.move = move
                 s.activity = .walk
 
-            } else if toLip <= Feel.Physics.edgeApproach + Feel.Physics.brakingDistance {
+            } else if toLip <= plantAt {
                 // Close enough. He plants and puts his head over the side.
                 s.facing = lip.dir
                 s.perchSpeed = 0
@@ -669,13 +672,26 @@ public enum Cat {
             } else {
                 // The approach, aimed to stop `edgeApproach` SHORT of the lip — roughly half
                 // his drawn width, so he ends up with his nose over the edge and his paws on
-                // solid ground. It is the ordinary walk, so the ramp and the braking are the
-                // ordinary ones and there is no second notion of speed anywhere.
+                // solid ground.
                 //
-                // The plant above intercepts one braking distance outside that mark, so the
-                // walk can never actually *arrive*. That matters: arriving calls `advance`, and
-                // from this close to a lip a jump down suddenly clears his own ledge, so
-                // re-planning here would quietly turn the whole tell into a leap.
+                // The plant above intercepts one braking distance outside that mark so the walk
+                // can never actually *arrive*. That is what makes the tell survive: arriving
+                // calls `advance`, and from this close to a lip a jump down suddenly clears his
+                // own ledge, so re-planning here would quietly turn the whole thing into a leap.
+                //
+                // Which is also why the slowing down has to happen here rather than in the
+                // walk's own braking. The two windows coincide exactly — the walk brakes inside
+                // `brakingDistance` of its mark, which is the last `plantAt` points, and those
+                // are precisely the points he never spends walking — so left to the walk he
+                // would hold a flat `walkSpeed` right up to the lip and then stop dead. A
+                // ceiling on his surface speed, easing to a creep over the last `edgeEase`
+                // points, is the whole "slows" beat of the tell. It caps the ordinary walk
+                // rather than replacing it: the walk still ramps toward it at `accel`, so this
+                // is one number lower, not a second way of moving.
+                let ease = min(1, max(0, (toLip - plantAt) / Feel.Physics.edgeEase))
+                let cap = Feel.Physics.edgeCreepSpeed
+                    + (Feel.Physics.walkSpeed - Feel.Physics.edgeCreepSpeed) * ease
+                s.perchSpeed = max(-cap, min(cap, s.perchSpeed))
                 move = .walk(lip.x - lip.dir * Feel.Physics.edgeApproach)
             }
         }

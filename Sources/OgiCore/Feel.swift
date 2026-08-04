@@ -32,6 +32,15 @@ public enum Feel {
         /// How far back along the ledge he retreats when he thinks better of it. Far enough
         /// that the next idea starts from somewhere that is not the lip.
         public static let edgeRetreat: CGFloat = 70
+        /// Over how many points he eases off on the way to a lip, and the creep he is down to
+        /// when he gets there. This is the "slows" beat of the tell and it cannot come from
+        /// the walk's own braking: that only acts inside `brakingDistance` of its mark, which
+        /// is exactly the stretch he never walks, since he plants before reaching it.
+        ///
+        /// Three body lengths of approach, ending at about a third of a stroll. Long enough to
+        /// read as a decision being made before he arrives rather than a stop.
+        public static let edgeEase: CGFloat = 78
+        public static let edgeCreepSpeed: CGFloat = 16
 
         public static let walkSpeed: CGFloat = 46          // px/s
         public static let runSpeed: CGFloat = 118
@@ -141,7 +150,14 @@ public enum Feel {
         /// teleporting rectangle, and this is the difference between the cat jumped and the
         /// cat decided to jump. Long enough to read as thinking, short enough not to look
         /// broken. Tune these before anything else if the hold does not land.
-        public static let edgeHesitationMin: TimeInterval = 0.35
+        ///
+        /// **The minimum has a floor under it: the `lookDown` sheet's own time to its held
+        /// frame**, 3 frames at 6fps. Below that a shallow drop commits part-way through the
+        /// lean and the tell is a cat twitching his head down — and window-to-window drops are
+        /// the common case, so that would be most of them. `theLeanAlwaysFinishesBeforeHeCanCommit`
+        /// derives the figure from the clip and fails if either number moves; it lives in the
+        /// tests rather than here because `Cat.step` cannot see `Sprites`.
+        public static let edgeHesitationMin: TimeInterval = 0.5
         public static let edgeHesitationMax: TimeInterval = 1.6
 
         /// OGI_RESTLESS=1 collapses these so his behaviour can actually be watched.
