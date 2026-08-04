@@ -1067,38 +1067,17 @@ public enum Cat {
             case .alert where s.glanceLeft > 0: break
             default: s.activity = s.repose.restingActivity
             }
-            // Already washing: keep at it for a few seconds, then settle back. Anything that
-            // actually matters — settling to sleep, the mic going live — is handled above this
-            // and overrides it, which is the right precedence.
-            if s.activity == .groom {
-                if s.activityElapsed > Feel.Timing.groomSeconds {
-                    s.activity = s.repose.restingActivity
-                    s.activityElapsed = 0
-                    s.restLeft = Feel.Timing.restMin + Double.random(in: 0...Feel.Timing.restJitter)
-                }
-                return s
-            }
-            // Already sprawled: hold the lounge for its spell, then settle back. The same
-            // shape as the wash above, and everything that matters more — the freeze, the
-            // yield, sleep, being hidden — already returned before this.
-            if s.activity == .lounge {
-                if s.activityElapsed > Feel.Taste.loungeSeconds {
-                    s.activity = s.repose.restingActivity
-                    s.activityElapsed = 0
-                    s.restLeft = Feel.Timing.restMin + Double.random(in: 0...Feel.Timing.restJitter)
-                }
-                return s
-            }
-            // Nothing to do. Sit still until boredom wins.
-            // Low battery makes him idle longer. A sluggish cat means plug in.
-            // Settledness stretches the same timer rather than stopping it.
-            // He wants to be seen. A cat behind a window is a cat doing nothing, however good
-            // the thing he is doing, so this outranks every other idea he could have.
+            // He wants to be seen, and it outranks the in-place holds below: a cat behind a
+            // window is a cat doing nothing, however good the thing he is doing — and the
+            // lounge made that real, because a 45-second spell held behind a window blind to
+            // being hidden measured out at 52 seconds of invisibility. A wash or a lounge is
+            // interrupted; being seen matters more.
             //
-            // `spans` is exactly "where he is visible", so a window raised over his perch makes
-            // this true with no new world model: the same array the renderer already uses to
-            // decide what to clip. He steps out along his own ledge if any of it is still
-            // showing, and only leaves the ledge entirely when the whole thing is covered.
+            // `spans` is exactly "where he is visible", so a window raised over his perch
+            // makes this true with no new world model: the same array the renderer already
+            // uses to decide what to clip. He steps out along his own ledge if any of it is
+            // still showing, and only leaves the ledge entirely when the whole thing is
+            // covered.
             if s.hiddenFor >= Feel.Mind.hiddenPatience {
                 if let x = standingRoom(near: s.position.x, in: surface.spans),
                    abs(x - s.position.x) > Feel.Physics.arrivalSlop * 3 {
@@ -1121,6 +1100,34 @@ public enum Cat {
                     }
                 }
             }
+
+            // Already washing: keep at it for a few seconds, then settle back. Anything that
+            // actually matters — settling to sleep, the mic going live, being hidden — is
+            // handled above this and overrides it, which is the right precedence.
+            if s.activity == .groom {
+                if s.activityElapsed > Feel.Timing.groomSeconds {
+                    s.activity = s.repose.restingActivity
+                    s.activityElapsed = 0
+                    s.restLeft = Feel.Timing.restMin + Double.random(in: 0...Feel.Timing.restJitter)
+                }
+                return s
+            }
+            // Already sprawled: hold the lounge for its spell, then settle back. The same
+            // shape as the wash above, and everything that matters more — the freeze, the
+            // yield, sleep, being hidden — already returned before this.
+            if s.activity == .lounge {
+                if s.activityElapsed > Feel.Taste.loungeSeconds {
+                    s.activity = s.repose.restingActivity
+                    s.activityElapsed = 0
+                    s.restLeft = Feel.Timing.restMin + Double.random(in: 0...Feel.Timing.restJitter)
+                }
+                return s
+            }
+            // Nothing to do. Sit still until boredom wins.
+            // Low battery makes him idle longer. A sluggish cat means plug in.
+            // Settledness stretches the same timer rather than stopping it.
+            // (Being hidden is handled above the in-place holds now: a lounge held behind a
+            // window was 52 seconds of invisibility.)
 
             // Cats approach when you go still. Not gated on arousal: this is a condition rather
             // than an event, and an excited cat coming over is not what it is for. Above the

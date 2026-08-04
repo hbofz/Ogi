@@ -1224,17 +1224,19 @@ private func steppingOff() -> CatState {
     // A cat pacing to the same lip for ever is worse than one that jumps. Two things have to
     // hold: a refusal has to put a real gap before the next approach (he goes and does
     // something else), and he has to get down eventually.
-    // 90 seconds each, not 40: an approach is a slow one now (see `edgeEase`), and a refusal
-    // costs a retreat, a rest and a fresh idea before he is back at the lip. At 40s the second
-    // look often fell outside the window, and a trial where he only ever looked once measures
-    // nothing at all — hence the refusal count below, which cannot pass vacuously.
+    // 180 seconds each, extended twice for the same reason: an approach is a slow one (see
+    // `edgeEase`), a refusal costs a retreat, a rest and a fresh idea — and since v2c that
+    // fresh idea is often a 45-second lounge, which is the election working as designed. At
+    // 90s the second look fell outside the window again, and a trial where he only ever
+    // looked once measures nothing at all — hence the refusal count below, which cannot
+    // pass vacuously.
     let world = ledgeWorld()
     var looks = 0, refusals = 0, left = 0
     var tightest = TimeInterval.infinity, closest: CGFloat = 0
     for _ in 0..<40 {
         var cat = steppingOff()
         var wasLooking = false, sinceLook = TimeInterval.infinity
-        for _ in 0..<Int(90 / dt) {
+        for _ in 0..<Int(180 / dt) {
             cat = Cat.step(cat, world: world, dt: dt)
             sinceLook += dt
             let looking = cat.activity == .edgeLook

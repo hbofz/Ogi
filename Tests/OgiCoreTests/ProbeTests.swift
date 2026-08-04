@@ -273,7 +273,7 @@ func PROBE_heLooksAtWindowsThatOpen() {
 func PROBE_aRousedCatGoesToLook() {
     let dt = Feel.Timing.fixedDT
     func rates(arousal: Double) -> (all: Double, whenFree: Double) {
-        var approached = 0, opened = 0, free = 0
+        var approached = 0, opened = 0, free = 0, walled = 0
         for run in 0..<40 {
             let world = realDesktop()
             var cat = CatState(position: CGPoint(x: 400 + CGFloat(run % 5) * 100, y: 1205))
@@ -282,22 +282,45 @@ func PROBE_aRousedCatGoesToLook() {
                 cat.arousal = arousal            // held, so the measurement is about the gate
                 if tick % (120 * 60) == 0, tick > 0 {
                     let wasFree = cat.intent == nil
+                    // Free is not enough since v2c: the taste layer moves him around more
+                    // than the coin flip did, and from window(2) there is no route to
+                    // window(1) at all — nextMove refuses to lose height, deliberately. The
+                    // arousal gate cannot be measured through a wall, so the denominator is
+                    // free AND routable; the walled share is printed rather than judged.
+                    let promoted = Cat.nearestSpanX(to: 650, in: world.surface(.window(1))?.spans ?? [])
+                    var routable = false
+                    if case .grounded(let p) = cat.support, let here = world.surface(p.id) {
+                        routable = Cat.nextMove(from: cat, on: here, toward: .window(1),
+                                                x: promoted ?? 650, world: world) != nil
+                    }
+                    // ...and he cannot approach what he is standing on. The taste layer
+                    // CAMPS him at the promoted spot — novelty took him there, staleness and
+                    // the lounge kept him there — so at the next opening he is often already
+                    // at x≈650 on window(1). The promotion still fires, forms a three-point
+                    // walk, and completes-and-settles inside the same step, which read as a
+                    // miss. Being there already is the behaviour succeeding, not failing.
+                    let alreadyThere: Bool = {
+                        guard case .grounded(let p) = cat.support else { return false }
+                        return p.id == .window(1)
+                            && abs(cat.position.x - (promoted ?? 650)) < Feel.Physics.arrivalSlop * 3
+                    }()
                     cat.stimulus = Stimulus(kind: .windowOpened, at: CGPoint(x: 650, y: 1110))
                     opened += 1
-                    if wasFree { free += 1 }
+                    if wasFree, routable, !alreadyThere { free += 1 }
+                    if wasFree, !routable { walled += 1 }
                     cat = Cat.step(cat, world: world, dt: dt)
                     // Matched on the exact destination the promotion computes, not merely on the
                     // surface. Boredom picks a uniform x on that same window often enough to
                     // register as a chase otherwise, which showed up as a calm cat "chasing" one
                     // window in 360 and is a coincidence rather than a behaviour.
-                    let promoted = Cat.nearestSpanX(to: 650, in: world.surface(.window(1))?.spans ?? [])
-                    if wasFree, cat.intent?.destination == .window(1),
+                    if wasFree, routable, !alreadyThere, cat.intent?.destination == .window(1),
                        cat.intent?.destinationX == promoted { approached += 1 }
                     continue
                 }
                 cat = Cat.step(cat, world: world, dt: dt)
             }
         }
+        print("  arousal \(arousal): \(walled) of \(opened) openings found him free but walled off")
         return (Double(approached) / Double(max(opened, 1)),
                 Double(approached) / Double(max(free, 1)))
     }
@@ -424,6 +447,109 @@ func PROBE_openingTwoWindowsTheWayAPersonDoes() {
         print(String(format: "two windows %.0fs apart: he went over %d/60 (free to act %d/60)",
                      gap, went, freeAtSecond))
     }
+}
+
+/// The whole point of v2c, as a number: where he CHOOSES to go must stop being the same
+/// distribution as where he happens to be. v2b measured the two as identical (L1 ≈ 0.04),
+/// which is what "he has no preference" looks like.
+@Test(.enabled(if: ProcessInfo.processInfo.environment["OGI_PROBE"] != nil))
+func PROBE_hisChoicesAreNoLongerDice() {
+    var toCount: [String: Int] = [:], dwell: [String: Double] = [:]
+    var total = 0
+    for i in 0..<40 {
+        let starts: [(CGPoint, SurfaceID)] = [
+            (CGPoint(x: 400, y: 1205), .menuBar), (CGPoint(x: 600, y: 1110), .window(1)),
+            (CGPoint(x: 1300, y: 973), .window(2)), (CGPoint(x: 900, y: 90), .floor),
+        ]
+        let (p, id) = starts[i % starts.count]
+        let r = simulate(realDesktop(), seconds: 600, startAt: p, startPerch: id)
+        for d in r.decisions { toCount[name(d.to), default: 0] += 1; total += 1 }
+        for (k, v) in r.dwell { dwell[k, default: 0] += v }
+    }
+    let dwellTotal = dwell.values.reduce(0, +)
+    var l1 = 0.0
+    for k in Set(toCount.keys).union(dwell.keys) {
+        let choice = Double(toCount[k] ?? 0) / Double(max(total, 1))
+        let share = (dwell[k] ?? 0) / max(dwellTotal, 1)
+        print(String(format: "  %-12@ chosen %5.1f%%  dwelt %5.1f%%", k as NSString,
+                     choice * 100, share * 100))
+        l1 += abs(choice - share)
+    }
+    print(String(format: "choice-vs-dwell L1 distance: %.3f (v2b baseline ~0.04)", l1))
+    // Pinned per the spec's measure-then-set rule: dice measured ~0.04, the election at
+    // temperature 0.18 measured ~0.145. The gap is structurally compressed — dwell CHASES
+    // choice once he acts on preferences, since he spends his time where he chose to go —
+    // so this can never approach 1 and the pin sits between the two measured worlds.
+    #expect(l1 > 0.10, "his choices still mirror where he already is; the taste is decorative")
+}
+
+/// Spec §8: a bare desk is for lounging, not pacing.
+@Test(.enabled(if: ProcessInfo.processInfo.environment["OGI_PROBE"] != nil))
+func PROBE_aBareDeskIsForLounging() {
+    var lounge = 0.0, grounded = 0.0
+    var floorStrolls = 0, decisions = 0
+    for i in 0..<40 {
+        let starts: [(CGPoint, SurfaceID)] = [
+            (CGPoint(x: 400, y: 1205), .menuBar), (CGPoint(x: 900, y: 90), .floor),
+        ]
+        let (p, id) = starts[i % starts.count]
+        let r = simulate(bareDesktop(), seconds: 600, startAt: p, startPerch: id)
+        lounge += r.activitySeconds["lounge"] ?? 0
+        grounded += r.dwell.values.reduce(0, +)
+        for d in r.decisions {
+            decisions += 1
+            if d.from == .floor && d.to == .floor { floorStrolls += 1 }
+        }
+    }
+    let loungeShare = lounge / max(grounded, 1)
+    let strollShare = Double(floorStrolls) / Double(max(decisions, 1))
+    print(String(format: "bare desk: lounging %.1f%% of grounded time, floor strolls %.1f%% of decisions (was ~96%%)",
+                 loungeShare * 100, strollShare * 100))
+    #expect(loungeShare >= 0.25, "he barely lounges on a bare desk")
+    #expect(strollShare < 0.50, "the bare desk is still a pacing pen")
+}
+
+/// Spec §8: a new window stays interesting for minutes, through ordinary boredom, at
+/// arousal 0 the whole way — this is taste, not the v2b stimulus promotion.
+@Test(.enabled(if: ProcessInfo.processInfo.environment["OGI_PROBE"] != nil))
+func PROBE_aNewWindowStaysInteresting() {
+    let dt = Feel.Timing.fixedDT
+    func withNewWindow() -> Skyline {
+        World.build(windows: [
+            RawWindow(id: 1, pid: 100, layer: 0,
+                      rect: CGRect(x: 254, y: 192, width: 847, height: 918),
+                      alpha: 1, owner: "Ghostty"),
+            RawWindow(id: 2, pid: 101, layer: 0,
+                      rect: CGRect(x: 1167, y: 588, width: 580, height: 385),
+                      alpha: 1, owner: "Terminal"),
+            RawWindow(id: 3, pid: 102, layer: 0,
+                      rect: CGRect(x: 700, y: 300, width: 500, height: 350),
+                      alpha: 1, owner: "Fresh"),
+        ], screen: probeScreen, ownPID: 999)
+    }
+    func choices(appearing: Bool) -> Int {
+        var count = 0
+        for run in 0..<40 {
+            let before = realDesktop()
+            let after = withNewWindow()
+            let startX = 300 + CGFloat(run % 8) * 100
+            var cat = CatState(position: CGPoint(x: startX, y: 1205))
+            cat.support = .grounded(Perch(id: .menuBar, dx: startX))
+            var lastIntent: SurfaceID?
+            for tick in 0..<(120 * 600) {
+                let world = (appearing && tick < 120 * 60) ? before : after
+                cat = Cat.step(cat, world: world, dt: dt)
+                if tick >= 120 * 60, cat.intent?.destination == .window(3),
+                   lastIntent != .window(3) { count += 1 }
+                lastIntent = cat.intent?.destination
+            }
+        }
+        return count
+    }
+    let asFurniture = choices(appearing: false)   // present from launch: never novel
+    let asNews = choices(appearing: true)         // appears at t=60: novel for minutes
+    print("window(3) chosen: \(asNews) times when it appeared mid-run, \(asFurniture) as launch furniture")
+    #expect(asNews > asFurniture, "a window appearing changes nothing about where he goes")
 }
 
 /// A layout where windows actually overlap each other's top edges, which is what makes any of

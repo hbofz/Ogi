@@ -277,8 +277,10 @@ public enum Feel {
     /// `theLoungeWinsBareDesksButNotAlways`.
     public enum Taste {
         /// How opinionated he is. Lower is more compulsive; higher approaches the old
-        /// coin flip.
-        public static let temperature: Double = 0.25
+        /// coin flip. 0.25 measured out at a choice-vs-dwell divergence of 0.095 on the
+        /// real desktop — taste you could measure and not quite feel — and sharpening to
+        /// 0.18 is the knob the plan names first.
+        public static let temperature: Double = 0.18
         /// New furniture stays interesting for minutes, not for a glance. Dominant by
         /// design: a new window must beat any stale, familiar perch.
         public static let wNovelty: Double = 1.0
