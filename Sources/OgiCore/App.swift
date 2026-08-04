@@ -524,6 +524,10 @@ public final class OgiApp: NSObject, NSApplicationDelegate {
         let pose = buildPose(dt: dt)
         let frame = Sprites.frame(for: cat, pose: pose)
         drawnRect = frame.rect(at: cat.position)
+        // The simulation's copy of the drawn rect, so the yield guard measures the same box
+        // that swallows clicks. One frame stale at worst, which is what the click poll costs
+        // anyway.
+        cat.drawnBox = drawnRect
 
         // He looks at your cursor. The strongest aliveness signal that exists.
         let head = CGPoint(x: cat.position.x,
@@ -539,12 +543,14 @@ public final class OgiApp: NSObject, NSApplicationDelegate {
                                                     intersecting: hitRect().insetBy(dx: -40, dy: -h - 40)))
     }
 
-    /// Where a click counts as touching him. Padded, because he is a small target.
+    /// Where a click counts as touching him. Padded, because he is a small target. This is
+    /// `Cat.hisBox` exactly — same rect, same pad — so the box he yields to and the box that
+    /// swallows clicks cannot drift apart again.
     private func hitRect() -> CGRect {
         (drawnRect == .zero ? CGRect(x: cat.position.x - Feel.Shape.width / 2,
                                      y: cat.position.y,
                                      width: Feel.Shape.width, height: Feel.Shape.height)
-                            : drawnRect).insetBy(dx: -6, dy: -6)
+                            : drawnRect).insetBy(dx: -Feel.Shape.hitPad, dy: -Feel.Shape.hitPad)
     }
 
     /// Stops the clock entirely and watches for your return once a second. One wakeup a

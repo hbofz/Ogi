@@ -316,6 +316,11 @@ public struct CatState: Sendable {
     /// in place resets it for ever, so he would sit under it swallowing clicks and never decide
     /// he was in the way. Measured at fourteen seconds before this existed.
     public var cursorOnHimFor: TimeInterval = 0
+    /// The rect he was actually drawn in last frame, screen-global. Set by `App` each render;
+    /// nil until the first one. The sprite is normalised on eye width and is usually larger
+    /// than the nominal `Feel.Shape` figure, and the yield has to measure the box that
+    /// actually swallows clicks, not the one that is convenient to compute.
+    public var drawnBox: CGRect?
     /// Covering a long distance, so he trots instead of strolling.
     public var hurrying = false
 
@@ -891,7 +896,8 @@ public enum Cat {
         // the way.
         if s.intent == nil, let cursor = s.cursor,
            s.cursorOnHimFor >= Feel.Mind.yieldPatience,
-           let x = beside(cursor: cursor, on: surface, from: s.position.x),
+           let x = beside(cursor: cursor, on: surface, from: s.position.x,
+                          width: s.drawnBox?.width ?? Feel.Shape.width),
            abs(x - s.position.x) > Feel.Physics.arrivalSlop {
             s.intent = Intent(destination: surface.id, destinationX: x, move: .walk(x))
             s.activity = .walk
@@ -1040,7 +1046,8 @@ public enum Cat {
             if let cursor = s.cursor,
                s.cursorStill >= Feel.Mind.cursorStillSeconds,
                hypot(cursor.x - s.position.x, cursor.y - s.position.y) <= Feel.Mind.cursorNearby,
-               let x = beside(cursor: cursor, on: surface, from: s.position.x),
+               let x = beside(cursor: cursor, on: surface, from: s.position.x,
+                              width: s.drawnBox?.width ?? Feel.Shape.width),
                abs(x - s.position.x) > Feel.Physics.arrivalSlop * 3 {
                 s.intent = Intent(destination: surface.id, destinationX: x, move: .walk(x))
                 s.activity = .walk
@@ -1712,35 +1719,39 @@ public enum Cat {
         return !surface.spans.contains { $0.contains(s.position.x) }
     }
 
-    /// The box your cursor has to be inside for him to count as being in your way, which is his
-    /// drawn size plus the same clearance `beside` leaves.
+    /// The box your cursor has to be inside for him to count as being in your way: the rect
+    /// he was DRAWN in, padded by the same `hitPad` the click rect uses, so the two are one
+    /// figure. `App.hitRect` decides whether his window swallows your clicks, and this must
+    /// be that rect — built from the nominal 52×34 instead, it missed every drawn point
+    /// outside it (the sprite is normalised on eye width and is usually larger), so a cursor
+    /// parked on his ear ate clicks for ever and the yield never saw it.
     ///
-    /// Built from `Feel.Shape` because `App.hitRect` is built from `Feel.Shape`, and that is the
-    /// rect deciding whether his window swallows your clicks. If these two ever disagree he is
-    /// either moving aside for a cursor that was never on him or sitting on one that is.
+    /// The nominal figure only stands in before the first render, when nothing has been
+    /// drawn and nothing can be clicked anyway.
     public static func hisBox(_ s: CatState) -> CGRect {
-        let pad = Feel.Mind.cursorGap
-        return CGRect(x: s.position.x - Feel.Shape.width / 2 - pad,
-                      y: s.position.y - pad,
-                      width: Feel.Shape.width + pad * 2,
-                      height: Feel.Shape.height + pad * 2)
+        let box = s.drawnBox ?? CGRect(x: s.position.x - Feel.Shape.width / 2,
+                                       y: s.position.y,
+                                       width: Feel.Shape.width, height: Feel.Shape.height)
+        return box.insetBy(dx: -Feel.Shape.hitPad, dy: -Feel.Shape.hitPad)
     }
 
     /// Where to stop so he is beside your cursor rather than on top of it, or nil if there is
     /// no standable spot on this surface that clears it.
     ///
     /// He settles on the side he is arriving from, so he does not walk past the thing he came
-    /// for and turn round. The clearance is his half width plus `cursorGap`, measured against
-    /// `Feel.Shape.width` rather than the drawn sprite because `App.hitRect` is built from the
-    /// same nominal figure, and these two must agree or the guard is measuring the wrong box.
+    /// for and turn round. The clearance is half of `width` plus `cursorGap` — the caller
+    /// passes his DRAWN width when there is one, because the sprite is usually larger than
+    /// the nominal figure and a clearance measured against the smaller box can settle his
+    /// drawn edge onto the cursor.
     ///
     /// **He must never come to rest ON the cursor.** `Overlay.setInteractive` toggles
     /// `ignoresMouseEvents` from exactly "is the cursor inside his hit rect", so a cat parked on
     /// your cursor is a cat swallowing every click you make until he moves. `MANIFESTO.md` §7.3
     /// asks for him to curl up on it; that is a defect by construction and this refuses it. A
     /// cat does not sit on your hand, it sits against your hand.
-    public static func beside(cursor: CGPoint, on surface: Surface, from x0: CGFloat) -> CGFloat? {
-        let clear = Feel.Shape.width / 2 + Feel.Mind.cursorGap
+    public static func beside(cursor: CGPoint, on surface: Surface, from x0: CGFloat,
+                              width: CGFloat = Feel.Shape.width) -> CGFloat? {
+        let clear = width / 2 + Feel.Mind.cursorGap
         let near = cursor.x + (x0 < cursor.x ? -clear : clear)
         let far = cursor.x + (x0 < cursor.x ? clear : -clear)
         // The near side first, then the far one, so a cursor at the very end of a ledge still

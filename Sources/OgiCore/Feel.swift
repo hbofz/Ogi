@@ -221,13 +221,19 @@ public enum Feel {
         /// pointer six hundred points down, which is aligned with you rather than next to you.
         public static let cursorStillSeconds: TimeInterval = 60
         public static let cursorNearby: CGFloat = 400
-        /// Clearance between his hit rect and your cursor when he settles beside it.
+        /// Clearance between his DRAWN edge and your cursor when he settles beside it.
         ///
         /// He must never come to rest ON the cursor. `Overlay.setInteractive` toggles
         /// `ignoresMouseEvents` from exactly one condition, whether the cursor is inside his
         /// hit rect, because Apple's per-pixel alpha hit testing regressed again on 26.5.1.
         /// A cat parked on your cursor is a cat swallowing every click you make.
-        public static let cursorGap: CGFloat = 8
+        ///
+        /// Floored by `Shape.hitPad + arrivalSlop`: the click rect reaches `hitPad` past his
+        /// ink and the walk overshoots a few points toward its mark, so anything smaller can
+        /// settle him with the cursor still inside the rect that eats clicks. 8 was under
+        /// that floor by one point. Tune by eye upward only;
+        /// `theSettleClearanceKeepsTheCursorOutOfTheClickRect` holds the floor.
+        public static let cursorGap: CGFloat = 12
         /// How long your cursor has to sit on him before he gets up and moves aside.
         ///
         /// Not zero, which is what it effectively was. Firing on arrival meant that pointing at
@@ -402,6 +408,10 @@ public enum Feel {
         /// Target on-screen eye width in points. Every clip is scaled to match it, which is
         /// what keeps him the same size whether he is sitting or walking.
         public static let referenceEyeWidth: CGFloat = 2.1
+        /// How far past his drawn ink a click still counts as touching him. He is a small
+        /// target, so the hit rect is padded — and the yield box is built from the same
+        /// figure, because the box he moves aside for must be the box that swallows clicks.
+        public static let hitPad: CGFloat = 6
         /// Squash depth is proportional to impact speed, capped here.
         public static let maxSquash: CGFloat = 0.30
         /// Ground covered per full gait cycle. Tuned so the paws do not skate.

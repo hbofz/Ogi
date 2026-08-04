@@ -767,16 +767,50 @@ private func twoLedges() -> Skyline {
 }
 
 @Test func hisBoxAgreesWithTheRectThatSwallowsClicks() {
-    // App.hitRect is what actually decides whether his window eats your clicks. If these two
-    // drift he either moves aside for a cursor that was never on him, or sits on one that is.
+    // App.hitRect is what actually decides whether his window eats your clicks: the DRAWN
+    // rect, padded by hitPad. If these two drift he either moves aside for a cursor that was
+    // never on him, or sits on one that is — which is what shipped: this box used to be built
+    // from the nominal 52×34 while the sprite is normalised on eye width and usually larger,
+    // so a cursor parked on his ear swallowed clicks for ever and the yield never saw it.
     var cat = CatState(position: CGPoint(x: 900, y: 1205))
     cat.support = .grounded(Perch(id: .menuBar, dx: 900))
-    let hit = CGRect(x: cat.position.x - Feel.Shape.width / 2, y: cat.position.y,
-                     width: Feel.Shape.width, height: Feel.Shape.height)
-    let box = Cat.hisBox(cat)
-    #expect(box.contains(hit), "his box has to cover every point that swallows a click")
-    #expect(box.insetBy(dx: Feel.Mind.cursorGap, dy: Feel.Mind.cursorGap) == hit,
-            "his box should be exactly the click rect plus one cursorGap of clearance")
+
+    // Before the first render there is no drawn rect and the nominal figure stands in.
+    let nominal = CGRect(x: cat.position.x - Feel.Shape.width / 2, y: cat.position.y,
+                         width: Feel.Shape.width, height: Feel.Shape.height)
+    #expect(Cat.hisBox(cat) == nominal.insetBy(dx: -Feel.Shape.hitPad, dy: -Feel.Shape.hitPad))
+
+    // Once he has been drawn, the drawn rect is the truth.
+    let drawn = CGRect(x: 855, y: 1205, width: 90, height: 60)
+    cat.drawnBox = drawn
+    #expect(Cat.hisBox(cat) == drawn.insetBy(dx: -Feel.Shape.hitPad, dy: -Feel.Shape.hitPad),
+            "his box has to be exactly the rect that swallows a click")
+}
+
+@Test func theYieldMeasuresTheDrawnSpriteNotTheNominalBox() {
+    // A cursor can sit on a drawn part of him that the nominal box cannot see. That cursor
+    // is inside the rect that eats clicks, so he has to treat it as being in his way.
+    let bar = surface(.menuBar, y: 1205, from: 0, to: 1920, z: -1)
+    var cat = CatState(position: CGPoint(x: 900, y: 1205))
+    cat.support = .grounded(Perch(id: .menuBar, dx: 900))
+    cat.restLeft = .infinity
+    cat.drawnBox = CGRect(x: 855, y: 1205, width: 90, height: 60)
+    cat.cursor = CGPoint(x: 940, y: 1215)   // on his drawn rump, outside the nominal box
+
+    for _ in 0..<(120 * 20) {
+        cat.cursorStill += dt
+        cat = Cat.step(cat, world: sky([bar]), dt: dt)
+    }
+    #expect(abs(cat.position.x - 940) >= 45 + Feel.Mind.cursorGap - Feel.Physics.arrivalSlop * 3,
+            "he stayed at \(cat.position.x) with the cursor on his drawn body, eating clicks")
+}
+
+@Test func theSettleClearanceKeepsTheCursorOutOfTheClickRect() {
+    // He aims to stop width/2 + cursorGap from the cursor and overshoots a few points toward
+    // it, and the click rect reaches hitPad past his ink. If the gap cannot absorb both, the
+    // settle parks the cursor inside the rect that eats clicks — at 8 it did, by one point.
+    #expect(Feel.Mind.cursorGap > Feel.Shape.hitPad + Feel.Physics.arrivalSlop,
+            "cursorGap has no room for the click padding plus the arrival overshoot")
 }
 
 // MARK: - He wants to be seen
