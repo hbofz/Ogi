@@ -43,6 +43,41 @@ private let dt = Feel.Timing.fixedDT
     #expect(edge < 2 * Feel.Taste.temperature, "the lounge always wins; he would never stroll")
 }
 
+// MARK: - Scoring and the draw
+
+@Test func theDrawFavoursTheHighScoreWithoutGuaranteeingIt() {
+    let scores = [1.0, 0.0]
+    // At tiny temperature the high score takes essentially the whole roll range.
+    #expect(Cat.draw(scores, temperature: 0.01, roll: 0.95) == 0)
+    // At huge temperature the two split it nearly evenly, so a roll past the midpoint is
+    // the second candidate.
+    #expect(Cat.draw(scores, temperature: 100, roll: 0.6) == 1)
+    #expect(Cat.draw([], temperature: 1, roll: 0.5) == nil)
+}
+
+@Test func theUrgesReadHisMemory() {
+    let bar = surface(.menuBar, y: 1205, from: 0, to: 1920, z: -1)
+    let floor = surface(.floor, y: 90, from: 0, to: 1920, z: .max)
+    let world = sky([bar, floor])
+    var cat = CatState(position: CGPoint(x: 900, y: 90))
+    cat.support = .grounded(Perch(id: .floor, dx: 900))
+    cat.age = 100
+    var floorPlace = CatState.Place(firstSeen: -.infinity)
+    floorPlace.lastVisit = 100
+    floorPlace.visits = 5
+    cat.memory[.floor] = floorPlace
+    cat.memory[.menuBar] = CatState.Place(firstSeen: 95)
+
+    let here = Cat.score(Cat.Candidate(id: .floor, x: 905, y: 90), from: cat, world: world)
+    let fresh = Cat.score(Cat.Candidate(id: .menuBar, x: 905, y: 1205), from: cat, world: world)
+    // The menu bar candidate is novel (appeared 5s ago), never visited, and high; the floor
+    // under his feet is none of those. This ordering is the entire point of the layer.
+    #expect(fresh > here + 0.5, "a brand-new high perch barely outscores the floor he is on")
+
+    let lounge = Cat.score(Cat.Candidate(id: nil, x: 900, y: 90), from: cat, world: world)
+    #expect(lounge == Feel.Taste.loungeBase)
+}
+
 // MARK: - Task 1: session memory
 
 @Test func theLaunchWorldIsNeverNovel() {

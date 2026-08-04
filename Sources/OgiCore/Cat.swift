@@ -1782,6 +1782,60 @@ public enum Cat {
             ? nil : Intent(destination: surface.id, destinationX: x, move: .walk(x))
     }
 
+    /// One thing the election could choose. `id == nil` is the null candidate: stay here
+    /// and lounge.
+    public struct Candidate: Sendable, Equatable {
+        public let id: SurfaceID?
+        public let x: CGFloat
+        public let y: CGFloat
+        public init(id: SurfaceID?, x: CGFloat, y: CGFloat) {
+            self.id = id; self.x = x; self.y = y
+        }
+    }
+
+    /// What a place offers him right now. Spec §2: every urge lands in 0…1 before
+    /// weighting, and the weights are the personality. Pure — the memory and the world go
+    /// in, one number comes out — so each urge's arithmetic is testable on its own.
+    static func score(_ c: Candidate, from s: CatState, world: Skyline) -> Double {
+        typealias T = Feel.Taste
+        guard let id = c.id else { return T.loungeBase }
+        let place = s.memory[id]
+        // New furniture stays interesting for minutes, not for a glance. The launch world
+        // carries firstSeen = -infinity and is never novel.
+        let novelty: Double = {
+            guard let p = place, p.firstSeen > -.infinity else { return 0 }
+            return exp(-(s.age - p.firstSeen) / T.noveltyHalfLife)
+        }()
+        // A perch he has not used in a while feels fresh again; never visited is fully so.
+        let stale: Double = {
+            guard let p = place, p.lastVisit > -.infinity else { return 1 }
+            return 1 - exp(-(s.age - p.lastVisit) / T.staleHalfLife)
+        }()
+        let floorY = world.surface(.floor)?.y ?? 0
+        let barY = world.surface(.menuBar)?.y ?? floorY + 1
+        let height = Double(min(max((c.y - floorY) / max(barY - floorY, 1), 0), 1))
+        let near = s.cursor.map { Double(exp(-hypot($0.x - c.x, $0.y - c.y) / T.nearScale)) } ?? 0
+        let visits = Double(place?.visits ?? 0)
+        let familiar = visits / (visits + T.familiarVisits)
+        let effort = Double(min(1, hypot(c.x - s.position.x, c.y - s.position.y) / T.effortScale))
+        return T.wNovelty * novelty + T.wStale * stale + T.wHeight * height
+             + T.wNear * near + T.wFamiliar * familiar - T.wEffort * effort
+    }
+
+    /// Which index a softmax draw lands on, given one uniform roll in [0, 1). Pure, so the
+    /// arithmetic is testable exactly; the caller supplies the randomness.
+    static func draw(_ scores: [Double], temperature: Double, roll: Double) -> Int? {
+        guard !scores.isEmpty else { return nil }
+        let top = scores.max()!             // subtracted for numeric stability only
+        let weights = scores.map { exp(($0 - top) / temperature) }
+        var mark = roll * weights.reduce(0, +)
+        for (i, w) in weights.enumerated() {
+            mark -= w
+            if mark < 0 { return i }
+        }
+        return scores.count - 1
+    }
+
     /// Is he behind something, where you cannot see him?
     ///
     /// A lookup rather than a computation. `Surface.spans` is defined as `solid` minus every
