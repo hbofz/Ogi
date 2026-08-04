@@ -22,11 +22,36 @@ public enum Feel {
         /// clear of the edge he just left rather than scraping down it. Small: his centre of
         /// mass has only just crossed.
         public static let edgeTolerance: CGFloat = 2
-        /// How close to the edge counts as "at the edge" for the approach and the tell.
+        /// How far PAST a lip a committed step-off aims, and how close to one counts as "at the
+        /// edge" for the tell. Comfortably outside `brakingDistance` on purpose: a step-off has
+        /// to be still at speed when it reaches the lip, or he brakes at it instead of over it.
         ///
-        /// Also where he stops to look: it is roughly half his drawn width, so a cat whose
-        /// midline is this far back has his nose over the lip and his paws on solid ground.
+        /// It used to be where he stopped to look as well, on the reasoning that it was roughly
+        /// half his drawn width. It is not — see `edgePlant` — and one number cannot be both,
+        /// because this one may not shrink.
         public static let edgeApproach: CGFloat = 26
+        /// Where he stops to look: how far back from the lip he plants, and the number to move
+        /// if he reads as standing too far back. The approach walks to a mark one
+        /// `brakingDistance` further in, which is what stops it from ever arriving — so this has
+        /// to stay above `brakingDistance` or the mark lands past the lip.
+        ///
+        /// Off the art, not off his nominal size. `Shape.width` is 52 and means nothing here:
+        /// every clip is normalised on eye width and cropped tight sideways, so what is actually
+        /// drawn around `position.x` varies per clip and per frame. The held `lookDown` frame is
+        /// 23pt wide, and reading its ground contacts gives his front paws 2.5pt ahead of his
+        /// midline and his lowered head reaching 11.5pt ahead — he is looking straight down past
+        /// his own paws, so the head is the part that has to clear the lip.
+        ///
+        /// That brackets this number, and `hePlantsWithHisPawsOnTheLedgeAndHisHeadOverTheLip`
+        /// derives both ends from `Sprites` and fails if the sheet is redrawn. At 26 he stopped
+        /// 30pt back with an 18pt strip of bare ledge between his nose and the drop, which reads
+        /// as a cat looking at the floor rather than over an edge.
+        ///
+        /// 6 rather than the 2.5 that would put his toes exactly on the lip, because the clip is
+        /// cropped per frame: his paws sit 9.7pt forward of his midline in the standing frame he
+        /// plants on and 2.5pt forward in the one he holds, so his feet appear to slide back 7pt
+        /// during the lean. Standing between the two keeps either end under `arrivalSlop`.
+        public static let edgePlant: CGFloat = 6
         /// Drop at which the hesitation is longest and the reluctance strongest.
         public static let edgeHesitationDrop: CGFloat = 800
         /// How often he turns down a drop that deep, having walked over to look at it. Below

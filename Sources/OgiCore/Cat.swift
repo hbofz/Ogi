@@ -707,9 +707,10 @@ public enum Cat {
                 return s
             }
             let toLip = abs(lip.x - s.position.x)
-            // Where he plants: one braking distance outside the mark he is walking to, so the
-            // approach can never actually *arrive* (see the approach branch).
-            let plantAt = Feel.Physics.edgeApproach + Feel.Physics.brakingDistance
+            // Where he plants, and the mark the approach walks to: one braking distance
+            // further in, so the approach can never actually *arrive* (see that branch).
+            let plantAt = Feel.Physics.edgePlant
+            let mark = Feel.Physics.edgePlant - Feel.Physics.brakingDistance
 
             if s.activity == .edgeLook {
                 s.perchSpeed = 0
@@ -756,9 +757,9 @@ public enum Cat {
                 return s
 
             } else {
-                // The approach, aimed to stop `edgeApproach` SHORT of the lip — roughly half
-                // his drawn width, so he ends up with his nose over the edge and his paws on
-                // solid ground.
+                // The approach, aimed to stop just short of the lip, so that the plant above
+                // catches him at `edgePlant` — with his front paws on solid ground and his
+                // lowered head out over the drop.
                 //
                 // The plant above intercepts one braking distance outside that mark so the walk
                 // can never actually *arrive*. That is what makes the tell survive: arriving
@@ -781,7 +782,7 @@ public enum Cat {
                 // at walking speed, which is the gait desync `strideLength` exists to prevent.
                 // Applied only inside the ease itself for the same reason: outside it he is
                 // covering ground, and how he covers ground is not this code's business.
-                let target = lip.x - lip.dir * Feel.Physics.edgeApproach
+                let target = lip.x - lip.dir * mark
                 let ease = (toLip - plantAt) / Feel.Physics.edgeEase
                 if ease < 1 {
                     let top = gait(over: target - s.position.x, languor: s.languor).top

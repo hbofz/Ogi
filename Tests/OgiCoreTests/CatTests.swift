@@ -951,9 +951,11 @@ private func steppingOff() -> CatState {
     #expect(looked > 0, "he walked straight off the lip without a moment's thought")
     // Long enough to read as thinking, at the 500pt drop this ledge has.
     #expect(Double(looked) * dt >= Cat.hesitation(forDrop: 500) - 2 * dt)
-    // Stopped short of the lip at 900, on the ledge, not hanging over it.
-    #expect(lookedAt < 900 && lookedAt > 900 - Feel.Physics.edgeApproach * 2,
-            "he looked from x=\(Int(lookedAt)); the lip is at 900")
+    // Stopped short of the lip at 900, on the ledge, not hanging over it — and stopped where
+    // `edgePlant` says, which is the tick the plant intercepts on.
+    let plant = 900 - Feel.Physics.edgePlant
+    #expect(lookedAt < 900 && abs(lookedAt - plant) < Feel.Physics.arrivalSlop,
+            "he looked from x=\(lookedAt); the lip is at 900 and he should plant at \(plant)")
     #expect(movedWhileLooking < 0.01, "he is still drifting toward the edge while looking")
 }
 
@@ -1150,6 +1152,56 @@ private func steppingOff() -> CatState {
     let toHeldFrame = Double(clip.count - 1) / clip.fps
     #expect(Cat.hesitation(forDrop: 0) >= toHeldFrame,
             "the shortest look is \(Cat.hesitation(forDrop: 0))s and the lean takes \(toHeldFrame)s")
+}
+
+/// Where the held `lookDown` frame reaches, in drawn points forward of the spot he stands on.
+///
+/// The sheets are cropped tight sideways and drawn on a ground line, so whatever touches the
+/// bottom rows is what he is standing on: reading left to right that is his hind paw, his front
+/// paw, then his lowered chin and whiskers, which in this pose are also on the floor. Measured
+/// rather than written down because it is a property of the art and it moved once already.
+@MainActor
+private func lookDownReach() -> (toes: CGFloat, nose: CGFloat) {
+    let clip = Sprites.Clip.lookDown, held = clip.count - 1
+    guard let img = Sprites.image(clip, held) else { return (0, 0) }
+    let w = img.width, h = img.height
+    var px = [UInt8](repeating: 0, count: w * h * 4)
+    px.withUnsafeMutableBytes { buf in
+        CGContext(data: buf.baseAddress, width: w, height: h, bitsPerComponent: 8,
+                  bytesPerRow: w * 4, space: CGColorSpaceCreateDeviceRGB(),
+                  bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue)?
+            .draw(img, in: CGRect(x: 0, y: 0, width: w, height: h))
+    }
+    func opaque(_ x: Int, _ y: Int) -> Bool { px[(y * w + x) * 4 + 3] > 128 }
+
+    var floor = 0, inkRight = 0
+    for y in 0..<h { for x in 0..<w where opaque(x, y) { floor = max(floor, y); inkRight = max(inkRight, x) } }
+    // Contact runs along the bottom few rows, merged across gaps narrower than a toe.
+    var runs: [(lo: Int, hi: Int)] = []
+    for x in 0..<w where (max(0, floor - 7)...floor).contains(where: { opaque(x, $0) }) {
+        if var last = runs.last, x <= last.hi + 4 { last.hi = x; runs[runs.count - 1] = last }
+        else { runs.append((x, x)) }
+    }
+    let size = Sprites.size(clip, held)
+    let px2pt = size.width / CGFloat(w)
+    let frontPaw = runs.count > 1 ? runs[1].hi : inkRight
+    return (CGFloat(frontPaw + 1) * px2pt - size.width / 2,
+            CGFloat(inkRight + 1) * px2pt - size.width / 2)
+}
+
+@MainActor
+@Test func hePlantsWithHisPawsOnTheLedgeAndHisHeadOverTheLip() {
+    // He used to stop 30pt back from a lip, which on the held `lookDown` frame — 23pt of cat,
+    // all of it behind him — left an 18pt gap of bare ledge between his nose and the drop. He
+    // read as looking at the floor near the edge rather than over it.
+    //
+    // The two ends of the right answer both come off the art: near enough that his lowered head
+    // clears the lip, far enough back that his front paws still have ledge under them.
+    let (toes, nose) = lookDownReach()
+    #expect(Feel.Physics.edgePlant < nose,
+            "planted \(Feel.Physics.edgePlant)pt back his head stops \(nose - Feel.Physics.edgePlant)pt short of the lip")
+    #expect(Feel.Physics.edgePlant > toes,
+            "planted \(Feel.Physics.edgePlant)pt back his front paws are \(toes - Feel.Physics.edgePlant)pt past the lip, on nothing")
 }
 
 @MainActor
