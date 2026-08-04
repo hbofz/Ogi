@@ -339,20 +339,20 @@ final class OgiView: NSView {
         maskContainer.mask = maskShape
     }
 
-    // M0 probe: does per-pixel alpha hit testing still work on this macOS?
-    // If a click on empty space reaches us, Apple's 26.3-era regression is present here.
+    // Screen-global, not view-local: the cat's world position is screen-global and the
+    // overlay's origin is not guaranteed to be (0, 0).
     override func mouseDown(with event: NSEvent) {
-        let p = convert(event.locationInWindow, from: nil)
+        let p = NSEvent.mouseLocation
         overlay?.click(p, onCat: true)
         overlay?.drag(.began, p)
     }
 
     override func mouseDragged(with event: NSEvent) {
-        overlay?.drag(.moved, convert(event.locationInWindow, from: nil))
+        overlay?.drag(.moved, NSEvent.mouseLocation)
     }
 
     override func mouseUp(with event: NSEvent) {
-        overlay?.drag(.ended, convert(event.locationInWindow, from: nil))
+        overlay?.drag(.ended, NSEvent.mouseLocation)
     }
 
     override func acceptsFirstMouse(for event: NSEvent?) -> Bool { true }

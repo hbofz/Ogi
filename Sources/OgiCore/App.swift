@@ -27,6 +27,11 @@ public final class OgiApp: NSObject, NSApplicationDelegate {
     private var flipOrigin: CGFloat = 0
     private var ownPID = getpid()
 
+    /// The screen the overlay was built for. `NSScreen.main` means "screen with the key
+    /// window" and changes when you click an app on another display, which silently
+    /// rebuilt the entire skyline against different geometry every poll.
+    private var homeScreen: NSScreen!
+
     /// OGI_DEBUG=1 narrates what he is doing. Off, he is silent.
     private let debug = ProcessInfo.processInfo.environment["OGI_DEBUG"] != nil
     private var wasOverHim = false
@@ -38,6 +43,7 @@ public final class OgiApp: NSObject, NSApplicationDelegate {
         NSApp.setActivationPolicy(.accessory)
 
         guard let screen = NSScreen.main else { return }
+        homeScreen = screen
         flipOrigin = NSScreen.screens[0].frame.maxY
 
         setupStatusItem()
@@ -404,7 +410,7 @@ public final class OgiApp: NSObject, NSApplicationDelegate {
     }
 
     private func poll(force: Bool) {
-        guard let screen = NSScreen.main else { return }
+        guard let screen = homeScreen else { return }
         let raw = World.snapshot(flipOrigin: flipOrigin)
         let fresh = World.build(windows: raw, screen: ScreenGeometry(screen), ownPID: ownPID)
         skyline = tracker.ingest(fresh)

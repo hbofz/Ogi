@@ -333,6 +333,11 @@ public enum Cat {
                     s.goal = goal
                     s.activity = (goal.isJump ? .crouch : .walk)
                     s.activityElapsed = 0
+                } else {
+                    // Nothing worth doing. Wait before asking again rather than re-rolling
+                    // on every one of the next 120 ticks, which both burns work and biases
+                    // the destination distribution toward whatever is easiest to pick.
+                    s.restLeft = Feel.Timing.restMin
                 }
             }
 
