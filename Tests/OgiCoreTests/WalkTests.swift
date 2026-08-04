@@ -535,7 +535,8 @@ private func bareDesktop() -> Skyline {
         for vy in stride(from: -1400.0, through: 1400.0, by: 700) {
             var cat = CatState(position: CGPoint(x: 900, y: 800))
             cat = Cat.grab(cat, at: CGPoint(x: 900, y: 800))
-            cat = Cat.release(cat, throwVelocity: CGVector(dx: vx, dy: vy))
+            cat = Cat.release(cat, throwVelocity: CGVector(dx: vx, dy: vy),
+                              world: sky([ground]))
             #expect(cat.righting == 0, "the twist should start from scratch")
 
             var landed = false
@@ -552,9 +553,9 @@ private func bareDesktop() -> Skyline {
 
 @Test func theTwistFinishesLongBeforeATypicalLanding() {
     var cat = CatState(position: CGPoint(x: 900, y: 800))
-    cat = Cat.release(Cat.grab(cat, at: CGPoint(x: 900, y: 800)),
-                      throwVelocity: CGVector(dx: 0, dy: 0))
     let ground = surface(.floor, y: 100, from: 0, to: 1920)
+    cat = Cat.release(Cat.grab(cat, at: CGPoint(x: 900, y: 800)),
+                      throwVelocity: CGVector(dx: 0, dy: 0), world: sky([ground]))
 
     var rightedAt: TimeInterval?
     var t: TimeInterval = 0
@@ -572,7 +573,7 @@ private func bareDesktop() -> Skyline {
 @Test func aViolentFlickDoesNotTurnHimIntoAProjectile() {
     var cat = CatState(position: CGPoint(x: 900, y: 800))
     cat = Cat.release(Cat.grab(cat, at: CGPoint(x: 900, y: 800)),
-                      throwVelocity: CGVector(dx: 99_000, dy: 99_000))
+                      throwVelocity: CGVector(dx: 99_000, dy: 99_000), world: sky([]))
     #expect(abs(cat.velocity.dx) <= Feel.Physics.maxThrow)
     #expect(abs(cat.velocity.dy) <= Feel.Physics.maxThrow)
 }

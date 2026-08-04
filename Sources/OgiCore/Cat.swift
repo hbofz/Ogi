@@ -13,11 +13,28 @@ public struct Perch: Sendable, Equatable {
     public init(id: SurfaceID, dx: CGFloat) { self.id = id; self.dx = dx }
 }
 
+/// Where he is gripping a window's face, in that window's coordinate space.
+///
+/// Platform-local for exactly the reason `Perch` is, and it inherits the same three
+/// properties for nothing: dragging the window carries him, closing it drops him, and the
+/// occlusion rule is unchanged because he is in front of that window and behind everything
+/// in front of it.
+public struct Grip: Sendable, Equatable {
+    public let id: SurfaceID
+    /// From the window's left edge.
+    public var dx: CGFloat
+    /// **Down** from the window's top edge. Climbing shrinks this.
+    public var dy: CGFloat
+    public init(id: SurfaceID, dx: CGFloat, dy: CGFloat) { self.id = id; self.dx = dx; self.dy = dy }
+}
+
 public enum Support: Sendable, Equatable {
     case grounded(Perch)
     case falling
     /// Dangling from the cursor. This is what actually happens to cats.
     case held(CGPoint)
+    /// Stuck to a window's face, claws in. Cats go up curtains.
+    case clinging(Grip)
 }
 
 /// What the ground ahead of him looks like. Recomputed every tick, never stored across one.
@@ -55,6 +72,7 @@ public enum Activity: Sendable, Equatable {
     case crouch     // the 100ms wind-up before every jump
     case brace      // riding a window that is being dragged
     case slip       // the ground just went away
+    case cling      // gripping a vertical face
     case airborne
     case land
     case landHard
@@ -209,6 +227,9 @@ public struct CatState: Sendable {
     /// the battery complaint about desktop pets is about wakeups, not pixels.
     public var isMoving: Bool {
         if case .falling = support { return true }
+        // He scrabbles, then slides. Always a bounded state — he mantles onto the ledge or
+        // runs out of wall — so this cannot hold the render rate up indefinitely.
+        if case .clinging = support { return true }
         if intent != nil { return true }
         return squashElapsed < 0.4
     }
@@ -262,6 +283,47 @@ public enum Cat {
             s.drift = 0
             s.perchSpeed = 0
             s.lastPerchOrigin = nil
+            return s
+
+        case .clinging(var grip):
+            guard let surface = world.surface(grip.id), let rect = surface.rect else {
+                // The window went away under his claws.
+                s.support = .falling
+                s.activity = .slip
+                s.activityElapsed = 0
+                return s
+            }
+            s.activity = .cling
+            s.velocity = .zero
+            s.perchSpeed = 0
+
+            if s.activityElapsed > Feel.Timing.clingHold {
+                if grip.dy <= Feel.Physics.mantleReach {
+                    // Close enough to the top: he climbs it and mantles onto the ledge.
+                    grip.dy -= Feel.Physics.clingSlideSpeed * CGFloat(dt)
+                    if grip.dy <= 0 {
+                        s.support = .grounded(Perch(id: grip.id,
+                                                    dx: rect.minX + grip.dx - surface.extent.lowerBound))
+                        s.position = CGPoint(x: rect.minX + grip.dx, y: surface.y)
+                        s.activity = .land
+                        s.activityElapsed = 0
+                        return s
+                    }
+                } else {
+                    grip.dy += Feel.Physics.clingSlideSpeed * CGFloat(dt)
+                    if grip.dy >= rect.height {
+                        // Out of wall. He lets go.
+                        s.support = .falling
+                        s.activity = .slip
+                        s.activityElapsed = 0
+                        return s
+                    }
+                }
+            }
+            // World position is derived, so dragging the window carries him. Free, exactly
+            // as it is for a perch.
+            s.position = CGPoint(x: rect.minX + grip.dx, y: surface.y - grip.dy)
+            s.support = .clinging(grip)
             return s
 
         case .grounded(let perch):
@@ -400,9 +462,26 @@ public enum Cat {
         return s
     }
 
-    /// Let go. He twists, rights himself, and lands on his feet.
-    public static func release(_ state: CatState, throwVelocity v: CGVector) -> CatState {
+    /// Let go. If he is over a window's face he grabs it; otherwise he twists, rights
+    /// himself, and lands on his feet.
+    ///
+    /// **Entry is on release only, deliberately.** Clinging on any fall past any window
+    /// would stop every descent at the first window it passed, and the fall is the app's
+    /// entire demo.
+    public static func release(_ state: CatState, throwVelocity v: CGVector,
+                               world: Skyline) -> CatState {
         var s = state
+        if abs(v.dx) < Feel.Physics.clingGrabSpeed, abs(v.dy) < Feel.Physics.clingGrabSpeed,
+           let face = world.faceContaining(s.position) {
+            s.support = .clinging(Grip(id: face.id,
+                                       dx: s.position.x - (face.rect?.minX ?? 0),
+                                       dy: face.y - s.position.y))
+            s.activity = .cling
+            s.activityElapsed = 0
+            s.velocity = .zero
+            s.intent = nil
+            return s
+        }
         s.support = .falling
         s.velocity = CGVector(dx: max(-Feel.Physics.maxThrow, min(Feel.Physics.maxThrow, v.dx)),
                               dy: max(-Feel.Physics.maxThrow, min(Feel.Physics.maxThrow, v.dy)))

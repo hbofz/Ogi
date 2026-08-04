@@ -89,6 +89,16 @@ public enum Feel {
         /// However hard you flick him, he does not become a projectile.
         public static let maxThrow: CGFloat = 1500
 
+        /// How fast he slides down a face he cannot hold, px/s. Deliberately slow: this is
+        /// a moment, not a transition.
+        public static let clingSlideSpeed: CGFloat = 34
+        /// Within this far of the top edge he climbs up and mantles onto it instead of
+        /// sliding down.
+        public static let mantleReach: CGFloat = 90
+        /// How gently he has to be put down to catch the face at all, px/s on either axis.
+        /// Above it he was thrown rather than placed, and a thrown cat does not grab.
+        public static let clingGrabSpeed: CGFloat = 200
+
         /// Per-tick drift at which he leans as far as he ever will (~480 px/s of drag).
         public static let driftReference: CGFloat = 4.0
         public static let driftSmoothing: CGFloat = 0.02
@@ -111,6 +121,8 @@ public enum Feel {
         /// default and most interesting when you are not working.
         /// The mid-air twist. Fixed duration, so he is always feet-down before he lands.
         public static let righting: TimeInterval = 0.18
+        /// How long he holds still after grabbing on. The "oh no" beat.
+        public static let clingHold: TimeInterval = 0.7
 
         /// OGI_RESTLESS=1 collapses these so his behaviour can actually be watched.
         /// Living with him wants long pauses; testing him does not.

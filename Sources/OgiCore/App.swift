@@ -306,7 +306,7 @@ public final class OgiApp: NSObject, NSApplicationDelegate {
                                  dy: (last.p.y - first.p.y) / CGFloat(dt))
                 }
             }
-            cat = Cat.release(cat, throwVelocity: v)
+            cat = Cat.release(cat, throwVelocity: v, world: skyline)
             dragSamples = []
             log("released, righting")
         }
@@ -336,6 +336,7 @@ public final class OgiApp: NSObject, NSApplicationDelegate {
         switch cat.support {
         case .falling: pose.airborne = true
         case .held: pose.airborne = true; pose.dangling = true
+        case .clinging: pose.airborne = true    // nothing under his feet, but not dangling
         case .grounded: break
         }
         pose.righting = cat.righting
@@ -458,6 +459,10 @@ public final class OgiApp: NSObject, NSApplicationDelegate {
         switch cat.support {
         case .grounded(let p):
             return skyline.surface(p.id)?.z ?? .max
+        case .clinging(let g):
+            // In front of the window he is gripping, behind everything in front of it.
+            // Exactly the perch rule.
+            return skyline.surface(g.id)?.z ?? .max
         case .falling:
             // Use the surface he is heading for, so his depth stays stable through a fall.
             // He vanishes behind a frontmost window mid-drop and re-emerges below it.

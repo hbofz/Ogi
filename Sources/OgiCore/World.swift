@@ -122,6 +122,14 @@ public struct Skyline: Sendable {
             .max { a, b in (a.y, -a.z) < (b.y, -b.z) }
     }
 
+    /// The frontmost window whose face contains this point. Nil in open air, and nil for
+    /// the menu bar and the floor, which have no face.
+    public func faceContaining(_ p: CGPoint) -> Surface? {
+        surfaces
+            .filter { s in s.rect.map { $0.contains(p) } ?? false }
+            .min { $0.z < $1.z }
+    }
+
     /// Everything strictly in front of the perch. He rests ON his perch, so his body
     /// occupies the band above it, which belongs to whatever is behind. He is therefore
     /// just in front of his perch and behind everything in front of it.

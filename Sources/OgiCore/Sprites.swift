@@ -127,6 +127,7 @@ public enum Sprites {
         // Both ways he leaves the ground without choosing to: his platform vanished, or you
         // dropped him. The fall sheet is the righting reflex, so it covers both.
         case .slip, .righting:      return .fall
+        case .cling:                return .cling
         case .scruffed:             return .held
         case .land, .landHard:      return .land
         case .sit:                  return .sitdown

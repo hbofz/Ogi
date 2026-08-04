@@ -11,9 +11,10 @@ private func sky(_ surfaces: [Surface]) -> Skyline {
     Skyline(surfaces: surfaces, occluders: [], screen: screen)
 }
 
-private func surface(_ id: SurfaceID, y: CGFloat, from: CGFloat, to: CGFloat, z: Int = 0) -> Surface {
+private func surface(_ id: SurfaceID, y: CGFloat, from: CGFloat, to: CGFloat, z: Int = 0,
+                     rect: CGRect? = nil) -> Surface {
     Surface(id: id, z: z, y: y, extent: from...to,
-            solid: [from...to], spans: [from...to], targetable: true, rect: nil)
+            solid: [from...to], spans: [from...to], targetable: true, rect: rect)
 }
 
 private let dt = Feel.Timing.fixedDT
@@ -99,8 +100,11 @@ private let dt = Feel.Timing.fixedDT
 // MARK: - Edges
 
 /// A ledge from x=400 to x=900 at y=600, with the floor a long way below it at y=100.
+/// The ledge is the top edge of a window whose face runs down to y=300, which is what he
+/// clings to.
 private func ledgeWorld() -> Skyline {
-    sky([surface(.window(1), y: 600, from: 400, to: 900),
+    sky([surface(.window(1), y: 600, from: 400, to: 900,
+                 rect: CGRect(x: 400, y: 300, width: 500, height: 300)),
          surface(.floor, y: 100, from: 0, to: 1920, z: .max)])
 }
 
@@ -421,7 +425,7 @@ private let notched = ScreenGeometry(frame: CGRect(x: 0, y: 0, width: 1920, heig
     // The other way he leaves the ground without choosing to. Righting used to hand over to
     // `.airborne` once the twist finished, which put him back on the jump sheet in mid-air.
     var cat = CatState(position: CGPoint(x: 200, y: 900))
-    cat = Cat.release(cat, throwVelocity: CGVector(dx: 0, dy: 0))
+    cat = Cat.release(cat, throwVelocity: CGVector(dx: 0, dy: 0), world: sky([]))
     #expect(cat.activity == .righting)
 
     for _ in 0..<Int(1.0 / dt) {
@@ -511,4 +515,133 @@ private let notched = ScreenGeometry(frame: CGRect(x: 0, y: 0, width: 1920, heig
         #expect(cat.activity == .sleep)
         #expect(cat.intent == nil)
     }
+}
+
+// MARK: - The face
+
+@Test func droppedOnAWindowFaceHeClingsToIt() {
+    let world = ledgeWorld()          // window(1) rect is x 400...900, y 300...600
+    var cat = CatState(position: CGPoint(x: 650, y: 420))
+    cat = Cat.grab(cat, at: CGPoint(x: 650, y: 420))
+    cat = Cat.release(cat, throwVelocity: .zero, world: world)
+
+    guard case .clinging(let g) = cat.support else {
+        Issue.record("expected clinging, got \(cat.support)")
+        return
+    }
+    #expect(g.id == .window(1))
+    #expect(abs(g.dx - 250) < 1)      // 650 - 400
+    #expect(abs(g.dy - 180) < 1)      // 600 - 420, down from the top edge
+}
+
+@Test func droppedInOpenAirHeStillFalls() {
+    let world = ledgeWorld()
+    var cat = CatState(position: CGPoint(x: 1500, y: 800))
+    cat = Cat.grab(cat, at: CGPoint(x: 1500, y: 800))
+    cat = Cat.release(cat, throwVelocity: .zero, world: world)
+
+    guard case .falling = cat.support else {
+        Issue.record("expected falling, got \(cat.support)")
+        return
+    }
+}
+
+@Test func aFallPastAWindowFaceDoesNotCling() {
+    // The regression that would break the fall, which is the app's entire demo.
+    //
+    // He has to genuinely cross the face for this to prove anything. Dropping him from
+    // straight above the window does not: its top edge is terrain, so he lands on it at
+    // y=600 and never reaches the face at all. So he comes in from the side, already below
+    // the top edge, and drifts across it on his way to the floor — which is what happens
+    // every time he steps off the menu bar past the edge of a window.
+    let world = ledgeWorld()
+    var cat = CatState(position: CGPoint(x: 300, y: 560))
+    cat.support = .falling
+    cat.velocity = CGVector(dx: 260, dy: 0)
+
+    var crossedTheFace = false
+    for _ in 0..<1200 {
+        cat = Cat.step(cat, world: world, dt: 1.0 / 120)
+        if world.faceContaining(cat.position) != nil { crossedTheFace = true }
+        if case .clinging = cat.support {
+            Issue.record("clung mid-fall at \(cat.position)")
+            return
+        }
+    }
+    #expect(crossedTheFace, "the fall never entered the face, so this test proved nothing")
+}
+
+@Test func clingingCarriesHimWhenTheWindowMoves() {
+    var world = ledgeWorld()
+    var cat = CatState(position: CGPoint(x: 650, y: 420))
+    cat.support = .clinging(Grip(id: .window(1), dx: 250, dy: 180))
+    cat = Cat.step(cat, world: world, dt: 1.0 / 120)
+    let before = cat.position.x
+
+    // Slide the window +200.
+    var moved = world.surfaces
+    moved[0].extent = 600...1100
+    moved[0].solid = [600...1100]
+    moved[0].rect = CGRect(x: 600, y: 300, width: 500, height: 300)
+    world = Skyline(surfaces: moved, occluders: [], screen: world.screen)
+
+    cat = Cat.step(cat, world: world, dt: 1.0 / 120)
+    #expect(abs(cat.position.x - (before + 200)) < 1)
+}
+
+@Test func closingTheWindowUnderAClingingCatDropsHim() {
+    let world = ledgeWorld()
+    var cat = CatState(position: CGPoint(x: 650, y: 420))
+    cat.support = .clinging(Grip(id: .window(1), dx: 250, dy: 180))
+
+    let empty = Skyline(surfaces: world.surfaces.filter { $0.id != .window(1) },
+                        occluders: [], screen: world.screen)
+    cat = Cat.step(cat, world: empty, dt: 1.0 / 120)
+
+    guard case .falling = cat.support else {
+        Issue.record("expected falling, got \(cat.support)")
+        return
+    }
+}
+
+@Test func heSlidesDownAFaceHeCannotHoldAndEventuallyLetsGo() {
+    // The beat, then the slide. Gripped 180 below the top edge, well past `mantleReach`,
+    // so down is the only way he goes.
+    let world = ledgeWorld()
+    var cat = CatState(position: CGPoint(x: 650, y: 420))
+    cat.support = .clinging(Grip(id: .window(1), dx: 250, dy: 180))
+
+    // Nothing moves during the hold.
+    for _ in 0..<Int(Feel.Timing.clingHold * 120) - 2 {
+        cat = Cat.step(cat, world: world, dt: 1.0 / 120)
+    }
+    #expect(abs(cat.position.y - 420) < 0.5, "he slid during the hold")
+
+    for _ in 0..<(120 * 30) {
+        cat = Cat.step(cat, world: world, dt: 1.0 / 120)
+        if case .falling = cat.support { break }
+    }
+    guard case .falling = cat.support else {
+        Issue.record("still on the face after 30s, got \(cat.support)")
+        return
+    }
+    #expect(cat.position.y < 420, "he let go without ever sliding down")
+}
+
+@Test func grippingNearTheTopHeClimbsUpAndMantlesOntoTheLedge() {
+    let world = ledgeWorld()
+    var cat = CatState(position: CGPoint(x: 650, y: 560))   // 40 below the top edge
+    cat.support = .clinging(Grip(id: .window(1), dx: 250, dy: 40))
+
+    for _ in 0..<(120 * 30) {
+        cat = Cat.step(cat, world: world, dt: 1.0 / 120)
+        if case .grounded = cat.support { break }
+    }
+    guard case .grounded(let p) = cat.support else {
+        Issue.record("never made it over the lip, got \(cat.support)")
+        return
+    }
+    #expect(p.id == .window(1))
+    #expect(abs(cat.position.y - 600) < 0.001)
+    #expect(abs(cat.position.x - 650) < 1)
 }
