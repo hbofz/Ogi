@@ -82,3 +82,32 @@ private let redrawnClips: Set<String> = ["walk", "fall", "land", "idle", "jump",
         }
     }
 }
+
+@Test @MainActor func frameRectIsAnchoredAtTheFeet() {
+    var cat = CatState(position: CGPoint(x: 500, y: 300))
+    cat.activity = .idle
+    let f = Sprites.frame(for: cat, pose: Body.Pose())
+    let r = f.rect(at: cat.position)
+
+    #expect(f.clip == .idle)
+    #expect(abs(r.midX - 500) < 0.001)
+    // anchor 0 means the bottom of the frame sits on his position
+    #expect(abs(r.minY - 300) < 0.001)
+    #expect(r.height == f.size.height)
+}
+
+@Test @MainActor func heldFrameHangsFromTheNape() {
+    var cat = CatState(position: CGPoint(x: 500, y: 300))
+    cat.support = .held(CGPoint(x: 500, y: 300))
+    cat.activity = .scruffed
+    var pose = Body.Pose()
+    pose.dangling = true
+    let f = Sprites.frame(for: cat, pose: pose)
+    let r = f.rect(at: cat.position)
+
+    #expect(f.clip == .held)
+    #expect(f.anchor > 0.9)
+    // gripped near the top, so most of him hangs BELOW his position
+    #expect(r.minY < 300)
+    #expect(r.maxY - 300 < r.height * 0.15)
+}

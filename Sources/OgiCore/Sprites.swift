@@ -19,7 +19,7 @@ import AppKit
 public enum Sprites {
 
     /// Ordered frames per animation. Names match the files in Resources/Sprites.
-    public enum Clip: String {
+    public enum Clip: String, Sendable {
         case walk, idle, jump, land, fall, run, alert, sitdown, held, sleep, groom, curl
 
         var count: Int {
@@ -66,6 +66,35 @@ public enum Sprites {
             case .jump, .land, .fall, .sitdown, .curl: false
             }
         }
+    }
+
+    /// Everything about what is on screen this instant: which drawing, at what size, and
+    /// where it attaches to his world position.
+    ///
+    /// This exists because `App` and `Overlay` both used to derive it and disagreed. The
+    /// hit rect was a fixed 52x34 while the sprite is normalised on eye width and is often
+    /// larger, so petting missed him; and the occlusion mask was built from that same
+    /// 52x34 box, which silently cropped the top of his head whenever a mask existed.
+    public struct Frame: Sendable {
+        public let clip: Clip
+        public let index: Int
+        public let size: CGSize
+        /// Fraction up the frame where he attaches. 0 = his feet, 0.95 = his nape.
+        public let anchor: CGFloat
+
+        /// Where this frame lands on screen for a cat standing at `p`.
+        public func rect(at p: CGPoint) -> CGRect {
+            CGRect(x: p.x - size.width / 2,
+                   y: p.y - size.height * anchor,
+                   width: size.width, height: size.height)
+        }
+    }
+
+    public static func frame(for cat: CatState, pose: Body.Pose) -> Frame {
+        let c = clip(for: cat.activity, dangling: pose.dangling, hurrying: cat.hurrying)
+        let i = index(c, activity: cat.activity,
+                      walkPhase: pose.walkPhase, elapsed: cat.activityElapsed)
+        return Frame(clip: c, index: i, size: size(c, i), anchor: footAnchor(c))
     }
 
     // Everything in this app runs on the main actor, so a plain cache needs no lock.

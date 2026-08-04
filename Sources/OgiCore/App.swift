@@ -325,23 +325,33 @@ public final class OgiApp: NSObject, NSApplicationDelegate {
         lastSteps = max(steps, 1)
     }
 
+    /// The rect he is actually drawn in, this frame. Set by `renderNow`, read by hit
+    /// testing, so the thing you click is the thing you see.
+    private var drawnRect: CGRect = .zero
+
     private func renderNow() {
         let dt = CGFloat(Feel.Timing.fixedDT * Double(lastSteps))
+        let pose = buildPose(dt: dt)
+        let frame = Sprites.frame(for: cat, pose: pose)
+        drawnRect = frame.rect(at: cat.position)
+
         // He looks at your cursor. The strongest aliveness signal that exists.
         let head = CGPoint(x: cat.position.x,
                            y: cat.position.y + Feel.Shape.height * Feel.Eyes.heightFraction)
         gaze.step(target: lookDirection(from: head, to: NSEvent.mouseLocation), dt: dt)
 
         let h = heightAboveGround()
-        overlay.render(cat, pose: buildPose(dt: dt), gaze: gaze, heightAboveGround: h,
+        overlay.render(cat, pose: pose, gaze: gaze, frame: frame, heightAboveGround: h,
                        occluders: skyline.occluders(above: perchZ(),
                                                     intersecting: hitRect().insetBy(dx: -40, dy: -h - 40)))
     }
 
-    /// Where a click counts as touching him. Padded, because a 46x34 cat is a small target.
+    /// Where a click counts as touching him. Padded, because he is a small target.
     private func hitRect() -> CGRect {
-        CGRect(x: cat.position.x - Feel.Shape.width / 2, y: cat.position.y,
-               width: Feel.Shape.width, height: Feel.Shape.height).insetBy(dx: -6, dy: -6)
+        (drawnRect == .zero ? CGRect(x: cat.position.x - Feel.Shape.width / 2,
+                                     y: cat.position.y,
+                                     width: Feel.Shape.width, height: Feel.Shape.height)
+                            : drawnRect).insetBy(dx: -6, dy: -6)
     }
 
     /// Stops the clock entirely and watches for your return once a second. One wakeup a

@@ -83,9 +83,9 @@ public final class Overlay {
         window.ignoresMouseEvents = !wanted
     }
 
-    public func render(_ cat: CatState, pose: Body.Pose, gaze: Gaze,
+    public func render(_ cat: CatState, pose: Body.Pose, gaze: Gaze, frame: Sprites.Frame,
                        heightAboveGround: CGFloat, occluders: [CGRect]) {
-        view.apply(cat, pose: pose, gaze: gaze,
+        view.apply(cat, pose: pose, gaze: gaze, frame: frame,
                    heightAboveGround: heightAboveGround, occluders: occluders)
     }
 
@@ -203,20 +203,22 @@ final class OgiView: NSView {
         overlay?.tick(l.targetTimestamp)
     }
 
-    func apply(_ cat: CatState, pose: Body.Pose, gaze: Gaze,
+    func apply(_ cat: CatState, pose: Body.Pose, gaze: Gaze, frame: Sprites.Frame,
                heightAboveGround h: CGFloat, occluders: [CGRect]) {
-        let bodyRect = CGRect(x: cat.position.x - Feel.Shape.width / 2, y: cat.position.y,
-                              width: Feel.Shape.width, height: Feel.Shape.height)
+        // The REAL drawn rect, not a nominal 52x34. Building the mask box from the nominal
+        // size cropped the top of his head whenever an occluder existed.
+        let bodyRect = frame.rect(at: cat.position)
+        let size = frame.size
         // The shadow separates from him as he rises, so the box has to follow it down.
-        let shadowRect = CGRect(x: cat.position.x - Feel.Shape.width,
+        let shadowRect = CGRect(x: cat.position.x - size.width / 2 - 12,
                                 y: cat.position.y - h - 12,
-                                width: Feel.Shape.width * 2, height: 24)
+                                width: size.width + 24, height: 24)
         // The z's rise well above his head, and `applyOcclusion` masks everything to this rect,
         // so leaving them out of it means they vanish the moment any window overlaps him —
         // which is most of the time, since he sleeps on a window edge.
         let sleepRect = cat.activity == .sleep
-            ? CGRect(x: cat.position.x - Feel.Shape.width, y: cat.position.y,
-                     width: Feel.Shape.width * 2, height: Feel.Shape.height * 2.4)
+            ? CGRect(x: cat.position.x - size.width, y: cat.position.y,
+                     width: size.width * 2, height: size.height * 2.4)
             : bodyRect
         let padded = bodyRect.union(shadowRect).union(sleepRect).insetBy(dx: -8, dy: -8)
 
@@ -236,13 +238,8 @@ final class OgiView: NSView {
         // sliding: his paws stay put and his body tips.
         let s = cat.scale
         let lean = -cat.lean * Feel.Physics.maxLean * cat.facing
-        let clip = Sprites.clip(for: cat.activity, dangling: pose.dangling,
-                                hurrying: cat.hurrying)
-        let idx = Sprites.index(clip, activity: cat.activity,
-                                walkPhase: pose.walkPhase, elapsed: cat.activityElapsed)
-        let size = Sprites.size(clip, idx)
-        bodyLayer.anchorPoint = CGPoint(x: 0.5, y: Sprites.footAnchor(clip))
-        bodyLayer.contents = Sprites.image(clip, idx)
+        bodyLayer.anchorPoint = CGPoint(x: 0.5, y: frame.anchor)
+        bodyLayer.contents = Sprites.image(frame.clip, frame.index)
         // Nearest-neighbour: these are pixel art, and smoothing turns crisp edges to mush.
         bodyLayer.magnificationFilter = .nearest
         bodyLayer.minificationFilter = .trilinear
