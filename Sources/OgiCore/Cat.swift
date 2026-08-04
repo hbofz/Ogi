@@ -196,6 +196,11 @@ public enum Cat {
                 s.support = .falling
                 s.activity = .slip
                 s.activityElapsed = 0
+                // The one thing that reaches here is a window being resize-dragged, which is
+                // exactly when drift is non-zero. Without this he falls through the air still
+                // braced against a window he is no longer standing on.
+                s.drift = 0
+                s.lastPerchOrigin = nil
                 return s
             }
             // World position is derived. Surfing is free — he is already being carried.
@@ -366,7 +371,7 @@ public enum Cat {
             let nextX = worldX + step
             if let edge = edgeAhead(from: worldX, facing: s.facing, on: surface),
                (s.facing > 0 ? nextX > edge : nextX < edge) {
-                if isCliff(at: edge, below: surface.y, world: world) {
+                if isCliff(at: edge, facing: s.facing, on: surface, world: world) {
                     // He walked off. Gravity was always there; nothing was ever allowed
                     // to reach it.
                     s.support = .falling
@@ -468,8 +473,17 @@ public enum Cat {
     }
 
     /// Is there anywhere to land past that edge? Cliff if yes, wall if no.
-    static func isCliff(at x: CGFloat, below y: CGFloat, world: Skyline) -> Bool {
-        world.supportBelow(x: x, from: y - 1, to: -.greatestFiniteMagnitude) != nil
+    static func isCliff(at x: CGFloat, facing: CGFloat, on surface: Surface, world: Skyline) -> Bool {
+        // A hole with more of the SAME surface beyond it is a gap, not a cliff, and a gap is
+        // a wall. The notch is the only one that exists — windows produce a single solid run
+        // and the floor is uncarved — and it is a trap rather than a ledge: he cannot jump to
+        // the surface he is standing on (`pickGoal` excludes it), and the desktop a thousand
+        // points below is far past `maxJumpDrop`, so stepping into it is one-way.
+        if surface.solid.contains(where: { facing > 0 ? $0.lowerBound > x : $0.upperBound < x }) {
+            return false
+        }
+        return world.supportBelow(x: x, from: surface.y - Feel.World.coplanarEpsilon,
+                                  to: -.greatestFiniteMagnitude) != nil
     }
 }
 

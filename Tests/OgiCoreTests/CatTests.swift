@@ -144,15 +144,72 @@ private func ledgeWorld() -> Skyline {
     #expect(Cat.edgeAhead(from: 5000, facing: 1, on: s) == nil)
 }
 
+/// A 1920-wide screen with a 200pt cutout at 830...1030, as a notched Mac reports it.
+private let notched = ScreenGeometry(frame: CGRect(x: 0, y: 0, width: 1920, height: 1243),
+                                     visibleFrame: CGRect(x: 0, y: 90, width: 1920, height: 1115),
+                                     notch: CGRect(x: 830, y: 1205, width: 200, height: 38))
+
+@Test func heDoesNotWalkIntoTheNotch() {
+    // The cutout is a hole in the MIDDLE of the menu bar, not the end of it, and the desktop
+    // visible through it makes it look exactly like a ledge. It is a trap: he cannot jump the
+    // gap (pickGoal refuses the surface he is already standing on) and he cannot climb back up
+    // from the floor a thousand points below (way past maxJumpDrop), so one step in and he is
+    // off the menu bar for the rest of the session. An interior gap has to be a wall.
+    let world = World.build(windows: [], screen: notched, ownPID: 99)
+    let bar = world.surface(.menuBar)!
+    let notch = notched.notch!
+    var cat = CatState(position: CGPoint(x: 1200, y: bar.y))
+    cat.support = .grounded(Perch(id: .menuBar, dx: 1200 - bar.extent.lowerBound))
+    cat.goal = .walkTo(400)          // straight across the cutout
+
+    for _ in 0..<Int(10 / dt) {
+        cat = Cat.step(cat, world: world, dt: dt)
+        guard case .grounded(let p) = cat.support, p.id == .menuBar else {
+            Issue.record("he stepped into the notch at x=\(Int(cat.position.x)) and cannot get back")
+            return
+        }
+        #expect(cat.position.x >= notch.maxX - 0.001, "he is standing in the cutout")
+    }
+}
+
+@MainActor
+@Test func heGoesHomeToTheDoorwayOnHisOwnSide() {
+    // `homeX` is fixed at launch to the ONE edge he came out of. Walking to it from the far
+    // side routes him across the cutout, where he now stops dead — so quitting would hang for
+    // the full eight seconds of the terminate failsafe, with him standing at the lip.
+    let world = World.build(windows: [], screen: notched, ownPID: 99)
+    let bar = world.surface(.menuBar)!
+    let notch = notched.notch!
+
+    // He arrived out of the right-hand doorway, so homeX is notch.maxX.
+    #expect(OgiApp.doorway(from: 1500, toward: notch.maxX, on: bar) == notch.maxX)
+    #expect(OgiApp.doorway(from: 400, toward: notch.maxX, on: bar) == notch.minX)
+    // ...and the mirror image, for a notch closer to the right-hand edge.
+    #expect(OgiApp.doorway(from: 400, toward: notch.minX, on: bar) == notch.minX)
+    #expect(OgiApp.doorway(from: 1500, toward: notch.minX, on: bar) == notch.maxX)
+
+    // He actually reaches it, and `tick`'s arrival check fires.
+    let home = OgiApp.doorway(from: 400, toward: notch.maxX, on: bar)
+    var cat = CatState(position: CGPoint(x: 400, y: bar.y))
+    cat.support = .grounded(Perch(id: .menuBar, dx: 400 - bar.extent.lowerBound))
+    cat.goal = .walkTo(home)
+    for _ in 0..<Int(30 / dt) {
+        cat = Cat.step(cat, world: world, dt: dt)
+        if cat.goal == nil { break }
+    }
+    guard case .grounded = cat.support else {
+        Issue.record("he fell on the way out")
+        return
+    }
+    #expect(abs(cat.position.x - home) < Feel.Physics.arrivalSlop * 2, "the app would hang until the failsafe")
+}
+
 @MainActor
 @Test func heArrivesStandingOnSolidGround() {
     // The notch is a hole in the menu bar's `solid` — a hardware cutout with no pixels
     // behind it — so the doorway he steps out of is its *edge*. Grounding him at its centre
     // stands him on nothing, and the edge test drops him on the first tick after launch.
-    let notched = ScreenGeometry(frame: CGRect(x: 0, y: 0, width: 1920, height: 1243),
-                                 visibleFrame: CGRect(x: 0, y: 90, width: 1920, height: 1115),
-                                 notch: CGRect(x: 830, y: 1205, width: 200, height: 38))
-    let world = World.build(windows: [], screen: notched, ownPID: 0)
+    let world = World.build(windows: [], screen: notched, ownPID: 99)
     let bar = world.surface(.menuBar)!
     var cat = OgiApp.arrival(notch: notched.notch!, bar: bar, screenMaxX: notched.frame.maxX)
 

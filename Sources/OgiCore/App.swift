@@ -141,6 +141,12 @@ public final class OgiApp: NSObject, NSApplicationDelegate {
     private var homeX: CGFloat?
     private var leaving = false
 
+    /// The edge of the cutout on *his* side of it. `homeX` is fixed at launch to the one he
+    /// came out of, and the two are only the same while he stays on that side.
+    static func doorway(from x: CGFloat, toward homeX: CGFloat, on bar: Surface) -> CGFloat {
+        Cat.edgeAhead(from: x, facing: x < homeX ? 1 : -1, on: bar) ?? homeX
+    }
+
     private func setupStatusItem() {
         // LSUIElement means no Dock icon, which is the point, but it also means no obvious
         // way to quit. The most common complaint about desktop pets in the wild is literally
@@ -165,7 +171,6 @@ public final class OgiApp: NSObject, NSApplicationDelegate {
         leaveSlumber()
         cat.listening = false
         cat.repose = .awake
-        cat.goal = .walkTo(homeX)
         let bar = skyline.surface(.menuBar)
         // He steps onto the bar wherever he happens to be — unless that is under the notch,
         // which is a hole in it. From there there is nothing to step onto, so he is already
@@ -173,6 +178,12 @@ public final class OgiApp: NSObject, NSApplicationDelegate {
         let startX = bar?.solid.contains { $0.contains(cat.position.x) } == true ? cat.position.x : homeX
         cat.support = .grounded(Perch(id: .menuBar, dx: startX - (bar?.extent.lowerBound ?? 0)))
         cat.position = CGPoint(x: startX, y: bar?.y ?? cat.position.y)
+        // He goes in the near side of the doorway, not the side he came out of. Sending him
+        // to the far one routes him across the cutout, which is a wall: he would stop at the
+        // lip and quitting would sit there for the whole eight seconds below.
+        let goingTo = bar.map { OgiApp.doorway(from: startX, toward: homeX, on: $0) } ?? homeX
+        self.homeX = goingTo        // the arrival check in `tick` has to match where he went
+        cat.goal = .walkTo(goingTo)
         log("going home")
         // Never hang on the way out. Generous enough to cover the longest walk home from
         // anywhere on a wide screen, because quitting must never wait on the animation.

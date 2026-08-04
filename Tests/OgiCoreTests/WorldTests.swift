@@ -153,8 +153,9 @@ private let screen = ScreenGeometry(
     #expect(!bar.solid.contains { $0.contains(960) })   // 960 is inside the notch
     #expect(bar.solid.contains { $0.contains(400) })
     #expect(bar.solid.contains { $0.contains(1500) })
-    // The anchor space still spans the whole screen, so arrival() can still place him
-    // at the notch's centre and walk him out.
+    // The anchor space still spans the whole screen: `extent` is the perch coordinate system
+    // and must never develop holes, however many the surface itself has. arrival() places him
+    // on the cutout's lip, which is in `solid`, and his dx is measured from this origin.
     #expect(bar.extent.contains(960))
 }
 
