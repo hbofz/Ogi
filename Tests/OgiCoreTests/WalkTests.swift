@@ -45,6 +45,68 @@ private func strolling(to x: CGFloat, on s: Surface) -> Intent {
     #expect(cat.activity == .idle, "he should settle once he arrives")
 }
 
+// MARK: - Weight in the walk
+
+/// One wide ledge with nothing under either end, so an overshoot cannot quietly become a fall
+/// and confuse the thing being measured.
+private func ledgeWorld() -> Skyline {
+    sky([surface(.window(1), y: 600, from: 400, to: 900)])
+}
+
+@Test func heOvershootsHisTargetAndSettlesBack() {
+    let world = ledgeWorld()          // ledge 400...900 at y=600
+    var cat = CatState(position: CGPoint(x: 450, y: 600))
+    cat.support = .grounded(Perch(id: .window(1), dx: 50))
+    cat.intent = Intent(destination: .window(1), destinationX: 700, move: .walk(700))
+
+    var maxX: CGFloat = 0
+    for _ in 0..<1200 {
+        cat = Cat.step(cat, world: world, dt: 1.0 / 120)
+        maxX = max(maxX, cat.position.x)
+        if cat.intent == nil { break }
+    }
+    #expect(maxX > 700)                            // he went past it
+    #expect(maxX < 700 + 20)                       // but not far past it
+    #expect(abs(cat.position.x - 700) < 12)        // and settled back near it
+}
+
+@Test func heAcceleratesRatherThanStartingAtFullSpeed() {
+    let world = ledgeWorld()
+    var cat = CatState(position: CGPoint(x: 450, y: 600))
+    cat.support = .grounded(Perch(id: .window(1), dx: 50))
+    cat.intent = Intent(destination: .window(1), destinationX: 850, move: .walk(850))
+
+    cat = Cat.step(cat, world: world, dt: 1.0 / 120)
+    let early = abs(cat.perchSpeed)
+    for _ in 0..<120 { cat = Cat.step(cat, world: world, dt: 1.0 / 120) }
+    let later = abs(cat.perchSpeed)
+
+    #expect(early < Feel.Physics.walkSpeed * 0.5)
+    #expect(later > Feel.Physics.walkSpeed * 0.8)
+}
+
+@Test func heDoesNotCoastOffALipHeWasAimingAt() {
+    // The overshoot meets the edge test. `nextMove` aims AT lips on purpose (the launch point
+    // for the next hop, the near side of a crack to stride over), so a brake that carries him a
+    // few points past his mark carries him off the ledge, and ledge two has the floor a couple
+    // of hundred points below it. He has to arrive ON the lip, not past it.
+    let world = stairsWorld()
+    let ledge = world.surface(.window(2))!          // 500...800 at y=310
+    var cat = standing(at: 600, on: ledge)
+    cat.intent = Intent(destination: .window(2), destinationX: 800, move: .walk(800))
+
+    for _ in 0..<Int(30 / dt) {
+        cat = Cat.step(cat, world: world, dt: dt)
+        if cat.intent == nil { break }
+    }
+    guard case .grounded(let p) = cat.support else {
+        Issue.record("he coasted off the lip and fell to \(cat.position)")
+        return
+    }
+    #expect(p.id == .window(2))
+    #expect(cat.position.x > 800 - Feel.Physics.brakingDistance && cat.position.x <= 800.001)
+}
+
 @Test func heFacesTheDirectionHeWalks() {
     let ledge = surface(.window(1), y: 500, from: 0, to: 800)
     var cat = standing(at: 400, on: ledge)
@@ -503,3 +565,4 @@ private func bareDesktop() -> Skyline {
     #expect(abs(cat.lean) < 0.05, "he braced against a window that never moved")
     #expect(cat.activity != .brace)
 }
+

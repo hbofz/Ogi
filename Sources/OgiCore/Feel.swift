@@ -27,6 +27,26 @@ public enum Feel {
         public static let hurryDistance: CGFloat = 210
         /// He never arrives exactly on the mark.
         public static let arrivalSlop: CGFloat = 3
+
+        /// Surface-local acceleration and braking, px/s². He winds up into a walk over about
+        /// 0.2s and coasts out of one over about 0.3s, which is the whole of the weight.
+        ///
+        /// Braking is finite AND starts late, and the second half is where the overshoot comes
+        /// from: `walkSpeed` needs 7pt to stop in, he only starts braking `brakingDistance`
+        /// out, so he arrives ~3pt past his mark. Braking slightly late IS the overshoot.
+        ///
+        /// Two ceilings on that difference, both of them real:
+        /// - keep it under `arrivalSlop * 3` or every arrival counts as a miss and he walks
+        ///   back, and a walk-back long enough to reach full speed overshoots by exactly as
+        ///   much again, which is a cat pacing between two points for ever.
+        /// - keep `brakingDistance` well under `edgeApproach` or a step-off brakes at the lip
+        ///   instead of going over it, since a step-off is aimed `edgeApproach` past it.
+        public static let accel: CGFloat = 220
+        public static let decel: CGFloat = 150
+        /// How far out he starts braking.
+        public static let brakingDistance: CGFloat = 4
+        /// Below this he counts as stopped.
+        public static let stopSpeed: CGFloat = 3
         /// A gap he strides over rather than leaping. Two tiled windows sharing a top edge
         /// read as one shelf; a full ballistic arc over the crack between them does not.
         public static let strideGap: CGFloat = 24

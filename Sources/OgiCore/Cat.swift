@@ -168,6 +168,9 @@ public struct CatState: Sendable {
     public var drift: CGFloat = 0
     /// Internal to the drift low-pass. Public only because `Cat.step` is a free function.
     public var lastPerchOrigin: CGFloat?
+    /// Signed speed along the surface he is standing on, px/s. Zero while airborne.
+    /// This is what gives him weight: he winds up into a walk and coasts out of one.
+    public var perchSpeed: CGFloat = 0
     /// Which surface `lastPerchOrigin` belongs to. Without this, landing on a new window
     /// measures drift as the distance between two unrelated windows and he braces hard
     /// against a perfectly stationary ledge.
@@ -257,6 +260,7 @@ public enum Cat {
             s.activity = .scruffed
             s.intent = nil
             s.drift = 0
+            s.perchSpeed = 0
             s.lastPerchOrigin = nil
             return s
 
@@ -332,6 +336,9 @@ public enum Cat {
             }
 
         case .falling:
+            // Nothing to push against. Whatever he was carrying along the ledge is spent on
+            // the way over the lip, and `velocity` is the only thing moving him now.
+            s.perchSpeed = 0
             s.velocity.dy = max(s.velocity.dy - Feel.Physics.gravity * dt,
                                 -Feel.Physics.terminalVelocity)
             let y0 = s.position.y
@@ -412,6 +419,12 @@ public enum Cat {
                                world: Skyline, dt: TimeInterval) -> CatState {
         var s = state
         guard case .grounded(var perch) = s.support else { return s }
+
+        // He only has speed of his own while a walk is in progress, and every way one ends
+        // (arriving, a wall, the mic going live, being picked up) clears the intent. One line
+        // here rather than one in each of them; without it the next walk starts at whatever
+        // speed the last one ended at, in whatever direction that happened to be.
+        if s.intent == nil { s.perchSpeed = 0 }
 
         // Frozen. Ears forward, tail dead still. He hears you, and it doubles as a privacy
         // indicator: if he has gone rigid, your microphone is hot.
@@ -517,23 +530,56 @@ public enum Cat {
         switch move {
         case .walk(let targetX):
             let dx = targetX - s.position.x
-            if abs(dx) < Feel.Physics.arrivalSlop {
-                advance(&s, on: surface)
-                break
-            }
-            s.facing = dx > 0 ? 1 : -1
             // Long trips are covered at a trot. A cat crossing a room does not stroll,
             // and it is also the only thing that ever plays the run frames.
             s.hurrying = abs(dx) > Feel.Physics.hurryDistance && s.languor < 0.5
             let base = s.hurrying ? Feel.Physics.runSpeed : Feel.Physics.walkSpeed
-            let speed = base * (1 - CGFloat(s.languor) * 0.45)
-            let step = min(abs(dx), speed * CGFloat(dt)) * s.facing
+            let top = base * (1 - CGFloat(s.languor) * 0.45)
+
+            // The weight, in four lines. One signed surface-local speed ramped toward what he
+            // wants gives the wind-up; braking at a fixed distance rather than at the distance
+            // he actually needs gives the overshoot, because the two do not match. He arrives
+            // a few points past his mark and stops there, which is also what retires the old
+            // `abs(dx) < arrivalSlop` arrival check: running out of speed IS arriving now.
+            let braking = abs(dx) <= Feel.Physics.brakingDistance
+            let want: CGFloat = braking ? 0 : top * (dx > 0 ? 1 : -1)
+            let rate = (braking ? Feel.Physics.decel : Feel.Physics.accel) * CGFloat(dt)
+            s.perchSpeed += max(-rate, min(rate, want - s.perchSpeed))
+
+            // Facing follows where he is actually going, not where he is aiming: past the mark
+            // those two disagree, and the edge test below reads `facing` to work out which way
+            // the ground runs out. Falling back to the target covers the tick where he is
+            // turning round and his speed passes through exactly zero.
+            if s.perchSpeed != 0 {
+                s.facing = s.perchSpeed > 0 ? 1 : -1
+            } else if abs(dx) > Feel.Physics.arrivalSlop {
+                s.facing = dx > 0 ? 1 : -1
+            }
+
+            if braking, abs(s.perchSpeed) < Feel.Physics.stopSpeed {
+                s.perchSpeed = 0
+                advance(&s, on: surface)
+                break
+            }
+            let step = s.perchSpeed * CGFloat(dt)
 
             let worldX = surface.extent.lowerBound + perch.dx
             let nextX = worldX + step
             if let edge = edgeAhead(from: worldX, facing: s.facing, on: surface),
                (s.facing > 0 ? nextX > edge : nextX < edge) {
-                if let below = landing(past: edge, facing: s.facing, on: surface, world: world) {
+                if braking {
+                    // He was stopping anyway and the ground ran out first. The coast past his
+                    // mark must not carry him off a lip he was aiming AT, and `nextMove` aims
+                    // at lips deliberately: the launch point for a jump, the near side of a
+                    // crack to stride over. Three points past one of those is a fall, not a
+                    // flourish. A step-off is untouched by this. It aims `edgeApproach` past
+                    // the lip, far outside `brakingDistance`, so he is still at full speed when
+                    // he gets there and goes straight over.
+                    perch.dx = edge - surface.extent.lowerBound
+                    s.support = .grounded(perch)
+                    s.perchSpeed = 0
+                    advance(&s, on: surface)
+                } else if let below = landing(past: edge, facing: s.facing, on: surface, world: world) {
                     // He walked off. Gravity was always there; nothing was ever allowed
                     // to reach it. The intent SURVIVES: he re-plans from wherever he lands,
                     // which is what makes a step off a route rather than an accident.

@@ -320,8 +320,10 @@ public final class OgiApp: NSObject, NSApplicationDelegate {
         let walking = cat.activity == .walk
         pose.stride = walking ? 1 : 0
         if walking {
-            // Gait speed follows walk speed, so the feet do not skate.
-            walkPhase += dt * Feel.Physics.walkSpeed / Feel.Shape.strideLength
+            // Gait speed follows the speed he is actually moving at, so the feet do not skate.
+            // Against the constant it used to read, the wind-up and the coast to a halt would
+            // both be moonwalks, and a trot would have been one all along.
+            walkPhase += dt * abs(cat.perchSpeed) / Feel.Shape.strideLength
             walkPhase = walkPhase.truncatingRemainder(dividingBy: 1)
         }
         pose.walkPhase = walkPhase
