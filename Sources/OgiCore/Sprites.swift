@@ -23,6 +23,7 @@ public enum Sprites {
         case walk, idle, jump, land, fall, run, alert, sitdown, held, sleep, groom, curl, cling
         case lookDown, peek, turn, shake
         case climbUp
+        case lounge
 
         var count: Int {
             switch self {
@@ -44,6 +45,7 @@ public enum Sprites {
             case .peek: 4
             case .turn: 4
             case .shake: 4
+            case .lounge: 4
             }
         }
 
@@ -78,6 +80,7 @@ public enum Sprites {
             case .peek: 5       // creeping out of the doorway; slower than he ever walks
             case .turn: 12      // a pivot is quick
             case .shake: 12     // a shudder, not a wobble
+            case .lounge: 2.5   // breathing, like idle and sleep: he is watching, not doing
             }
         }
 
@@ -86,7 +89,9 @@ public enum Sprites {
             // groom loops: a cat washing does it for a while, and the sheet's last frame
             // returns to the sitting pose it started from, so the seam is invisible.
             // cling loops: he holds on until he lets go.
-            case .walk, .run, .idle, .sleep, .held, .alert, .groom, .cling, .climbUp: true
+            // lounge loops: a sprawl is a spell, and its breath cycles back to frame 1.
+            case .walk, .run, .idle, .sleep, .held, .alert, .groom, .cling, .climbUp,
+                 .lounge: true
             // curl settles into the sleep pose and holds it until sleep takes over.
             // lookDown holds its last frame too: he leans out over the lip and stays there
             // while he thinks. The hold IS the tell, so it must not cycle back to standing.
@@ -170,9 +175,7 @@ public enum Sprites {
         case .sit:                  return .sitdown
         case .curl:                 return .curl
         case .sleep:                return .sleep
-        // Placeholder until the lounge sheet lands (v2c plan, Task 7): a sprawled cat
-        // borrowing the curled one reads as napping, which is wrong in the right direction.
-        case .lounge:               return .curl
+        case .lounge:               return .lounge
         case .alert, .brace:        return .alert
         case .groom:                return .groom
         case .idle:                 return .idle
