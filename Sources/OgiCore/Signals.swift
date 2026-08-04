@@ -17,10 +17,15 @@ public struct Sensations: Sendable {
     public var charging = false
     public var lowPower = false
     public var asleep = false                // screen locked or display asleep
+    /// The user has told the OS that things moving on screen hurt. No panel, no toggle:
+    /// he reads the room through the accessibility setting that already exists.
+    public var reduceMotion = false
 
     /// He conserves energy when the machine is. Manifesto: a sluggish cat means plug in.
+    /// Reduce Motion pins the same dial: a permanently calm cat, through the mechanism the
+    /// battery already tunes, rather than a second way of being slow.
     public var languor: Double {
-        if lowPower { return 1 }
+        if lowPower || reduceMotion { return 1 }
         guard let b = batteryPercent, !charging, b < 20 else { return 0 }
         return min(1, Double(20 - b) / 15)
     }
@@ -94,6 +99,7 @@ public final class Signals {
         s.batteryPercent = battery?.percent
         s.charging = battery?.charging ?? false
         s.lowPower = ProcessInfo.processInfo.isLowPowerModeEnabled
+        s.reduceMotion = NSWorkspace.shared.accessibilityDisplayShouldReduceMotion
         s.asleep = screenAsleep
         return s
     }

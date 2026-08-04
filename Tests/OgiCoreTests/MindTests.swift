@@ -579,6 +579,17 @@ private func twoLedges() -> Skyline {
     #expect(cat.intent?.destinationX == 1000)
 }
 
+@Test func reduceMotionIsAPermanentlyCalmCat() {
+    // The one accessibility signal a moving overlay must respect, and it costs no panel and
+    // no permission: the user already told the OS. It pins languor, the dial low battery
+    // already tunes, so he idles longer, never trots, and settles sooner.
+    var s = Sensations()
+    s.reduceMotion = true
+    #expect(s.languor == 1)
+    s.reduceMotion = false
+    #expect(s.languor == 0)
+}
+
 @Test func aTapIsAPetNotAScruffing() {
     // Manifesto §7.7's first line: click him and he responds. mouseDown used to go straight
     // to the grab, so the most basic interaction there is read as rough handling. A pet
