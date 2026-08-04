@@ -78,6 +78,48 @@ private let dt = Feel.Timing.fixedDT
     #expect(lounge == Feel.Taste.loungeBase)
 }
 
+// MARK: - The election
+
+@Test func theElectionReturnsARoutableTrip() {
+    let bar = surface(.menuBar, y: 1205, from: 0, to: 1920, z: -1)
+    let ledge = surface(.window(1), y: 1100, from: 400, to: 900)
+    let floor = surface(.floor, y: 90, from: 0, to: 1920, z: .max)
+    let world = sky([bar, ledge, floor])
+    var cat = CatState(position: CGPoint(x: 650, y: 1100))
+    cat.support = .grounded(Perch(id: .window(1), dx: 250))
+    cat.age = 100
+    // Fifty elections: every .go must carry a move routing agreed to, whatever was drawn.
+    for _ in 0..<50 {
+        guard case .go(let intent)? = Cat.idea(from: cat, on: ledge, world: world) else {
+            continue
+        }
+        #expect(Cat.nextMove(from: cat, on: ledge, toward: intent.destination,
+                             x: intent.destinationX, world: world) != nil,
+                "the election proposed a trip routing had refused")
+    }
+}
+
+@Test func aBareDeskElectsTheLoungeMoreOftenThanNot() {
+    let bar = surface(.menuBar, y: 1205, from: 0, to: 1920, z: -1)
+    let floor = surface(.floor, y: 90, from: 0, to: 1920, z: .max)
+    let world = sky([bar, floor])
+    var cat = CatState(position: CGPoint(x: 900, y: 90))
+    cat.support = .grounded(Perch(id: .floor, dx: 900))
+    cat.age = 1000
+    var lived = CatState.Place(firstSeen: -.infinity)
+    lived.lastVisit = 900
+    lived.visits = 10
+    cat.memory[.floor] = lived
+    cat.memory[.menuBar] = lived    // stale but familiar; unreachable from the floor anyway
+
+    var lounges = 0
+    for _ in 0..<200 {
+        if case .lounge? = Cat.idea(from: cat, on: floor, world: world) { lounges += 1 }
+    }
+    #expect(lounges > 100, "the lounge won only \(lounges)/200 bare-desk elections")
+    #expect(lounges < 195, "the lounge never loses; he would never stroll at all")
+}
+
 // MARK: - Task 1: session memory
 
 @Test func theLaunchWorldIsNeverNovel() {

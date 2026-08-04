@@ -1143,10 +1143,18 @@ public enum Cat {
                     s.activity = .groom
                     s.activityElapsed = 0
                 } else if !s.screenCovered,
-                          let idea = pickIntent(from: s, on: surface, world: world) {
-                    s.intent = idea
-                    if case .jump = idea.move { s.activity = .crouch } else { s.activity = .walk }
-                    s.activityElapsed = 0
+                          let choice = idea(from: s, on: surface, world: world) {
+                    switch choice {
+                    case .go(let intent):
+                        s.intent = intent
+                        if case .jump = intent.move { s.activity = .crouch }
+                        else { s.activity = .walk }
+                        s.activityElapsed = 0
+                    case .lounge:
+                        // The v2c plan's Task 5 gives this its own pose; until then a won
+                        // lounge is an ordinary rest.
+                        s.restLeft = Feel.Timing.restMin
+                    }
                 } else {
                     // Nothing worth doing. Wait before asking again rather than re-rolling
                     // on every one of the next 120 ticks, which both burns work and biases
@@ -1750,36 +1758,50 @@ public enum Cat {
         return min(max(nearest, run.lowerBound + margin), run.upperBound - margin)
     }
 
-    /// Where he'd like to go next, and the first step toward it. Deliberately dumb: no A*, no
-    /// navigation mesh. A cat that pathfinds perfectly reads as a robot.
+    /// One thing to do about being bored: go somewhere, or stay and lounge.
+    public enum Idea: Sendable, Equatable { case go(Intent), lounge }
+
+    /// The election. This is where his taste lives, and it replaced a coin flip that chose
+    /// destinations exactly as often as randomness predicts — measured, choice and dwell
+    /// were the same distribution.
     ///
-    /// **This is the seam.** v2b's mind replaces this function and nothing else: everything
-    /// below it takes a destination as given.
-    private static func pickIntent(from s: CatState, on surface: Surface,
-                                   world: Skyline) -> Intent? {
-        if Double.random(in: 0...1) < Feel.Physics.jumpChance {
-            // Somewhere else entirely: the first candidate that routes, in random order.
-            // Unfiltered by reach on purpose — `nextMove` will chain two hops to get there, and
-            // filtering here by what is reachable in ONE would make multi-hop routing something
-            // only a test could ever ask for.
-            for other in world.surfaces.shuffled()
-            where other.id != surface.id && other.targetable {
-                guard let span = other.spans.randomElement() else { continue }
-                let x = CGFloat.random(in: span.lowerBound...span.upperBound)
-                if let move = nextMove(from: s, on: surface, toward: other.id, x: x, world: world) {
-                    return Intent(destination: other.id, destinationX: x, move: move)
-                }
+    /// Candidates from every visible span plus the null candidate, scored, drawn with a
+    /// temperature, and checked against routing — drawn again from the remainder if
+    /// `nextMove` refuses. The lounge always routes, because it is not a move; that makes
+    /// nil unreachable in practice, and the branch stays for the day the lounge is ever
+    /// conditional.
+    ///
+    /// **This replaced `pickIntent` and nothing else.** `nextMove` is final; the scorer
+    /// never assumes reachability, which is the false premise the v2b handoff warns about.
+    /// Unroutable dreams simply lose the draw.
+    static func idea(from s: CatState, on surface: Surface, world: Skyline) -> Idea? {
+        var pool = [Candidate(id: nil, x: s.position.x, y: s.position.y)]
+        for other in world.surfaces where other.targetable {
+            for span in other.spans where span.length > Feel.World.minStandWidth {
+                pool.append(Candidate(id: other.id,
+                                      x: .random(in: span.lowerBound...span.upperBound),
+                                      y: other.y))
             }
         }
-        // A stroll along the ledge he is on. The span is picked without weighting by length, so
-        // a 5pt sliver is as likely as a 300pt run; surfaces are one span in almost every real
-        // case, and a slight bias toward the awkward perches is not a defect worth code.
-        guard let span = surface.spans.randomElement(), span.length > Feel.World.minStandWidth else {
-            return nil
+        var scores = pool.map { score($0, from: s, world: world) }
+        while let i = draw(scores, temperature: Feel.Taste.temperature,
+                           roll: .random(in: 0..<1)) {
+            let c = pool[i]
+            if let id = c.id {
+                // A stroll to the spot he is already standing on is not an idea.
+                let arrived = id == surface.id
+                    && abs(c.x - s.position.x) < Feel.Physics.arrivalSlop * 2
+                if !arrived, let move = nextMove(from: s, on: surface, toward: id, x: c.x,
+                                                 world: world) {
+                    return .go(Intent(destination: id, destinationX: c.x, move: move))
+                }
+            } else {
+                return .lounge
+            }
+            pool.remove(at: i)
+            scores.remove(at: i)
         }
-        let x = CGFloat.random(in: span.lowerBound...span.upperBound)
-        return abs(x - s.position.x) < Feel.Physics.arrivalSlop * 2
-            ? nil : Intent(destination: surface.id, destinationX: x, move: .walk(x))
+        return nil
     }
 
     /// One thing the election could choose. `id == nil` is the null candidate: stay here

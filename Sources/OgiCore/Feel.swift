@@ -128,7 +128,6 @@ public enum Feel {
         /// A ceiling, not the speed he always uses: every launch is the cheapest one that
         /// reaches its target, so what he actually spends rises with the distance.
         public static let jumpImpulse: CGFloat = 872
-        public static let jumpChance = 0.55
         /// Deliberate aiming error, as a **fraction of the launch speed**. A cat that always
         /// sticks the landing reads as a machine.
         ///
