@@ -319,6 +319,30 @@ private let notched = ScreenGeometry(frame: CGRect(x: 0, y: 0, width: 1920, heig
 }
 
 @MainActor
+@Test func fullscreenSomewhereElseIsNotFullscreenHere() {
+    // The raw snapshot is the GLOBAL window list. Judged on a window's own size, a
+    // fullscreen video on the external display — or any window merely bigger than his
+    // screen, wherever it sits — reads as fullscreen here and sends the laptop cat home.
+    let frame = CGRect(x: 0, y: 0, width: 1512, height: 982)
+    let his = RawWindow(id: 1, pid: 7, layer: 0, rect: frame, alpha: 1, owner: "Safari")
+    let elsewhere = RawWindow(id: 2, pid: 7, layer: 0,
+                              rect: CGRect(x: 1512, y: 0, width: 2560, height: 1440),
+                              alpha: 1, owner: "Safari")
+    let poking = RawWindow(id: 3, pid: 7, layer: 0,
+                           rect: CGRect(x: 1500, y: 0, width: 2560, height: 1440),
+                           alpha: 1, owner: "Safari")
+    let own = RawWindow(id: 4, pid: 99, layer: 0, rect: frame, alpha: 1, owner: "Ogi")
+
+    #expect(OgiApp.somethingFullscreen(in: [his], frame: frame, ownPID: 99))
+    #expect(!OgiApp.somethingFullscreen(in: [elsewhere], frame: frame, ownPID: 99),
+            "a fullscreen window on another display sent him home")
+    #expect(!OgiApp.somethingFullscreen(in: [poking], frame: frame, ownPID: 99),
+            "a big window poking 12pt into his screen sent him home")
+    #expect(!OgiApp.somethingFullscreen(in: [own], frame: frame, ownPID: 99),
+            "his own overlay counted as the world being covered")
+}
+
+@MainActor
 @Test func heGoesHomeToTheDoorwayOnHisOwnSide() {
     // `homeX` is fixed at launch to the ONE edge he came out of. Walking to it from the far
     // side routes him across the cutout, where he now stops dead — so quitting would hang for

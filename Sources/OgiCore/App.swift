@@ -631,15 +631,27 @@ public final class OgiApp: NSObject, NSApplicationDelegate {
         // Edge-triggered. Level-triggered it would re-issue the retreat on every poll for as
         // long as the window stayed fullscreen, which is a cat who cannot be anywhere else.
         let frame = ScreenGeometry(screen).frame
-        let fullscreen = raw.contains { w in
-            w.layer == 0 && w.pid != ownPID
-                && w.rect.width >= frame.width * 0.98 && w.rect.height >= frame.height * 0.98
-        }
+        let fullscreen = OgiApp.somethingFullscreen(in: raw, frame: frame, ownPID: ownPID)
         if fullscreen, !wasFullscreen, let homeX {
             cat.receive(Stimulus(kind: .goHome, at: CGPoint(x: homeX, y: 0)))
             log("something went fullscreen, heading home")
         }
         wasFullscreen = fullscreen
+    }
+
+    /// Is his screen essentially covered by one real window?
+    ///
+    /// Measured on the INTERSECTION with his screen, because `raw` is the GLOBAL window
+    /// list: judged on a window's own size, a fullscreen video on another display — or any
+    /// window merely bigger than his screen, wherever it sits — read as fullscreen here and
+    /// sent him home. Pure and static so the multi-display cases are testable without an
+    /// NSApplication.
+    static func somethingFullscreen(in raw: [RawWindow], frame: CGRect, ownPID: pid_t) -> Bool {
+        raw.contains { w in
+            guard w.layer == 0, w.pid != ownPID else { return false }
+            let covered = w.rect.intersection(frame)
+            return covered.width >= frame.width * 0.98 && covered.height >= frame.height * 0.98
+        }
     }
 
     /// His depth in the window stack, which decides what is allowed to occlude him.
