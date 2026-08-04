@@ -21,6 +21,7 @@ public enum Sprites {
     /// Ordered frames per animation. Names match the files in Resources/Sprites.
     public enum Clip: String, Sendable {
         case walk, idle, jump, land, fall, run, alert, sitdown, held, sleep, groom, curl, cling
+        case lookDown
 
         var count: Int {
             switch self {
@@ -37,6 +38,7 @@ public enum Sprites {
             case .groom: 6
             case .curl: 5
             case .cling: 4
+            case .lookDown: 4
             }
         }
 
@@ -56,6 +58,7 @@ public enum Sprites {
             case .groom: 8
             case .curl: 6
             case .cling: 4      // a slow scrabble, not a flail
+            case .lookDown: 6   // head over the side in half a second, then he holds
             }
         }
 
@@ -66,7 +69,9 @@ public enum Sprites {
             // cling loops: he holds on until he lets go.
             case .walk, .run, .idle, .sleep, .held, .alert, .groom, .cling: true
             // curl settles into the sleep pose and holds it until sleep takes over.
-            case .jump, .land, .fall, .sitdown, .curl: false
+            // lookDown holds its last frame too: he leans out over the lip and stays there
+            // while he thinks. The hold IS the tell, so it must not cycle back to standing.
+            case .jump, .land, .fall, .sitdown, .curl, .lookDown: false
             }
         }
     }

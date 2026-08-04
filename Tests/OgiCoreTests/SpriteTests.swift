@@ -5,7 +5,7 @@ import CoreGraphics
 /// Clips regenerated against the current `art/character.png`. Add each name as its sheet
 /// lands. Kept by hand on purpose: the old version inferred this from eye colour, which
 /// stopped meaning anything the moment the cat himself became ginger.
-private let redrawnClips: Set<String> = ["walk", "fall", "land", "idle", "jump", "run", "sitdown", "sleep", "alert", "held", "groom", "curl", "cling"]
+private let redrawnClips: Set<String> = ["walk", "fall", "land", "idle", "jump", "run", "sitdown", "sleep", "alert", "held", "groom", "curl", "cling", "lookDown"]
 
 /// The drawn frames come from separately-generated sheets that draw him at wildly different
 /// sizes, so `Sprites` rescales each clip to make him one cat. These check that it works,
@@ -26,7 +26,7 @@ private let redrawnClips: Set<String> = ["walk", "fall", "land", "idle", "jump",
     // nearly twice a sitting cat's while his eye stays the same. His ratio is honestly 0.047
     // against everyone else's 0.06-0.10, and including him would fail correct art.
     var ratios: [(String, Double)] = []
-    for clip in [Sprites.Clip.walk, .idle, .jump, .land, .fall, .run, .alert, .sitdown, .sleep, .groom, .curl, .cling]
+    for clip in [Sprites.Clip.walk, .idle, .jump, .land, .fall, .run, .alert, .sitdown, .sleep, .groom, .curl, .cling, .lookDown]
     where redrawnClips.contains(clip.rawValue) {
         // Median across frames. One frame is a bad sample for the same reason clipScale takes
         // a median: a squash frame is legitimately short and would read as an oversized eye.
@@ -68,7 +68,7 @@ private let redrawnClips: Set<String> = ["walk", "fall", "land", "idle", "jump",
     // `clipScale` silently falls back to 1.0 when it finds no eyes, which does not crash and
     // does not look obviously wrong in a still — it just renders that clip at the raw pixel
     // size of its sheet. Catching it here is much cheaper than noticing it on screen.
-    for clip in [Sprites.Clip.walk, .idle, .jump, .land, .fall, .run, .alert, .sitdown, .held, .cling] {
+    for clip in [Sprites.Clip.walk, .idle, .jump, .land, .fall, .run, .alert, .sitdown, .held, .cling, .lookDown] {
         let withEyes = (0..<clip.count).filter { !Sprites.eyes(clip, $0).isEmpty }
         #expect(!withEyes.isEmpty, "\(clip.rawValue): no frame has a findable eye")
     }
@@ -76,7 +76,7 @@ private let redrawnClips: Set<String> = ["walk", "fall", "land", "idle", "jump",
 
 @MainActor
 @Test func everyFrameOfEveryClipLoads() {
-    for clip in [Sprites.Clip.walk, .idle, .jump, .land, .fall, .run, .alert, .sitdown, .held, .sleep, .cling] {
+    for clip in [Sprites.Clip.walk, .idle, .jump, .land, .fall, .run, .alert, .sitdown, .held, .sleep, .cling, .lookDown] {
         for i in 0..<clip.count {
             #expect(Sprites.image(clip, i) != nil, "\(clip.rawValue)\(i).png is missing")
         }
