@@ -808,6 +808,10 @@ private func partlyCoveredLedge() -> Surface {
 
     for _ in 0..<Int((Feel.Mind.hiddenPatience + 20) / dt) {
         cat = Cat.step(cat, world: world, dt: dt)
+        // Stepping out is the whole claim. Running the clock on after he has done it lets a
+        // later random wander be mid-crossing of the covered middle at the cutoff, and the
+        // test failed on that draw about one run in eight.
+        if !Cat.isHidden(cat, world: world), cat.intent == nil { break }
     }
     #expect(!Cat.isHidden(cat, world: world),
             "he stayed behind the window at x=\(cat.position.x)")
