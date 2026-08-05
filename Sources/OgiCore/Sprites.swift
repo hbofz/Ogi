@@ -50,7 +50,11 @@ public enum Sprites {
             case .lounge: 4
             case .stretch: 5
             case .peer: 4
-            case .zap, .vibe, .droop, .curious: 6
+            // zap is 5: its sheet's first frame was a neutral STANDING pose, so a sitting
+            // cat popped upright for a tenth of a second before the jolt. The clip opens
+            // on the jolt now, which is what a surprise looks like.
+            case .zap: 5
+            case .vibe, .droop, .curious: 6
             }
         }
 
