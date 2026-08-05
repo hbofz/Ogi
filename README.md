@@ -51,14 +51,14 @@ at the time. He can climb to get back up, too: jump at a face, catch it on the w
 haul himself onto the ledge. He will not grab a face he is *falling* past, which is deliberate,
 because catching every fall at the first window would kill the fall.
 
-It is covered by 169 unit tests and by simulation (the descent was soaked at 400 runs of 600
+It is covered by 277 unit tests and by simulation (the descent was soaked at 400 runs of 600
 seconds, and he was stranded in none of them). The first pass was tuned entirely against that
 simulation; watching him for fifteen minutes then corrected four things it could not see, and
 more of it will need the same. He also still lives on one display: he survives a monitor being
 plugged in, unplugged, or rearranged, and he survives a Space change, but he does not cross to
 another screen.
 
-He is a ginger tabby, drawn across 79 frames in seventeen animations. Cursor-tracking eyes are
+He is a ginger tabby, drawn across 94 frames in twenty animations. Cursor-tracking eyes are
 built and currently switched off: painting a live pupil needs an empty socket in the artwork,
 and the drawn frames have the eye complete. See `docs/ART-BRIEF.md`.
 

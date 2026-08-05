@@ -463,8 +463,9 @@ public enum Feel {
         // what makes these things read as bears or rats.
         public static let height: CGFloat = 32
         public static let width: CGFloat = 52
-        /// Reference frames are ~70-95px tall. 0.55 puts him at roughly 40-50pt, which is
-        /// large enough to read on a window edge and small enough to stay out of the way.
+        /// A final multiplier on top of the eye-width normalisation, kept at 1: his actual
+        /// size comes from `referenceEyeWidth` below, and this is the knob for scaling him
+        /// globally without retuning that.
         public static let spriteScale: CGFloat = 1.0
         /// Target on-screen eye width in points. Every clip is scaled to match it, which is
         /// what keeps him the same size whether he is sitting or walking.

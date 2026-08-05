@@ -1,7 +1,7 @@
 #if canImport(AppKit)
 import AppKit
 
-/// The drawn cat: 71 frames across fifteen animations, generated per `docs/ART-BRIEF.md`.
+/// The drawn cat: 94 frames across twenty animations, generated per `docs/ART-BRIEF.md`.
 ///
 /// Ogi was procedural first — one filled path assembled from a torso, a skull, four legs and
 /// a simulated tail. It worked, it animated, and it did not look good enough. The silhouette

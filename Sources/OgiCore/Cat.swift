@@ -283,7 +283,10 @@ public struct CatState: Sendable {
     /// matters more than the sheet costs.
     public var holdingStill: Bool { listening || typingHard }
 
-    /// Your cursor, screen-global, or nil if it is off this screen. Set by `App` each tick.
+    /// Your cursor, screen-global. Set by `App` each tick, and in practice never nil today:
+    /// he is pinned to one screen and the global mouse location is always somewhere, so a
+    /// cursor on another display still reads as a live point. W5.2 owns making this honest
+    /// on multiple screens.
     public var cursor: CGPoint?
     /// How long it has sat within a point or two of where it is now. Cats approach when you
     /// go still, and this is the "still" half of that.
