@@ -67,9 +67,19 @@ private func eyeToInk(_ clip: Sprites.Clip, _ i: Int) -> Double? {
     // median lands on a crouch. His *emerged* frame reads 0.093, inside the band and next to
     // `land`'s 0.097, and his measured eye is steady across the four frames at 34/30/28/31px,
     // so the eye is found correctly; only the yardstick fails.
+    // Every clip is IN by default and exclusion is explicit, because the old hardcoded list
+    // silently skipped every clip added after it was written — lounge, stretch and peer all
+    // shipped with no size coverage at all, which is the exact hole this project has fallen
+    // down twice before.
+    //
+    // `lounge` is excluded for `climbUp`'s reason with the sign flipped: sprawled flat he is
+    // half his standing height while his eye stays the same, so his ratio is honestly high.
+    // `peer` is the extreme of the same: the drawing is mostly head, so eye-to-ink-height is
+    // the wrong yardstick entirely. Both get their own steadiness pin below.
     var ratios: [(String, Double)] = []
-    for clip in [Sprites.Clip.walk, .idle, .jump, .land, .fall, .run, .alert, .sitdown, .sleep, .groom, .curl, .cling, .lookDown, .turn, .shake]
-    where redrawnClips.contains(clip.rawValue) {
+    let excluded: Set<Sprites.Clip> = [.held, .climbUp, .peek, .lounge, .peer]
+    for clip in Sprites.Clip.allCases
+    where !excluded.contains(clip) && redrawnClips.contains(clip.rawValue) {
         // Median across frames. One frame is a bad sample for the same reason clipScale takes
         // a median: a squash frame is legitimately short and would read as an oversized eye.
         var perFrame = (0..<clip.count).compactMap { eyeToInk(clip, $0) }
@@ -162,15 +172,54 @@ private func eyeToInk(_ clip: Sprites.Clip, _ i: Int) -> Double? {
     // `clipScale` silently falls back to 1.0 when it finds no eyes, which does not crash and
     // does not look obviously wrong in a still — it just renders that clip at the raw pixel
     // size of its sheet. Catching it here is much cheaper than noticing it on screen.
-    for clip in [Sprites.Clip.walk, .idle, .jump, .land, .fall, .run, .alert, .sitdown, .held, .cling, .lookDown, .peek, .turn, .shake] {
+    for clip in Sprites.Clip.allCases {
         let withEyes = (0..<clip.count).filter { !Sprites.eyes(clip, $0).isEmpty }
         #expect(!withEyes.isEmpty, "\(clip.rawValue): no frame has a findable eye")
     }
 }
 
 @MainActor
+@Test func thePeerRendersAtHeadSize() {
+    // The one clip normalised on ink height rather than eye width. Keyed on its huge
+    // front-facing eyes it rendered at nine points; keyed on height it is a head over a
+    // lip, the same size as the head on his side-view body.
+    let size = Sprites.size(.peer, 0)
+    #expect(abs(size.height - Feel.Shape.peerHeight) < 0.5)
+    #expect(size.width > 12 && size.width < 30,
+            "a peeking head \(size.width)pt wide is not the same cat as his 16-28pt body")
+}
+
+@MainActor
+@Test func theOddShapedClipsMeasureTheirEyesSteadily() throws {
+    // lounge and peer sit outside the aggregate ratio band above for honest reasons (a
+    // sprawled cat is short; a peeking cat is mostly head), and the peek precedent says an
+    // exclusion with no pin of its own is how clips ship at the wrong size. What CAN be
+    // pinned for any clip is that the eye measures consistently across its own frames: a
+    // lid or a whisker caught instead of the eye is off by multiples, not percents.
+    for clip in [Sprites.Clip.lounge, .peer] {
+        var widths = (0..<clip.count).compactMap { i -> CGFloat? in
+            guard let img = Sprites.image(clip, i),
+                  let eye = Sprites.eyes(clip, i).first else { return nil }
+            let w = eye.width * CGFloat(img.width)
+            return w > 2 ? w : nil
+        }
+        try #require(widths.count > clip.count / 2,
+                     "\(clip.rawValue): most frames have no measurable eye")
+        // Against the median, which is what clipScale actually uses, rather than max/min:
+        // peer's blink frame legitimately measures a sliver of the open eye (6x off), and
+        // the median shrugs that off exactly as it was built to. What must hold is that
+        // the median comes from agreement, not from a fluke.
+        widths.sort()
+        let median = widths[widths.count / 2]
+        let agreeing = widths.filter { $0 > median * 0.75 && $0 < median * 1.33 }.count
+        #expect(agreeing > clip.count / 2,
+                "\(clip.rawValue): only \(agreeing)/\(clip.count) frames agree with the median eye, so the clip's scale is built on a fluke")
+    }
+}
+
+@MainActor
 @Test func everyFrameOfEveryClipLoads() {
-    for clip in [Sprites.Clip.walk, .idle, .jump, .land, .fall, .run, .alert, .sitdown, .held, .sleep, .cling, .lookDown, .peek, .turn, .shake] {
+    for clip in Sprites.Clip.allCases {
         for i in 0..<clip.count {
             #expect(Sprites.image(clip, i) != nil, "\(clip.rawValue)\(i).png is missing")
         }

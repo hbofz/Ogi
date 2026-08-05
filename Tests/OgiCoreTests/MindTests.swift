@@ -596,6 +596,42 @@ private func twoLedges() -> Skyline {
     #expect(s.languor == 0)
 }
 
+@Test func buriedHeSurfacesAtTheLipOfWhatBuriedHim() {
+    // Hamzah's pictures: a window covers his whole ledge, and instead of fleeing somewhere
+    // else he surfaces at the covering window's own top edge, head and paws over the lip of
+    // the thing that hid him. The climb up its back is unseen by construction — he was
+    // hidden, which is the premise — so the visible event is a head appearing over the lip.
+    let front = Surface(id: .window(1), z: 0, y: 900, extent: 100...900,
+                        solid: [110...890], spans: [110...890],
+                        targetable: true, rect: CGRect(x: 100, y: 200, width: 800, height: 700))
+    let buried = Surface(id: .window(2), z: 1, y: 600, extent: 200...800,
+                         solid: [210...790], spans: [], targetable: true,
+                         rect: CGRect(x: 200, y: 300, width: 600, height: 300))
+    let floor = surface(.floor, y: 90, from: 0, to: 1920, z: .max)
+    let world = sky([front, buried, floor])
+
+    var cat = CatState(position: CGPoint(x: 500, y: 600))
+    cat.support = .grounded(Perch(id: .window(2), dx: 300))
+    cat.restLeft = .greatestFiniteMagnitude
+
+    var peered = false
+    for _ in 0..<Int((Feel.Mind.hiddenPatience + Feel.Timing.peerSeconds + 3) / dt) {
+        cat = Cat.step(cat, world: world, dt: dt)
+        if cat.activity == .peer { peered = true; break }
+    }
+    #expect(peered, "he never surfaced at the lip of the window that buried him")
+    guard case .grounded(let p) = cat.support else { Issue.record("not grounded"); return }
+    #expect(p.id == .window(1), "he peers from the covering window's own top edge")
+    #expect(cat.position.y == 900)
+
+    // The look ends by pulling himself up onto the edge, not by holding for ever.
+    for _ in 0..<Int((Feel.Timing.peerSeconds + 2) / dt) {
+        cat = Cat.step(cat, world: world, dt: dt)
+        if cat.activity != .peer { break }
+    }
+    #expect(cat.activity != .peer, "the peer never ends")
+}
+
 @Test func wakingOwesHimAStretch() {
     // The manifesto's three tier-1 stretch moments — first unlock of the morning, the Mac
     // waking, power plugged in — are one flag: the first unlock of the morning IS a wake,

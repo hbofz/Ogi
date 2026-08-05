@@ -65,6 +65,7 @@ public enum Activity: Sendable, Equatable {
     case sleep
     case lounge     // sprawled flat, head up, watching the room: "nothing to do here" as a behaviour
     case stretch    // the wake-up bow and yawn; also an occasional in-place idea
+    case peer       // head and paws over the lip of the window that was hiding him
     case alert      // frozen and listening: the mic went live
     case scruffed   // limp, legs tucked, dangling
     case righting   // the twist, mid-air
@@ -1080,7 +1081,7 @@ public enum Cat {
             // the room went quiet sits down rather than only settling into it after his next
             // idea. Only ever swaps one waiting pose for another: a wash or a walk still wins.
             switch s.activity {
-            case .groom, .lounge, .stretch, .peek, .land, .landHard, .brace: break   // busy; each times out on its own
+            case .groom, .lounge, .stretch, .peek, .peer, .land, .landHard, .brace: break   // busy; each times out on its own
             // Mid-glance at something that just appeared. `glanceLeft` is what tells this apart
             // from a STALE alert left over after the mic went quiet, which this branch has to go
             // on clearing: the hold-still branch returns early, so without that reset he stayed
@@ -1139,7 +1140,25 @@ public enum Cat {
                     s.activityElapsed = 0
                     return s
                 }
-                // His whole ledge is covered. Somewhere else entirely, and the first that routes.
+                // His whole ledge is covered — but the window burying him has a top edge of
+                // its own, and surfacing there, head and paws over the lip of the thing
+                // that hid him, is better than fleeing. The climb up its back is unseen by
+                // construction: he is hidden, which is the premise. The visible event is a
+                // head appearing over the lip, which is Hamzah's pictures exactly.
+                if let face = world.faceContaining(CGPoint(x: s.position.x,
+                                                           y: s.position.y + 1)),
+                   face.targetable,
+                   let x = nearestSpanX(to: s.position.x, in: face.solid),
+                   face.spans.contains(where: { $0.contains(x) }) {
+                    s.support = .grounded(Perch(id: face.id, dx: x - face.extent.lowerBound))
+                    s.position = CGPoint(x: x, y: face.y)
+                    s.activity = .peer
+                    s.activityElapsed = 0
+                    s.lastPerchOrigin = nil
+                    s.lastPerchID = nil
+                    return s
+                }
+                // Nothing to surface at. Somewhere else entirely, and the first that routes.
                 for other in world.surfaces.shuffled()
                 where other.id != surface.id && other.targetable && !other.spans.isEmpty {
                     guard let span = other.spans.randomElement() else { continue }
@@ -1173,6 +1192,15 @@ public enum Cat {
                     s.activity = s.repose.restingActivity
                     s.activityElapsed = 0
                     s.restLeft = Feel.Timing.restMin + Double.random(in: 0...Feel.Timing.restJitter)
+                }
+                return s
+            }
+            // Peering over the lip: a good long nosy look, then he pulls himself up onto
+            // the edge — the landing clip is the pull-up, and its own hold hands to rest.
+            if s.activity == .peer {
+                if s.activityElapsed > Feel.Timing.peerSeconds {
+                    s.activity = .land
+                    s.activityElapsed = 0
                 }
                 return s
             }

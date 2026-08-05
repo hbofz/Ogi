@@ -19,11 +19,12 @@ import AppKit
 public enum Sprites {
 
     /// Ordered frames per animation. Names match the files in Resources/Sprites.
-    public enum Clip: String, Sendable {
+    public enum Clip: String, Sendable, CaseIterable {
         case walk, idle, jump, land, fall, run, alert, sitdown, held, sleep, groom, curl, cling
         case lookDown, peek, turn, shake
         case climbUp
         case lounge, stretch
+        case peer
 
         var count: Int {
             switch self {
@@ -47,6 +48,7 @@ public enum Sprites {
             case .shake: 4
             case .lounge: 4
             case .stretch: 5
+            case .peer: 4
             }
         }
 
@@ -83,6 +85,7 @@ public enum Sprites {
             case .shake: 12     // a shudder, not a wobble
             case .lounge: 2.5   // breathing, like idle and sleep: he is watching, not doing
             case .stretch: 5    // a bow and a yawn take a second; the last frame holds
+            case .peer: 2.5     // a nosy look over a lip: glances and a blink, nothing more
             }
         }
 
@@ -93,7 +96,7 @@ public enum Sprites {
             // cling loops: he holds on until he lets go.
             // lounge loops: a sprawl is a spell, and its breath cycles back to frame 1.
             case .walk, .run, .idle, .sleep, .held, .alert, .groom, .cling, .climbUp,
-                 .lounge: true
+                 .lounge, .peer: true
             // curl settles into the sleep pose and holds it until sleep takes over.
             // lookDown holds its last frame too: he leans out over the lip and stays there
             // while he thinks. The hold IS the tell, so it must not cycle back to standing.
@@ -182,6 +185,7 @@ public enum Sprites {
         case .sleep:                return .sleep
         case .lounge:               return .lounge
         case .stretch:              return .stretch
+        case .peer:                 return .peer
         case .alert, .brace:        return .alert
         case .groom:                return .groom
         case .idle:                 return .idle
@@ -394,6 +398,14 @@ public enum Sprites {
     /// visibly changing size the moment he starts moving. The median ignores those outliers.
     static func clipScale(_ clip: Clip) -> CGFloat {
         if let s = scaleCache[clip.rawValue] { return s }
+        // peer is normalised on ink height instead: a front-facing head-shot's eyes are
+        // stylistically huge, and keying on them renders the whole peeking head at nine
+        // points. See `Feel.Shape.peerHeight`.
+        if clip == .peer, let img = image(clip, 0) {
+            let s = Feel.Shape.peerHeight / CGFloat(img.height)
+            scaleCache[clip.rawValue] = s
+            return s
+        }
         var scale: CGFloat = 1
         var widths: [CGFloat] = []
         for i in 0..<clip.count {

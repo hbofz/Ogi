@@ -386,6 +386,9 @@ public enum Feel {
         /// Chance an in-place bout of boredom is a stretch rather than a wash. Below half:
         /// the wash stays the commoner idle behaviour.
         public static let stretchChance: Double = 0.25
+        /// How long he peers over the lip of the window that was hiding him before pulling
+        /// himself up onto it. A good long nosy look: about four blink-loops of the sheet.
+        public static let peerSeconds: TimeInterval = 6
         /// Chance that a bout of boredom becomes a wash rather than a trip somewhere.
         /// Manifesto §7.1 wants an occasional in-place behaviour roughly every few minutes,
         /// and washing is currently the only one of those that exists.
@@ -470,6 +473,12 @@ public enum Feel {
         /// Target on-screen eye width in points. Every clip is scaled to match it, which is
         /// what keeps him the same size whether he is sitting or walking.
         public static let referenceEyeWidth: CGFloat = 2.1
+        /// The peer clip's on-screen ink height, its own yardstick because eye-width
+        /// normalisation is wrong for a front-facing head-shot: his front-drawn eyes are
+        /// stylistically huge, and keying on them rendered the whole peeking head at nine
+        /// points. Sized so the head over the lip matches the head on his side-view body;
+        /// tune by eye.
+        public static let peerHeight: CGFloat = 19
         /// How far past his drawn ink a click still counts as touching him. He is a small
         /// target, so the hit rect is padded — and the yield box is built from the same
         /// figure, because the box he moves aside for must be the box that swallows clicks.
