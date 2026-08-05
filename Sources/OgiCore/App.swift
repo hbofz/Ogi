@@ -24,11 +24,9 @@ public final class OgiApp: NSObject, NSApplicationDelegate {
                                   screen: ScreenGeometry(frame: .zero, visibleFrame: .zero, notch: nil))
     private var cat = CatState(position: .zero)
     private var gaze = Gaze()
-    private var tail = TailSim()
     private let signals = Signals()
     private var sense = Sensations()
     private var walkPhase: CGFloat = 0
-    private var crouchAmount: CGFloat = 0
 
     private var accumulator: TimeInterval = 0
     private var lastTick: CFTimeInterval = 0
@@ -505,14 +503,10 @@ public final class OgiApp: NSObject, NSApplicationDelegate {
         }
     }
 
-    /// Advances everything that is computed rather than simulated: the gait cycle, the
-    /// crouch blend, and the tail.
+    /// Advances the gait cycle, the one pose input that is computed rather than simulated.
     private func buildPose(dt: CGFloat) -> Body.Pose {
         var pose = Body.Pose()
-
-        let walking = cat.activity == .walk
-        pose.stride = walking ? 1 : 0
-        if walking {
+        if cat.activity == .walk {
             // Gait speed follows the speed he is actually moving at, so the feet do not skate.
             // Against the constant it used to read, the wind-up and the coast to a halt would
             // both be moonwalks, and a trot would have been one all along.
@@ -525,25 +519,7 @@ public final class OgiApp: NSObject, NSApplicationDelegate {
             walkPhase = walkPhase.truncatingRemainder(dividingBy: 1)
         }
         pose.walkPhase = walkPhase
-
-        // Blend into and out of the crouch rather than snapping, so the wind-up reads.
-        let wantCrouch: CGFloat = cat.activity == .crouch ? 1 : 0
-        crouchAmount += (wantCrouch - crouchAmount) * min(1, dt * 18)
-        pose.crouch = crouchAmount
-
-        switch cat.support {
-        case .falling: pose.airborne = true
-        case .held: pose.airborne = true; pose.dangling = true
-        case .clinging: pose.airborne = true    // nothing under his feet, but not dangling
-        case .grounded: break
-        }
-        pose.righting = cat.righting
-        pose.earAngle = cat.activity == .landHard ? -0.35 : 0
-
-        // The tail is simulated in body space, so it inherits the mirror and the squash for
-        // free and never needs unwinding from the world transform.
-        tail.step(base: Body.tailBase(pose), dt: dt)
-        pose.tail = tail.points
+        if case .held = cat.support { pose.dangling = true }
         return pose
     }
 
