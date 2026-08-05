@@ -174,7 +174,12 @@ public final class Signals {
         if now - lastMicPoll > 0.25 { micLive = Self.micRunning(); lastMicPoll = now }
         s.micLive = micLive
 
-        if now - lastPowerPoll > 30 { battery = Self.power(); lastPowerPoll = now }
+        // 2s, not the 30s this shipped with: the IOPS notification should make the re-read
+        // instant, but three rounds of Hamzah plugging the cable in and watching nothing
+        // happen bought the belt AND the braces. Reading the power sources costs
+        // microseconds; at 0.5Hz it is nothing, and it caps the zap's worst-case lag at
+        // two seconds even if the notification never fires at all.
+        if now - lastPowerPoll > 2 { battery = Self.power(); lastPowerPoll = now }
         s.batteryPercent = battery?.percent
         s.charging = battery?.charging ?? false
         s.lowPower = ProcessInfo.processInfo.isLowPowerModeEnabled

@@ -390,12 +390,18 @@ public final class OgiApp: NSObject, NSApplicationDelegate {
         // properly low is the power-down. All edges only App can see; each first sample
         // records rather than fires, so a Mac that launches plugged in does not open with
         // a jolt.
-        if let was = wasCharging, sense.charging, !was { cat.owed = .zap }
+        if let was = wasCharging, sense.charging != was {
+            log("power \(sense.charging ? "arrived -> zap owed" : "left")")
+            if sense.charging { cat.owed = .zap }
+        }
         wasCharging = sense.charging
-        if sense.audioArrived { cat.owed = .vibe }
-        if sense.usbArrived { cat.owed = .curious }
+        if sense.audioArrived { cat.owed = .vibe; log("new ears -> vibe owed") }
+        if sense.usbArrived { cat.owed = .curious; log("something on the cable -> curious owed") }
         if let p = sense.batteryPercent, let was = lastPercent, p < 20, was >= 20,
-           !sense.charging { cat.owed = .droop }
+           !sense.charging {
+            cat.owed = .droop
+            log("battery crossed \(p)% -> droop owed")
+        }
         lastPercent = sense.batteryPercent ?? lastPercent
 
         // Cats approach when you go still, so how long it has NOT moved is the signal.
