@@ -51,14 +51,22 @@ at the time. He can climb to get back up, too: jump at a face, catch it on the w
 haul himself onto the ledge. He will not grab a face he is *falling* past, which is deliberate,
 because catching every fall at the first window would kill the fall.
 
-It is covered by 277 unit tests and by simulation (the descent was soaked at 400 runs of 600
+He has taste: where he goes when nothing has happened is an election over what the world
+offers — novelty, staleness, height, effort — not a coin flip, and on an empty desktop he
+sprawls and watches the room instead of pacing. Bury him behind a window and he surfaces at
+its top edge, head and paws over the lip. The notch is his den, and he waits in its doorway
+facing out. And the machine's own moments are little performances: plug in the charger and he
+is comically electrocuted, connect your AirPods and he grooves, run the battery low and he
+powers down flat, plug in your phone and he head-tilts at it.
+
+It is covered by 290 unit tests and by simulation (the descent was soaked at 400 runs of 600
 seconds, and he was stranded in none of them). The first pass was tuned entirely against that
 simulation; watching him for fifteen minutes then corrected four things it could not see, and
 more of it will need the same. He also still lives on one display: he survives a monitor being
 plugged in, unplugged, or rearranged, and he survives a Space change, but he does not cross to
 another screen.
 
-He is a ginger tabby, drawn across 94 frames in twenty animations. Cursor-tracking eyes are
+He is a ginger tabby, drawn across 121 frames in twenty-five animations. Cursor-tracking eyes are
 built and currently switched off: painting a live pupil needs an empty socket in the artwork,
 and the drawn frames have the eye complete. See `docs/ART-BRIEF.md`.
 
