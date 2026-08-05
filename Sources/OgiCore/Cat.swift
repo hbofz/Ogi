@@ -480,7 +480,11 @@ public enum Cat {
             // Only when he is standing around. A cat already walking somewhere just flicks his
             // eyes, and snapping the pose mid-walk would stop him dead for a beat. `holdingStill`
             // outranks this for the same reason it outranks everything else.
-            if stim.canTravel, s.intent == nil, !s.holdingStill,
+            // ...and never mid-show. Plugging a charger flashes a transient charging
+            // window on macOS, so this perk assassinated the zap a beat after it began —
+            // through three rounds of Hamzah lengthening a buzz that was never the
+            // problem. The glance's cheap half (eyes, arousal) still happens above.
+            if stim.canTravel, s.intent == nil, !s.holdingStill, !isShow(s.activity),
                case .grounded = s.support {
                 s.activity = .alert
                 s.activityElapsed = 0
@@ -518,7 +522,7 @@ public enum Cat {
             // a floating panel over fullscreen video is a real stimulus, and crossing the
             // movie to sniff it is exactly what `screenCovered` exists to refuse.
             if stim.canTravel, s.arousal >= Feel.Mind.investigateAbove, s.intent == nil,
-               !s.screenCovered,
+               !s.screenCovered, !isShow(s.activity),
                case .grounded(let perch) = s.support,
                let here = world.surface(perch.id),
                let dest = surfaceAt(stim.at, in: world),
@@ -1088,7 +1092,7 @@ public enum Cat {
             // entire gag, and queued behind the lounge it played up to a spell late, which
             // Hamzah felt as "kinda slow". Only the real interrupts outrank it: the freeze,
             // the yield and sleep all returned long before this.
-            if let show = s.owed {
+            if let show = s.owed, !isShow(s.activity) {
                 s.owed = nil
                 s.activity = show
                 s.activityElapsed = 0
@@ -1599,6 +1603,16 @@ public enum Cat {
             break   // resolved into a walk above; unreachable
         }
         return s
+    }
+
+    /// A show in progress: one of the owed performances, which nothing short of a real
+    /// interrupt (the freeze, the yield, sleep, a retreat) may take the pose from. The
+    /// glance's perk, an investigation, and a second show all wait their turn.
+    static func isShow(_ activity: Activity) -> Bool {
+        switch activity {
+        case .stretch, .zap, .vibe, .droop, .curious: return true
+        default: return false
+        }
     }
 
     /// How long an in-place performance holds before he settles back, or nil if the

@@ -786,6 +786,41 @@ private func landing(fromHeight h: CGFloat, routing: Bool = false) -> (Activity,
     #expect(cat.activity == .zap, "the jolt queued behind the lounge")
 }
 
+@Test func aWindowOpeningDoesNotStompTheShow() {
+    // The zap died in under a second on screen through THREE rounds of lengthening its
+    // buzz, because plugging the charger makes macOS flash a transient charging window:
+    // the glance's perk overwrote .zap with .alert on the next poll, and a roused cat
+    // could abandon the show for an investigation trip. He still glances — eyes and
+    // arousal are the cheap half — but the pose belongs to the show until it ends.
+    let bar = surface(.menuBar, y: 1205, from: 0, to: 1920, z: -1)
+    let win1 = surface(.window(1), y: 900, from: 300, to: 800)
+    var cat = CatState(position: CGPoint(x: 900, y: 1205))
+    cat.support = .grounded(Perch(id: .menuBar, dx: 900))
+    cat.restLeft = .greatestFiniteMagnitude
+    cat.activity = .zap
+    cat.activityElapsed = 0.3
+    cat.arousal = 1
+    cat.stimulus = Stimulus(kind: .windowOpened, at: CGPoint(x: 550, y: 900))
+    cat = Cat.step(cat, world: sky([bar, win1]), dt: dt)
+    #expect(cat.activity == .zap, "a transient window stomped the show")
+    #expect(cat.lookingAt != nil, "he should still glance")
+    #expect(cat.intent == nil, "roused, he abandoned the show for a trip")
+}
+
+@Test func aSecondShowQueuesBehindTheFirst() {
+    // One slot, no stomping: a second event mid-show waits for the first to finish.
+    let bar = surface(.menuBar, y: 1205, from: 0, to: 1920, z: -1)
+    var cat = CatState(position: CGPoint(x: 900, y: 1205))
+    cat.support = .grounded(Perch(id: .menuBar, dx: 900))
+    cat.restLeft = .greatestFiniteMagnitude
+    cat.activity = .zap
+    cat.activityElapsed = 0.3
+    cat.owed = .curious
+    cat = Cat.step(cat, world: sky([bar]), dt: dt)
+    #expect(cat.activity == .zap, "the queued show stomped the running one")
+    #expect(cat.owed == .curious, "the queued show was dropped instead of waiting")
+}
+
 @Test @MainActor func theBuzzLoopsBeforeTheRecovery() {
     let fps = Sprites.Clip.zap.fps
     let oneCycle = 3.0 / fps
