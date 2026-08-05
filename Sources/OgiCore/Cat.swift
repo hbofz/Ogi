@@ -753,7 +753,12 @@ public enum Cat {
             // can do it at 1500 px/s, and both must keep working; what must not survive is
             // leaving the world at all. Falling short of an interior lip and having to climb
             // back is untouched, because there is always something below one.
-            let bounds = world.screen.visibleFrame
+            //
+            // Inset by `clearance`, the same margin every surface's `solid` uses, so that
+            // being caught by this wall leaves him drawn WHOLE rather than merely on the
+            // desktop: pinned flush to `visibleFrame.minX` he lands with a third of himself
+            // off the panel, which is the same defect as standing on the screen's edge.
+            let bounds = world.screen.visibleFrame.insetBy(dx: Feel.Shape.clearance, dy: 0)
             let x = min(max(s.position.x + s.velocity.dx * dt, bounds.minX), bounds.maxX)
 
             // The second way into `.clinging`, and the only one that is not a release.
@@ -1065,6 +1070,25 @@ public enum Cat {
             return s
         }
 
+        // The screen has gone over to one app and he is behind it. Routing him to the top the
+        // ordinary way was timed on a real fullscreen Space at EIGHTEEN seconds: a seven-second
+        // run along a floor nobody can see, then a ten-second climb up the covering window's
+        // face. A fullscreen Space is somewhere you are for three. So he surfaces at the lip of
+        // the thing that covered him instead. It is the same move the hidden branch below already
+        // makes, and the climb it skips was invisible by construction, because being behind
+        // that window is the premise.
+        //
+        // `isHidden` is the safety rule and not a detail: a cat you can currently SEE must
+        // never jump position. On a covered screen he is only ever moved from somewhere nobody
+        // is looking.
+        //
+        // Above the intent handling, unlike the hidden branch: the fullscreen retreat forms an
+        // intent of its own, so behind that guard this would never run at all.
+        if s.screenCovered, !upTop(s, on: surface, world: world), isHidden(s, world: world),
+           surfaceOverTheLip(&s, world: world) {
+            return s
+        }
+
         /// Nothing left to do. He stops where he is and waits before wanting anything else.
         func settle(_ s: inout CatState) {
             s.intent = nil
@@ -1123,8 +1147,18 @@ public enum Cat {
             // so in ordinary life the next idea gets him up; on a covered screen, where
             // elections are gated, the den is how he watches the whole film.
             if s.activity == s.repose.restingActivity, s.repose != .asleep,
-               let out = denDoor(s, on: surface) {
-                s.facing = out
+               let den = denDoor(s, on: surface) {
+                // Out of the hole before he settles into it. Whatever is drawn inside the notch
+                // is simply gone, so a cat centred on the lip is missing his back half, which
+                // is what Hamzah watched happen up there. The retreats now aim at this spot
+                // already (`OgiApp.denX`), so on the common path this is a few points at most;
+                // it is here as well because the retreats are not the only way he ends up on a
+                // lip. A wall bump parks him on one, and so does a launch walk that never
+                // finished because the room went quiet.
+                s.position.x = den.standAt
+                s.support = .grounded(Perch(id: surface.id,
+                                            dx: den.standAt - surface.extent.lowerBound))
+                s.facing = den.out
                 s.activity = .peek
                 s.activityElapsed = 0
             }
@@ -1170,19 +1204,7 @@ public enum Cat {
                 // that hid him, is better than fleeing. The climb up its back is unseen by
                 // construction: he is hidden, which is the premise. The visible event is a
                 // head appearing over the lip, which is Hamzah's pictures exactly.
-                if let face = world.faceContaining(CGPoint(x: s.position.x,
-                                                           y: s.position.y + 1)),
-                   face.targetable,
-                   let x = nearestSpanX(to: s.position.x, in: face.solid),
-                   face.spans.contains(where: { $0.contains(x) }) {
-                    s.support = .grounded(Perch(id: face.id, dx: x - face.extent.lowerBound))
-                    s.position = CGPoint(x: x, y: face.y)
-                    s.activity = .peer
-                    s.activityElapsed = 0
-                    s.lastPerchOrigin = nil
-                    s.lastPerchID = nil
-                    return s
-                }
+                if surfaceOverTheLip(&s, world: world) { return s }
                 // Nothing to surface at. Somewhere else entirely, and the first that routes.
                 for other in world.surfaces.shuffled()
                 where other.id != surface.id && other.targetable && !other.spans.isEmpty {
@@ -2077,15 +2099,64 @@ public enum Cat {
     /// the bar except the two lips of the cutout. `isGap` alone is not enough: it answers
     /// "does solid resume somewhere ahead", which is true anywhere left of the notch, so
     /// the lip itself has to be underfoot.
-    static func denDoor(_ s: CatState, on surface: Surface) -> CGFloat? {
+    /// Returns which way faces OUT of the hole, and where he has to stand so that none of him
+    /// is drawn inside it.
+    static func denDoor(_ s: CatState, on surface: Surface) -> (out: CGFloat, standAt: CGFloat)? {
+        // A body-width of reach, not a footstep. He no longer *waits* on the lip, because everything
+        // past it is a hardware hole with no pixels behind it and half a cat reads as a broken
+        // sprite. So standing clear of it has to still count as standing at the door, or the
+        // pose he waits in would never play again.
+        let reach = Feel.Shape.clearance + Feel.Physics.arrivalSlop * 3
         for dir: CGFloat in [1, -1] {
             if let edge = edgeAhead(from: s.position.x, facing: dir, on: surface),
-               abs(edge - s.position.x) <= Feel.Physics.arrivalSlop * 3,
+               abs(edge - s.position.x) <= reach,
                isGap(at: edge, facing: dir, on: surface) {
-                return -dir
+                return (out: -dir, standAt: edge - dir * Feel.Shape.clearance)
             }
         }
         return nil
+    }
+
+    /// Head and paws over the lowest lip above him that you could actually see him on.
+    /// Returns false if there is no such lip.
+    ///
+    /// He is BEHIND all of it, so the scramble up is unseen by construction, which is what
+    /// makes arriving at the top directly honest rather than a cheat. The visible event is a
+    /// head appearing over an edge, and it is the same event either way.
+    ///
+    /// **The lowest VISIBLE one, not the window he happens to be under.** A fullscreen Chrome
+    /// is four stacked full-width bands: the one that buried him has its own top edge buried
+    /// under the next, so its lip is not a place anyone could see him, and asking only about
+    /// the window directly overhead left him sitting on the floor of a covered screen for as
+    /// long as it lasted. Walking up the stack finds the first edge that is actually on show.
+    ///
+    /// Somewhere random along that lip, rather than directly above wherever he was hiding.
+    /// He came up in the same spot every time otherwise, because the place he gets buried is
+    /// itself the same most days, and a cat who always appears at the same x reads as a
+    /// scripted popup instead of a cat. `standingRoom` keeps the draw off both ends of the
+    /// run, which is what stops a random x putting half of him inside the notch or past the
+    /// edge of the panel.
+    ///
+    /// Callers must check `isHidden` first. Nothing here can tell whether he is currently on
+    /// screen, and moving a cat you can see is the one thing this must never do. That check
+    /// is also what makes the sideways jump free: there is nobody to see it happen.
+    static func surfaceOverTheLip(_ s: inout CatState, world: Skyline) -> Bool {
+        let above = world.surfaces
+            .filter { $0.targetable && $0.y > s.position.y + Feel.World.coplanarEpsilon }
+            .sorted { $0.y < $1.y }
+        guard let lip = above.first(where: { !$0.spans.isEmpty }),
+              let x = standingRoom(near: randomX(in: lip.spans), in: lip.spans)
+        else { return false }
+        s.support = .grounded(Perch(id: lip.id, dx: x - lip.extent.lowerBound))
+        s.position = CGPoint(x: x, y: lip.y)
+        s.activity = .peer
+        s.activityElapsed = 0
+        // Cleared for the covered-screen caller, which arrives here with the retreat's own
+        // intent live. Left over, it would walk him straight back off the lip he just reached.
+        s.intent = nil
+        s.lastPerchOrigin = nil
+        s.lastPerchID = nil
+        return true
     }
 
     /// Home enough, for the standing order: on the menu bar itself, or on any surface
@@ -2184,6 +2255,20 @@ public enum Cat {
     /// Inset by `edgeApproach`, which is the distance a step-off aims past a lip and so the
     /// distance at which `isAtEdge` stops being true. Spans shorter than twice that get their
     /// midpoint, since there is nowhere in them that is not near an end.
+    /// A uniformly random point across a set of spans, weighted by their length so a 30pt
+    /// sliver is not as likely as the rest of the screen. Falls back to the first span's start
+    /// when the run has no length at all.
+    static func randomX(in spans: [ClosedRange<CGFloat>]) -> CGFloat {
+        let total = spans.reduce(0) { $0 + $1.length }
+        guard total > 0 else { return spans.first?.lowerBound ?? 0 }
+        var mark = CGFloat.random(in: 0...total)
+        for span in spans {
+            if mark <= span.length { return span.lowerBound + mark }
+            mark -= span.length
+        }
+        return spans[spans.count - 1].upperBound
+    }
+
     static func standingRoom(near x: CGFloat, in spans: [ClosedRange<CGFloat>]) -> CGFloat? {
         let inset = Feel.Physics.edgeApproach
         return spans.map { span -> CGFloat in

@@ -423,6 +423,9 @@ public enum Sprites {
     /// head and closes when he blinks, so one unlucky frame set the size of a whole animation.
     /// Reading frame 0 alone had `idle` 44% and `run` 42% off their own medians, which is him
     /// visibly changing size the moment he starts moving. The median ignores those outliers.
+    ///
+    /// Then corrected per sheet, because eye WIDTH is only half a measurement and a handful of
+    /// sheets disagree about the other half. See `sheetCorrection`.
     static func clipScale(_ clip: Clip) -> CGFloat {
         if let s = scaleCache[clip.rawValue] { return s }
         // peer is normalised on ink height instead: a front-facing head-shot's eyes are
@@ -444,10 +447,47 @@ public enum Sprites {
         }
         if !widths.isEmpty {
             widths.sort()
-            scale = Feel.Shape.referenceEyeWidth / widths[widths.count / 2]
+            scale = Feel.Shape.referenceEyeWidth / widths[widths.count / 2] * sheetCorrection(clip)
         }
         scaleCache[clip.rawValue] = scale
         return scale
+    }
+
+    /// A per-sheet correction on top of the eye-width normalisation, for the sheets that drew
+    /// his eye WIDE.
+    ///
+    /// Eye width is only half a measurement, and across the twenty-five sheets his eye is not
+    /// one shape. On the ones that render correctly it is a tall almond: `idle` 37x54, `walk`
+    /// 17x25, `sitdown` 21x31, `alert` 32x48, `groom` 22x31, `run` 13x19, every one of them
+    /// between 1.38 and 1.50 tall for its width. On these five it comes back much rounder:
+    /// `lookDown` 34x34, `stretch` 30x26, `turn` 39x42, `shake` 32x35, `peek` 31x37. Dividing
+    /// a fixed number by that inflated width renders the whole clip small, silently, and
+    /// Hamzah saw it long before any metric did: "when he peeks his body gets a bit smaller".
+    ///
+    /// The correction is `sqrt(1.45 / aspect)`, the family's shape over the sheet's own, on
+    /// the square root because the error is spread across both axes. Checked against
+    /// `all-clips` with every clip drawn at true scale on one baseline, which is the only
+    /// instrument that applies here.
+    ///
+    /// It is a **list and not a formula** on purpose, even though the numbers came from one.
+    /// A round eye means two different things and only one of them is this: on `sleep` (18x21),
+    /// `curl` (19x21) and `vibe` (33x34) it is a *closed* eye, which is small in both
+    /// directions, so their widths are already short and the same formula would inflate a cat
+    /// who is the right size. Applying it everywhere made the sleeping cat visibly too big.
+    /// Nothing in the pixels separates a squint from a round eye, so the split is a judgement
+    /// and is written down as one.
+    ///
+    /// Re-measure whenever one of these sheets is regenerated. `theWideEyedSheetsRenderAsOneCat`
+    /// fails if a new sheet drifts out of the family.
+    static func sheetCorrection(_ clip: Clip) -> CGFloat {
+        switch clip {
+        case .peek:     1.10    // eye 31x37, aspect 1.19
+        case .lookDown: 1.20    // eye 34x34, aspect 1.00
+        case .turn:     1.16    // eye 39x42, aspect 1.08
+        case .shake:    1.15    // eye 32x35, aspect 1.09
+        case .stretch:  1.29    // eye 30x26, aspect 0.87
+        default:        1
+        }
     }
 
     private static var scaleCache: [String: CGFloat] = [:]

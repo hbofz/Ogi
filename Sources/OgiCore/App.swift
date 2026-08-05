@@ -300,6 +300,29 @@ public final class OgiApp: NSObject, NSApplicationDelegate {
         return Cat.standingRoom(near: icon ?? bar.extent.upperBound, in: bar.spans)
     }
 
+    /// Where he WAITS when he goes home: beside the doorway rather than in it.
+    ///
+    /// The notch is a hardware hole with no pixels behind it, so a cat centred on its lip has
+    /// everything past that lip simply not drawn. Both retreats used to park him exactly there
+    /// and leave him for as long as it lasted, which on a covered screen is the whole film.
+    /// Hamzah watched about half of him vanish up there. He stops a body-width short now, with
+    /// all of him on lit pixels, and `Cat.denDoor` reaches that far so he still holds the den
+    /// pose when he gets there.
+    ///
+    /// `goHomeAndQuit` deliberately does NOT use this. Leaving means going *into* the hole, and
+    /// so does the launch emergence: both are motion, which reads as a doorway. Only stopping
+    /// there reads as a bug.
+    ///
+    /// Pure and static so both lips are testable without an NSApplication.
+    static func denX(_ home: CGFloat, notch: CGRect?) -> CGFloat {
+        guard let notch else { return home }
+        // Only the two lips are doorways; anywhere else on the bar there is no hole to stand
+        // out of, and shifting him would just be an unexplained 26pt of drift.
+        if abs(home - notch.minX) < 1 { return notch.minX - Feel.Shape.clearance }
+        if abs(home - notch.maxX) < 1 { return notch.maxX + Feel.Shape.clearance }
+        return home
+    }
+
     /// The edge of the cutout on *his* side of it, or `homeX` itself when no lip lies on the
     /// way — which is every notchless Mac, where home is mid-run and the edge ahead is the
     /// screen corner. `homeX` is fixed at launch to the doorway he came out of, and the two
@@ -661,8 +684,9 @@ public final class OgiApp: NSObject, NSApplicationDelegate {
         lastRaw = raw
         let fresh = World.build(windows: raw, screen: ScreenGeometry(screen), ownPID: ownPID)
         skyline = tracker.ingest(fresh)
-        // The simulation's copy of where home is, for the covered-screen standing order.
-        cat.homeX = effectiveHomeX
+        // The simulation's copy of where home is, for the covered-screen standing order. The
+        // waiting spot, not the doorway: the standing order is a place to *stay*.
+        cat.homeX = waitingSpot
 
         // New furniture. He looks at the first one: a stimulus is one-shot and two arriving in
         // the same poll would mean the second silently overwrote the first, so taking the first
@@ -685,8 +709,9 @@ public final class OgiApp: NSObject, NSApplicationDelegate {
         //
         // Edge-triggered. Level-triggered it would re-issue the retreat on every poll for as
         // long as the window stayed fullscreen, which is a cat who cannot be anywhere else.
-        let frame = ScreenGeometry(screen).frame
-        let fullscreen = OgiApp.somethingFullscreen(in: raw, frame: frame, ownPID: ownPID)
+        let fullscreen = OgiApp.somethingFullscreen(in: raw, screen: ScreenGeometry(screen),
+                                                    ownPID: ownPID)
+        if fullscreen != wasFullscreen { log("screen \(fullscreen ? "covered" : "clear")") }
         if fullscreen, !wasFullscreen {
             headHome(because: "something went fullscreen, heading home")
         }
@@ -702,25 +727,54 @@ public final class OgiApp: NSObject, NSApplicationDelegate {
     /// cat glancing at the floor the day they return. One helper because the two retreats
     /// (fullscreen, machine sleep) are the same act with a different prompt.
     private func headHome(because reason: String) {
-        guard let home = effectiveHomeX else { return }
+        guard let home = waitingSpot else { return }
         cat.receive(Stimulus(kind: .goHome,
                              at: CGPoint(x: home, y: skyline.screen.visibleFrame.maxY)))
         log(reason)
     }
 
-    /// Is his screen essentially covered by one real window?
+    /// `effectiveHomeX`, stood clear of the cutout. What both retreats and the covered-screen
+    /// standing order aim at; the goodbye still aims at the doorway itself.
+    private var waitingSpot: CGFloat? {
+        effectiveHomeX.map { OgiApp.denX($0, notch: skyline.screen.notch) }
+    }
+
+    /// Is his screen given over to one app?
     ///
-    /// Measured on the INTERSECTION with his screen, because `raw` is the GLOBAL window
-    /// list: judged on a window's own size, a fullscreen video on another display — or any
-    /// window merely bigger than his screen, wherever it sits — read as fullscreen here and
-    /// sent him home. Pure and static so the multi-display cases are testable without an
-    /// NSApplication.
-    static func somethingFullscreen(in raw: [RawWindow], frame: CGRect, ownPID: pid_t) -> Bool {
-        raw.contains { w in
-            guard w.layer == 0, w.pid != ownPID else { return false }
-            let covered = w.rect.intersection(frame)
-            return covered.width >= frame.width * 0.98 && covered.height >= frame.height * 0.98
+    /// **Not** "is there one window covering ~all of the frame", which is what this used to
+    /// ask and which is false of every real fullscreen Space. Dumped live off this machine
+    /// (M2, notched, macOS 26.5.1, 1920x1243pt) while sitting on one:
+    ///
+    /// - a settled fullscreen window is 1920x**1205**. It stops at the menu bar line and
+    ///   leaves the 38pt notch strip bare, so it covers 96.9% of the frame and fails a 98%
+    ///   test. The only window that ever passed was the 1920x1243 one macOS shows for ~0.7s
+    ///   during the zoom animation, which is precisely why *entering* fullscreen worked and
+    ///   swiping to a Space that was already fullscreen did nothing.
+    /// - a fullscreen app is not even one window. Chrome's is four full-width bands (1083,
+    ///   158, 81 and 41 tall); the tallest is 87% of the screen on its own.
+    ///
+    /// What IS true of all of them: full-width bands whose union covers the screen from its
+    /// bottom edge up to the menu bar line. The bottom **edge**, not `visibleFrame.minY`, is
+    /// what separates fullscreen from merely maximized (fullscreen owns the Dock band, zoom
+    /// does not), and the menu bar line is the top because the strip above it is the notch,
+    /// which fullscreen deliberately leaves bare.
+    ///
+    /// Full width is not an approximation either: every window in every fullscreen Space
+    /// dumped was exactly screen-wide. It is also what keeps the GLOBAL window list honest,
+    /// since a fullscreen window on another display spans none of this screen's x.
+    ///
+    /// Pure and static so the multi-display cases are testable without an NSApplication.
+    static func somethingFullscreen(in raw: [RawWindow], screen: ScreenGeometry,
+                                    ownPID: pid_t) -> Bool {
+        let f = screen.frame
+        let tol = Feel.World.coplanarTolerance
+        var bare = [f.minY...screen.visibleFrame.maxY]
+        for w in raw where w.layer == 0 && w.pid != ownPID
+            && w.alpha >= Feel.World.minWindowAlpha
+            && w.rect.minX <= f.minX + tol && w.rect.maxX >= f.maxX - tol {
+            bare = subtract(bare, w.rect.minY...w.rect.maxY)
         }
+        return bare.allSatisfy { $0.length <= tol }
     }
 
     /// His depth in the window stack, which decides what is allowed to occlude him.

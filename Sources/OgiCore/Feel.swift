@@ -387,8 +387,13 @@ public enum Feel {
         /// the wash stays the commoner idle behaviour.
         public static let stretchChance: Double = 0.25
         /// How long he peers over the lip of the window that was hiding him before pulling
-        /// himself up onto it. A good long nosy look: about four blink-loops of the sheet.
-        public static let peerSeconds: TimeInterval = 6
+        /// himself up onto it. A good long nosy look: about eight blink-loops of the sheet.
+        ///
+        /// Raised from 6 because the covered-screen retreat made this the pose you actually
+        /// see. Swiping to a fullscreen Space surfaces him at the lip within half a second,
+        /// and Hamzah asked for the head to stay up there a while: "it is cute ngl". The same
+        /// number covers being buried under an ordinary window, which is the same act.
+        public static let peerSeconds: TimeInterval = 12
 
         /// The event performances. Each non-looping one is floored by its own sheet, the
         /// way the stretch and the shake are, and `theEventPerformancesOutlastTheirSheets`
@@ -488,6 +493,9 @@ public enum Feel {
         public static let spriteScale: CGFloat = 1.0
         /// Target on-screen eye width in points. Every clip is scaled to match it, which is
         /// what keeps him the same size whether he is sitting or walking.
+        ///
+        /// Width alone is only half a measurement, and a handful of sheets drew his eye a
+        /// different shape from the rest. Those carry a correction: `Sprites.sheetCorrection`.
         public static let referenceEyeWidth: CGFloat = 2.1
         /// The peer clip's on-screen ink height, its own yardstick because eye-width
         /// normalisation is wrong for a front-facing head-shot: his front-drawn eyes are
@@ -495,6 +503,22 @@ public enum Feel {
         /// points. Sized so the head over the lip matches the head on his side-view body;
         /// tune by eye.
         public static let peerHeight: CGFloat = 19
+        /// How far from a hole in his world he has to stand to be drawn whole. Half his
+        /// nominal box, so it covers every pose rather than the one clip that happens to play
+        /// there.
+        ///
+        /// His world has two kinds of hole and both cost him the same way. The **notch** is a
+        /// hardware cutout with no pixels behind it: parked centred on its lip he loses
+        /// everything past it, and Hamzah watched a whole cat reduce to a sliver of tail up
+        /// there. The **edges of the display** are the other: standing at x=5 on a 1920pt
+        /// screen puts a third of him off the panel, which is what his peek over the left edge
+        /// actually looked like.
+        ///
+        /// *Moving* through either is fine and is sometimes the point. The launch emergence
+        /// comes half out of the notch, and the goodbye walks back into it. Coming to rest
+        /// there is what reads as a broken sprite. `reseat` keeps him on screen with the same
+        /// half-width.
+        public static let clearance: CGFloat = width / 2
         /// How far past his drawn ink a click still counts as touching him. He is a small
         /// target, so the hit rect is padded — and the yield box is built from the same
         /// figure, because the box he moves aside for must be the box that swallows clicks.

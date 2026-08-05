@@ -143,7 +143,11 @@ private let screen = ScreenGeometry(
 
     #expect(floor.spans.isEmpty)            // correctly invisible
     #expect(!floor.solid.isEmpty)           // but still there to stand on
-    #expect(floor.solid[0].length > 1900)
+    // The whole width bar a body-width at each end, which is not the same thing as the whole
+    // width: `solid` is where he can stand and be DRAWN, and the panel's own edges are as
+    // real a boundary as the notch. Flush to them he stood with a third of himself off screen.
+    #expect(floor.solid[0].length
+            == screen.visibleFrame.width - Feel.Shape.clearance * 2)
 }
 
 @Test func theNotchIsAHoleInTheMenuBar() {

@@ -39,20 +39,101 @@ import CoreGraphics
         cat.restLeft = .greatestFiniteMagnitude   // taste must not be what saves him
 
         let dt = Feel.Timing.fixedDT
-        var formed = false
+        var elapsed = 0.0
         for _ in 0..<Int(60 / dt) {
             cat = Cat.step(cat, world: world, dt: dt)
-            formed = formed || cat.intent != nil
+            elapsed += dt
             if case .grounded(let p) = cat.support, let s = world.surface(p.id),
                s.y >= barY - Feel.World.coplanarTolerance { break }
         }
-        #expect(formed, "the standing order never formed an intent")
+        // ...and fast. Timed on a real fullscreen Space, the ordinary route took eighteen
+        // seconds (a run along a floor nobody can see, then a ten-second climb) on a Space
+        // Hamzah is on for three, so he never once saw it finish. He is behind the covering
+        // window for all of it, so he surfaces at its lip instead of climbing to it.
+        #expect(elapsed < 2,
+                "took \(String(format: "%.1f", elapsed))s to get up top; Hamzah is gone by then")
         guard case .grounded(let p) = cat.support, let top = world.surface(p.id) else {
             Issue.record("not grounded at the end, at y=\(cat.position.y)")
             return
         }
         #expect(top.y >= barY - Feel.World.coplanarTolerance,
                 "still at y=\(Int(cat.position.y)): chilling at the bottom of a covered screen")
+    }
+
+    /// Chrome's fullscreen, dumped live off Hamzah's machine: four stacked full-width bands
+    /// rather than one window. The band that buries him has its own top edge buried under the
+    /// next one, so "the lip of the window over me" is not somewhere anyone could see him,
+    /// and he sat on the floor of a covered screen for the whole film because of it.
+    @Test func heSurfacesOnAFullscreenThatIsFourStackedBands() {
+        // The real screen too, not the square one the tests above use: on a notched Mac the
+        // menu bar line is y=1205 and the bands stop exactly there, which is the whole reason
+        // their top edge counts as up top.
+        let real = ScreenGeometry(frame: CGRect(x: 0, y: 0, width: 1920, height: 1243),
+                                  visibleFrame: CGRect(x: 0, y: 90, width: 1920, height: 1115),
+                                  notch: CGRect(x: 856, y: 1206, width: 208, height: 37))
+        // Front-to-back, the order CGWindowList reports them in, because that IS the z order
+        // and it decides which lips are buried: the toolbars sit in front of the content, so
+        // the content's own top edge at y=1083 is carved away to nothing by the band above it.
+        let bands = [(1164.0, 41.0), (1083.0, 81.0), (1047.0, 158.0), (0.0, 1083.0)]
+            .enumerated().map { i, b in
+                RawWindow(id: CGWindowID(10 + i), pid: 8, layer: 0,
+                          rect: CGRect(x: 0, y: b.0, width: 1920, height: b.1),
+                          alpha: 1, owner: "Google Chrome")
+            }
+        let world = World.build(windows: bands, screen: real, ownPID: 99)
+        let floor = world.surface(.floor)!
+        let barY = world.surface(.menuBar)!.y
+        var cat = CatState(position: CGPoint(x: 522, y: floor.y))
+        cat.support = .grounded(Perch(id: .floor, dx: 522 - floor.extent.lowerBound))
+        cat.screenCovered = true
+        cat.homeX = 500
+        cat.restLeft = .greatestFiniteMagnitude
+
+        let dt = Feel.Timing.fixedDT
+        var elapsed = 0.0
+        for _ in 0..<Int(30 / dt) {
+            cat = Cat.step(cat, world: world, dt: dt)
+            elapsed += dt
+            if case .grounded(let p) = cat.support, let s = world.surface(p.id),
+               s.y >= barY - Feel.World.coplanarTolerance { break }
+        }
+        guard case .grounded(let p) = cat.support, let top = world.surface(p.id) else {
+            Issue.record("not grounded at the end, at y=\(cat.position.y)")
+            return
+        }
+        #expect(top.y >= barY - Feel.World.coplanarTolerance,
+                "still at y=\(Int(cat.position.y)): the banded fullscreen left him underneath it")
+        #expect(elapsed < 2, "took \(String(format: "%.1f", elapsed))s to surface")
+        // Wherever he comes up, all of him has to be on lit pixels: clear of the cutout and
+        // clear of both ends of the panel. The draw is random now, so this is the invariant
+        // that replaces "he comes up where he was hiding".
+        let notch = real.notch!
+        let box = CGRect(x: cat.position.x - Feel.Shape.clearance, y: 0,
+                         width: Feel.Shape.clearance * 2, height: 1)
+        #expect(!box.intersects(CGRect(x: notch.minX, y: -1, width: notch.width, height: 3)),
+                "surfaced at x=\(Int(cat.position.x)), part of him inside the cutout")
+        #expect(box.minX >= real.visibleFrame.minX && box.maxX <= real.visibleFrame.maxX,
+                "surfaced at x=\(Int(cat.position.x)), part of him off the panel")
+    }
+
+    /// He used to come up directly above wherever he was buried, which on a desktop you use
+    /// the same way every day is the same spot every time. Hamzah: "it looks like he comes out
+    /// the same place everytime". Nobody can see him before he surfaces, so the draw is free.
+    @Test func heDoesNotSurfaceInTheSamePlaceEveryTime() {
+        let world = fullscreenWorld()
+        let floor = world.surface(.floor)!
+        var seen = Set<Int>()
+        for _ in 0..<20 {
+            var cat = CatState(position: CGPoint(x: 700, y: floor.y))
+            cat.support = .grounded(Perch(id: .floor, dx: 700 - floor.extent.lowerBound))
+            guard Cat.surfaceOverTheLip(&cat, world: world) else {
+                Issue.record("did not surface at all")
+                return
+            }
+            seen.insert(Int(cat.position.x / 40))
+        }
+        #expect(seen.count > 5,
+                "twenty surfacings landed in \(seen.count) places; he is still popping up on a mark")
     }
 
     @Test func upTopTheStandingOrderLeavesHimAlone() {

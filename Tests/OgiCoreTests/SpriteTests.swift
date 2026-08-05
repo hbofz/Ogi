@@ -348,3 +348,63 @@ private func eyeToInk(_ clip: Sprites.Clip, _ i: Int) -> Double? {
     #expect(drift < 2.5,
             "his grip slides \(drift)pt up and down the wall across the loop")
 }
+
+@MainActor
+@Test func theWideEyedSheetsRenderAsOneCat() throws {
+    // `Sprites.sheetCorrection` exists because eye WIDTH is only half a measurement and five
+    // sheets drew his eye a different shape from the rest. Where the well-behaved clips give
+    // a tall almond (idle 37x54, walk 17x25, sitdown 21x31, alert 32x48, run 13x19, all
+    // between 1.38 and 1.50 tall for their width), these came back round, so dividing a fixed
+    // number by that inflated width rendered them 10-30% small. Hamzah saw it before any
+    // metric did: "when he peeks his body gets a bit smaller".
+    //
+    // Two things are pinned here, because the correction is a constant sitting on top of a
+    // measurement and either half can rot.
+    //
+    // First the premise. A regenerated sheet with an ordinary almond eye would turn the
+    // correction into a DOUBLE correction, silently, and render that clip large.
+    for clip in Sprites.Clip.allCases where Sprites.sheetCorrection(clip) != 1 {
+        let a = try #require(medianEyeAspect(clip))
+        let shape = String(format: "%.2f", a)
+        #expect(a < 1.35,
+                "\(clip.rawValue)'s eye now measures \(shape) tall for its width, which is the family shape, so its correction is now double-counting")
+    }
+
+    // Then the result: after correction, his eye covers the same area on screen in every clip
+    // whose eyes are actually OPEN, which is the whole point of normalising on it at all.
+    //
+    // The sleeping and half-lidded clips are out, and that exclusion is the reason this is a
+    // hand-kept list rather than a formula. A round eye means two different things: on `peek`
+    // it is an open eye drawn round, and on `sleep` (18x21), `curl` (19x21), `vibe` (33x34)
+    // and `droop` (28x26) it is a closed one, small in BOTH directions. Nothing in the pixels
+    // tells them apart, and correcting the second kind made the sleeping cat visibly too big.
+    // `peer` is out for its own reason, as everywhere else: it is normalised on ink height.
+    let lidded: Set<String> = ["sleep", "curl", "vibe", "droop", "peer", "lounge", "cling",
+                               "climbUp", "held", "land", "curious", "zap"]
+    for clip in Sprites.Clip.allCases where !lidded.contains(clip.rawValue) {
+        guard let img = Sprites.image(clip, 0), let eye = Sprites.eyes(clip, 0).first,
+              let aspect = medianEyeAspect(clip) else { continue }
+        _ = img
+        _ = eye
+        let onScreenWidth = Feel.Shape.referenceEyeWidth * Sprites.sheetCorrection(clip)
+        let area = onScreenWidth * (onScreenWidth * aspect)
+        let got = String(format: "%.2f", area.squareRoot())
+        #expect(area.squareRoot() > 2.3 && area.squareRoot() < 2.8,
+                "\(clip.rawValue) renders an eye of \(got)pt against the family's 2.5, so the whole clip is the wrong size")
+    }
+}
+
+/// Median of `eyeHeight / eyeWidth` across a clip's frames, in sheet pixels.
+@MainActor
+private func medianEyeAspect(_ clip: Sprites.Clip) -> CGFloat? {
+    var a: [CGFloat] = []
+    for i in 0..<clip.count {
+        guard let img = Sprites.image(clip, i), let e = Sprites.eyes(clip, i).first else { continue }
+        let w = e.width * CGFloat(img.width), h = e.height * CGFloat(img.height)
+        guard w > 2, h > 2 else { continue }
+        a.append(h / w)
+    }
+    guard !a.isEmpty else { return nil }
+    a.sort()
+    return a[a.count / 2]
+}

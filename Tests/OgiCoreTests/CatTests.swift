@@ -261,6 +261,61 @@ private let notched = ScreenGeometry(frame: CGRect(x: 0, y: 0, width: 1920, heig
                                      visibleFrame: CGRect(x: 0, y: 90, width: 1920, height: 1115),
                                      notch: CGRect(x: 830, y: 1206, width: 200, height: 37))
 
+@Test func heIsNeverDrawnHalfOffThePanel() {
+    // He used to be able to plant at x=5 on a 1920pt screen. `edgePlant` stops him 6pt back
+    // from a lip, which is right at a window's edge and wrong at the display's, because there
+    // is nothing behind the display's. Hamzah's screenshot is a peek over the left edge with
+    // only his tail still on the panel.
+    let world = World.build(windows: [], screen: notched, ownPID: 99)
+    let margin = Feel.Shape.clearance
+    for id in [SurfaceID.menuBar, .floor] {
+        let s = world.surface(id)!
+        #expect(s.solid.allSatisfy { $0.lowerBound >= notched.visibleFrame.minX + margin
+                                  && $0.upperBound <= notched.visibleFrame.maxX - margin },
+                "\(id) lets him stand where he would be drawn off the panel: \(s.solid)")
+        // `extent` is the perch anchor space and must NOT shrink, or every window's
+        // surfing offset moves the moment this changes.
+        #expect(s.extent.lowerBound == notched.visibleFrame.minX)
+        #expect(s.extent.upperBound == notched.visibleFrame.maxX)
+    }
+
+    // ...and a fall that sails off the side is caught by the same margin, not by the raw
+    // frame. Pinned flush to it he simply lands half off instead of standing half off.
+    var thrown = CatState(position: CGPoint(x: 60, y: 900))
+    thrown.support = .falling
+    thrown.velocity = CGVector(dx: -1500, dy: 0)
+    for _ in 0..<Int(3 / dt) { thrown = Cat.step(thrown, world: world, dt: dt) }
+    #expect(thrown.position.x >= notched.visibleFrame.minX + margin - 0.01,
+            "thrown at the wall he ended at x=\(thrown.position.x), part of him off the panel")
+}
+
+@Test func theNotchIsAHoleInEveryLedgeAtThatHeight() {
+    // It used to be cut out of the menu bar alone, because the bar was the only ledge up
+    // there. A fullscreen window's top edge is another one. Measured on Hamzah's Mac it sits
+    // exactly ON the bar line and runs the full width, and since the covered-screen retreat
+    // learned to put him there, it is where he lives. Standing under the cutout drew him into
+    // a region with no pixels behind it: Hamzah's screenshot has a whole cat down to a sliver
+    // of tail.
+    let notch = notched.notch!
+    let fullscreen = RawWindow(id: 1, pid: 7, layer: 0,
+                               rect: CGRect(x: 0, y: 0, width: notched.frame.width,
+                                            height: notched.visibleFrame.maxY),
+                               alpha: 1, owner: "Google Chrome")
+    let top = World.build(windows: [fullscreen], screen: notched, ownPID: 99).surface(.window(1))!
+    #expect(top.y == notched.visibleFrame.maxY, "a fullscreen top edge should be the bar line")
+    #expect(!top.solid.contains { $0.contains(notch.midX) },
+            "he can still stand under the cutout on a fullscreen window's top edge")
+
+    // A ledge nowhere near it keeps its ground: the hole is at the notch's height, not
+    // everywhere. Without this the fix would delete a strip out of every window on screen.
+    let low = RawWindow(id: 2, pid: 7, layer: 0,
+                        rect: CGRect(x: 0, y: 100, width: notched.frame.width, height: 400),
+                        alpha: 1, owner: "Terminal")
+    let below = World.build(windows: [low], screen: notched, ownPID: 99).surface(.window(2))!
+    #expect(below.solid.contains { $0.contains(notch.midX) },
+            "a ledge 700pt below the notch lost ground to it")
+}
+
 @Test func heDoesNotWalkIntoTheNotch() {
     // The cutout is a hole in the MIDDLE of the menu bar, not the end of it, and the desktop
     // visible through it makes it look exactly like a ledge. It is a trap: he cannot jump the
@@ -414,13 +469,58 @@ private let notched = ScreenGeometry(frame: CGRect(x: 0, y: 0, width: 1920, heig
                            alpha: 1, owner: "Safari")
     let own = RawWindow(id: 4, pid: 99, layer: 0, rect: frame, alpha: 1, owner: "Ogi")
 
-    #expect(OgiApp.somethingFullscreen(in: [his], frame: frame, ownPID: 99))
-    #expect(!OgiApp.somethingFullscreen(in: [elsewhere], frame: frame, ownPID: 99),
+    let g = ScreenGeometry(frame: frame, visibleFrame: frame, notch: nil)
+    #expect(OgiApp.somethingFullscreen(in: [his], screen: g, ownPID: 99))
+    #expect(!OgiApp.somethingFullscreen(in: [elsewhere], screen: g, ownPID: 99),
             "a fullscreen window on another display sent him home")
-    #expect(!OgiApp.somethingFullscreen(in: [poking], frame: frame, ownPID: 99),
+    #expect(!OgiApp.somethingFullscreen(in: [poking], screen: g, ownPID: 99),
             "a big window poking 12pt into his screen sent him home")
-    #expect(!OgiApp.somethingFullscreen(in: [own], frame: frame, ownPID: 99),
+    #expect(!OgiApp.somethingFullscreen(in: [own], screen: g, ownPID: 99),
             "his own overlay counted as the world being covered")
+}
+
+/// The geometry a fullscreen Space actually has, dumped live off Hamzah's M2 (macOS 26.5.1,
+/// 1920x1243pt, notched) while sitting on one.
+@MainActor
+@Test func aSettledFullscreenSpaceReadsAsCovered() {
+    let g = ScreenGeometry(frame: CGRect(x: 0, y: 0, width: 1920, height: 1243),
+                           visibleFrame: CGRect(x: 0, y: 90, width: 1920, height: 1115),
+                           notch: CGRect(x: 856, y: 1206, width: 208, height: 37))
+
+    // A settled fullscreen window is 1920x**1205**: it stops at the menu bar line and leaves
+    // the 38pt notch strip bare. That is 96.9% of the frame, so a ">= 98% of the frame" test
+    // says NO, and the only thing that ever passed it was the 1920x1243 window macOS shows
+    // for ~0.7s during the zoom animation. Which is exactly why *entering* fullscreen worked
+    // and swiping to a Space that was already fullscreen did nothing at all.
+    let textEdit = [RawWindow(id: 1, pid: 7, layer: 0,
+                              rect: CGRect(x: 0, y: 0, width: 1920, height: 1205),
+                              alpha: 1, owner: "TextEdit")]
+    #expect(OgiApp.somethingFullscreen(in: textEdit, screen: g, ownPID: 99),
+            "a fullscreen Space he is standing in did not read as covered")
+
+    // And a fullscreen app is not one big window. Chrome's is four full-width bands, dumped
+    // from the same session; the tallest is 87% of the screen and no single one is close.
+    let chrome = [(0.0, 1083.0), (1083.0, 81.0), (1164.0, 41.0), (1047.0, 158.0)]
+        .enumerated().map { i, b in
+            RawWindow(id: CGWindowID(10 + i), pid: 8, layer: 0,
+                      rect: CGRect(x: 0, y: b.0, width: 1920, height: b.1),
+                      alpha: 1, owner: "Google Chrome")
+        }
+    #expect(OgiApp.somethingFullscreen(in: chrome, screen: g, ownPID: 99),
+            "a fullscreen app that splits into bands did not read as covered")
+
+    // A merely maximized window is NOT this, and telling them apart is what the Dock band is
+    // for: fullscreen owns it, zoom does not. He still has a bar to walk on and a shelf below.
+    let zoomed = [RawWindow(id: 2, pid: 7, layer: 0, rect: g.visibleFrame, alpha: 1, owner: "Safari")]
+    #expect(!OgiApp.somethingFullscreen(in: zoomed, screen: g, ownPID: 99),
+            "a maximized window sent him home")
+
+    // Nor is a tall window that leaves either side of the screen showing.
+    let tall = [RawWindow(id: 3, pid: 7, layer: 0,
+                          rect: CGRect(x: 40, y: 0, width: 1840, height: 1243),
+                          alpha: 1, owner: "Safari")]
+    #expect(!OgiApp.somethingFullscreen(in: tall, screen: g, ownPID: 99),
+            "a window with desktop showing either side of it sent him home")
 }
 
 @Test func heWaitsInTheDoorwayFacingOut() {
@@ -437,6 +537,11 @@ private let notched = ScreenGeometry(frame: CGRect(x: 0, y: 0, width: 1920, heig
     for _ in 0..<(120 * 2) { cat = Cat.step(cat, world: world, dt: dt) }
     #expect(cat.activity == .peek, "at the den door he should wait in the doorway")
     #expect(cat.facing == -1, "at the left lip, out is away from the cutout")
+    // Started centred ON the lip, which is where a wall bump and an interrupted launch walk
+    // both leave him. He must not settle there: the cutout has no pixels behind it, so half
+    // of him would simply not be drawn.
+    #expect(cat.position.x <= notch.minX - Feel.Shape.clearance + 0.01,
+            "waiting at x=\(cat.position.x) leaves part of him inside the cutout")
 
     // Mid-bar, resting is just resting: the den pose belongs to the doorway alone.
     var away = CatState(position: CGPoint(x: 300, y: bar.y))
@@ -444,6 +549,41 @@ private let notched = ScreenGeometry(frame: CGRect(x: 0, y: 0, width: 1920, heig
     away.restLeft = .greatestFiniteMagnitude
     for _ in 0..<(120 * 2) { away = Cat.step(away, world: world, dt: dt) }
     #expect(away.activity != .peek, "he peeked at a doorway that is not there")
+}
+
+@MainActor
+@Test func heWaitsBesideTheHoleAndNotInIt() {
+    // The notch has no pixels behind it, so whatever is drawn inside it is gone. Parked
+    // centred on the lip, where both retreats used to send him and where he then stays for
+    // as long as the screen is covered, he loses everything past it. Hamzah watched
+    // about half of him disappear up there. Every waiting spot must leave his whole box on
+    // lit pixels.
+    let notch = notched.notch!
+    for lip in [notch.minX, notch.maxX] {
+        let x = OgiApp.denX(lip, notch: notch)
+        let box = CGRect(x: x - Feel.Shape.width / 2, y: 0, width: Feel.Shape.width, height: 1)
+        #expect(!box.intersects(CGRect(x: notch.minX, y: -1, width: notch.width, height: 3)),
+                "waiting at \(x) puts part of him inside the cutout")
+    }
+    // Out of the cutout, not merely somewhere else: each lip pushes away from the hole.
+    #expect(OgiApp.denX(notch.minX, notch: notch) < notch.minX)
+    #expect(OgiApp.denX(notch.maxX, notch: notch) > notch.maxX)
+    // Anywhere that is not a lip is left alone. A notchless Mac's home is under the status
+    // item, and nudging that sideways would be 26pt of drift with no hole to explain it.
+    #expect(OgiApp.denX(1700, notch: notch) == 1700)
+    #expect(OgiApp.denX(1700, notch: nil) == 1700)
+
+    // ...and he must still hold the den pose once he is standing there, or the fix would have
+    // deleted the behaviour instead of repairing it.
+    let world = World.build(windows: [], screen: notched, ownPID: 99)
+    let bar = world.surface(.menuBar)!
+    let wait = OgiApp.denX(notch.minX, notch: notch)
+    var cat = CatState(position: CGPoint(x: wait, y: bar.y))
+    cat.support = .grounded(Perch(id: .menuBar, dx: wait - bar.extent.lowerBound))
+    cat.restLeft = .greatestFiniteMagnitude
+    for _ in 0..<(120 * 2) { cat = Cat.step(cat, world: world, dt: dt) }
+    #expect(cat.activity == .peek, "beside the doorway he stopped reading it as a doorway")
+    #expect(cat.facing == -1, "at the left lip, out is away from the cutout")
 }
 
 @MainActor

@@ -194,6 +194,21 @@ public enum World {
             ?? fromWindows
         let screenSpan = screen.visibleFrame.minX...screen.visibleFrame.maxX
 
+        /// Where he can stand and still be drawn whole, as opposed to where the desktop
+        /// happens to extend.
+        ///
+        /// The outer edges of the display are as real a boundary as the notch is, and `solid`
+        /// used to run flush to them: he could plant at x=5 on a 1920pt screen, which is a
+        /// third of him off the panel. Hamzah watched him peek over the left edge of the
+        /// screen with only his tail still on it. This is `solid` only. `extent` is the perch
+        /// anchor space and must not shrink for anything.
+        ///
+        /// Falls back to the full span on a screen too narrow to inset, which cannot happen on
+        /// real hardware but must not produce an inverted range if it ever does.
+        let standable = screenSpan.length > Feel.Shape.clearance * 2
+            ? (screenSpan.lowerBound + Feel.Shape.clearance)...(screenSpan.upperBound - Feel.Shape.clearance)
+            : screenSpan
+
         /// Cuts every occluder in front of `z` whose body straddles the line at `y`.
         func carve(_ initial: [ClosedRange<CGFloat>], y: CGFloat, z: Int) -> [ClosedRange<CGFloat>] {
             var spans = initial
@@ -206,17 +221,32 @@ public enum World {
             return spans.filter { $0.length >= Feel.World.minStandWidth }
         }
 
+        /// The notch is a hole in the SCREEN, not a hole in the menu bar.
+        ///
+        /// It used to be cut only out of the bar, because the bar was the only ledge up at
+        /// that height. A fullscreen window's top edge is another one: measured on a notched
+        /// Mac it sits *exactly* on the menu bar line, runs the full width of the screen, and
+        /// since the covered-screen retreat learned to put him there it is where he lives.
+        /// Standing anywhere under the cutout draws him into a region with no pixels behind
+        /// it. Hamzah watched a whole cat reduce to a sliver of tail up there.
+        ///
+        /// So the rule belongs to any ledge a standing cat would reach into it from, and is
+        /// the same rule the bar already had: a hole in `solid`, which `isGap` reads as a wall,
+        /// so he stops at the lip rather than walking into nothing.
+        func punchNotch(_ spans: [ClosedRange<CGFloat>], at y: CGFloat) -> [ClosedRange<CGFloat>] {
+            guard let notch = screen.notch,
+                  y < notch.maxY, y + Feel.Shape.height > notch.minY else { return spans }
+            return subtract(spans, notch.minX...notch.maxX)
+        }
+
         var surfaces: [Surface] = []
 
         // Menu bar. Always present, effectively never occluded (z = -1), but the notch is a
         // genuine hole in it: a hardware cutout with no pixels behind it. Cutting it out of
         // `solid` is what stops him walking through the doorway and disappearing.
         let menuY = screen.visibleFrame.maxY
-        var barSolid = [screenSpan]
-        if let notch = screen.notch {
-            barSolid = subtract(barSolid, notch.minX...notch.maxX)
-        }
-        barSolid = barSolid.filter { $0.length >= Feel.World.minStandWidth }
+        let barSolid = punchNotch([standable], at: menuY)
+            .filter { $0.length >= Feel.World.minStandWidth }
         surfaces.append(Surface(id: .menuBar, z: -1, y: menuY, extent: screenSpan,
                                 solid: barSolid, spans: barSolid, targetable: true, rect: nil))
 
@@ -226,9 +256,10 @@ public enum World {
             guard w.rect.width >= Feel.World.minStandWidth + 2 * inset, w.rect.height >= 20 else { continue }
             let extent = w.rect.minX...w.rect.maxX
             let start = subtract([(w.rect.minX + inset)...(w.rect.maxX - inset)],
-                                 // clip to the visible screen by cutting everything outside it
-                                 screen.frame.minX - 1e6 ... screen.visibleFrame.minX)
-            let solid = subtract(start, screen.visibleFrame.maxX ... screen.frame.maxX + 1e6)
+                                 // clip to where he is drawable by cutting everything outside it
+                                 screen.frame.minX - 1e6 ... standable.lowerBound)
+            let solid = punchNotch(subtract(start, standable.upperBound ... screen.frame.maxX + 1e6),
+                                   at: w.rect.maxY)
                 .filter { $0.length >= Feel.World.minStandWidth }
             surfaces.append(Surface(id: .window(w.id), z: i, y: w.rect.maxY, extent: extent,
                                     solid: solid, spans: carve(solid, y: w.rect.maxY, z: i),
@@ -253,8 +284,8 @@ public enum World {
         // left him with a two-node world. The desktop is still under Chrome; you just
         // cannot see it, which is what `spans` is for.
         surfaces.append(Surface(id: .floor, z: .max, y: floorY, extent: screenSpan,
-                                solid: [screenSpan],
-                                spans: carve([screenSpan], y: floorY, z: .max),
+                                solid: [standable],
+                                spans: carve([standable], y: floorY, z: .max),
                                 targetable: true, rect: nil))
 
         return Skyline(surfaces: surfaces, occluders: occluders, screen: screen)
