@@ -184,7 +184,13 @@ public final class Signals {
             guard let d = IOPSGetPowerSourceDescription(blob, src)?.takeUnretainedValue() as? [String: Any],
                   let cur = d[kIOPSCurrentCapacityKey] as? Int,
                   let max = d[kIOPSMaxCapacityKey] as? Int, max > 0 else { continue }
-            return (cur * 100 / max, d[kIOPSIsChargingKey] as? Bool ?? false)
+            // "On AC", not kIOPSIsChargingKey: a full battery reports IsCharging=false with
+            // the cable in (battery care too), so the plug-in stretch never fired on a
+            // topped-up MacBook — which is exactly the machine it was tested on. Power
+            // present is also the right sense for languor: a plugged-in Mac at 19% that
+            // happens not to be charging is not a Mac he should be conserving for.
+            let onAC = (d[kIOPSPowerSourceStateKey] as? String) == kIOPSACPowerValue
+            return (cur * 100 / max, onAC)
         }
         return nil   // desktop Macs have no battery
     }
