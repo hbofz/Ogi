@@ -190,8 +190,13 @@ for b in blobs {
     while didMerge {
         didMerge = false
         for (i, m) in merged.enumerated() {
-            let xOverlap = b.minX <= m.maxX + 5 && m.minX <= b.maxX + 5
-            let yOverlap = b.minY <= m.maxY + 5 && m.minY <= b.maxY + 5
+            // 40, not the 5 this shipped with: the event sheets draw detached effects — a
+            // bolt over his back, a note beside his ear, a "?" above his head — and at 5px
+            // those cut as phantom frames. 40 clusters anything within half the mandated
+            // 80px inter-frame gap, so effects weld to their cat and frames never weld to
+            // each other. The furniture filter already ran, so captions cannot glue on.
+            let xOverlap = b.minX <= m.maxX + 40 && m.minX <= b.maxX + 40
+            let yOverlap = b.minY <= m.maxY + 40 && m.minY <= b.maxY + 40
             if xOverlap && yOverlap {
                 b.minX = min(b.minX, m.minX); b.maxX = max(b.maxX, m.maxX)
                 b.minY = min(b.minY, m.minY); b.maxY = max(b.maxY, m.maxY)
