@@ -734,6 +734,14 @@ private func landing(fromHeight h: CGFloat, routing: Bool = false) -> (Activity,
     #expect(Feel.Physics.hardLanding < Feel.Physics.terminalVelocity)
 }
 
+@Test @MainActor func theStretchOutlastsItsOwnSheet() {
+    // Same floor the shake and the peek have: the clip does not loop, so a timeout shorter
+    // than the sheet cuts the yawn off mid-gape and snaps him to standing.
+    let clip = Sprites.Clip.stretch
+    #expect(Feel.Timing.stretchSeconds > Double(clip.count) / clip.fps,
+            "he returns to idle before the stretch's \(clip.count) frames at \(clip.fps)fps have played")
+}
+
 @Test @MainActor func theShakeOutlastsItsOwnSheet() {
     // The floor `peekSeconds` and `edgeHesitationMin` both have, for the same reason: the clip
     // does not loop, so a timeout shorter than the sheet cuts him off mid-shudder and snaps him

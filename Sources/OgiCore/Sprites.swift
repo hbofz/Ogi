@@ -23,7 +23,7 @@ public enum Sprites {
         case walk, idle, jump, land, fall, run, alert, sitdown, held, sleep, groom, curl, cling
         case lookDown, peek, turn, shake
         case climbUp
-        case lounge
+        case lounge, stretch
 
         var count: Int {
             switch self {
@@ -46,6 +46,7 @@ public enum Sprites {
             case .turn: 4
             case .shake: 4
             case .lounge: 4
+            case .stretch: 5
             }
         }
 
@@ -81,6 +82,7 @@ public enum Sprites {
             case .turn: 12      // a pivot is quick
             case .shake: 12     // a shudder, not a wobble
             case .lounge: 2.5   // breathing, like idle and sleep: he is watching, not doing
+            case .stretch: 5    // a bow and a yawn take a second; the last frame holds
             }
         }
 
@@ -101,7 +103,10 @@ public enum Sprites {
             // walk that follows picks up. Looping it would spin him.
             // shake runs once and settles: the last frame is a cat standing normally again,
             // which is what hands off to idle. Looping it would be a cat with a nervous tic.
-            case .jump, .land, .fall, .sitdown, .curl, .lookDown, .peek, .turn, .shake: false
+            // stretch too: it ends standing neutral, the idle handoff, and a looping bow
+            // would be a cat doing calisthenics.
+            case .jump, .land, .fall, .sitdown, .curl, .lookDown, .peek, .turn, .shake,
+                 .stretch: false
             }
         }
     }
@@ -176,9 +181,7 @@ public enum Sprites {
         case .curl:                 return .curl
         case .sleep:                return .sleep
         case .lounge:               return .lounge
-        // Placeholder until the stretch sheet lands (ART-BRIEF §4.12b): a cat doing an
-        // in-place cat thing, which is wrong in the right direction.
-        case .stretch:              return .groom
+        case .stretch:              return .stretch
         case .alert, .brace:        return .alert
         case .groom:                return .groom
         case .idle:                 return .idle
