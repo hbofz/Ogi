@@ -786,6 +786,20 @@ private func landing(fromHeight h: CGFloat, routing: Bool = false) -> (Activity,
     #expect(cat.activity == .zap, "the jolt queued behind the lounge")
 }
 
+@Test @MainActor func theBuzzLoopsBeforeTheRecovery() {
+    let fps = Sprites.Clip.zap.fps
+    let oneCycle = 3.0 / fps
+    // One full cycle in, the buzz is back on its first frame, not marching to the end.
+    #expect(Sprites.index(.zap, activity: .zap, walkPhase: 0, elapsed: oneCycle + 0.001) == 0)
+    // The buzz has room for at least the two full passes Hamzah asked for.
+    #expect(Feel.Timing.zapBuzzSeconds >= 2 * oneCycle)
+    // After the buzz the recovery marches to the settled last frame and holds there.
+    #expect(Sprites.index(.zap, activity: .zap, walkPhase: 0,
+                          elapsed: Feel.Timing.zapBuzzSeconds + 10) == Sprites.Clip.zap.count - 1)
+    // And the whole show outlasts buzz plus recovery, or the pleased finish is cut off.
+    #expect(Feel.Timing.zapSeconds > Feel.Timing.zapBuzzSeconds + 2.0 / fps)
+}
+
 @Test func anOwedShowPlaysItsWholeSpell() {
     // The generic slot, exercised with the zap: consumed once, held for its spell, settled.
     let bar = surface(.menuBar, y: 1205, from: 0, to: 1920, z: -1)

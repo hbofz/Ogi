@@ -224,6 +224,17 @@ public enum Sprites {
             // Skip the wind-up frames; he is already in the air.
             let n = clip.count - 2
             return 2 + min(n - 1, Int(elapsed * clip.fps))
+        case .zap:
+            // The buzz loops before the recovery plays: one straight pass read as a
+            // flicker, and Hamzah asked to actually see him cook. The three jolt frames
+            // cycle for zapBuzzSeconds, then the shake and the pleased finish run once
+            // and the last frame holds.
+            let buzzFrames = 3
+            if elapsed < Feel.Timing.zapBuzzSeconds {
+                return Int(elapsed * clip.fps) % buzzFrames
+            }
+            let after = Int((elapsed - Feel.Timing.zapBuzzSeconds) * clip.fps)
+            return min(buzzFrames + after, clip.count - 1)
         default:
             let raw = Int(elapsed * clip.fps)
             return clip.loops ? raw % clip.count : min(raw, clip.count - 1)
