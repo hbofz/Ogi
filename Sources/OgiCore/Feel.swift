@@ -395,11 +395,12 @@ public enum Feel {
         /// holds the floors. The zap is a gag and reads quick; the droop decelerates into
         /// lying flat and stays there a while, because running out of battery should look
         /// like running out of battery; the vibe loops for a proper little groove.
-        public static let zapSeconds: TimeInterval = 1.3
-        /// How long the jolt itself cycles before the recovery: two-and-a-bit passes of
-        /// the three buzz frames at the clip's 10fps. `theBuzzLoopsBeforeTheRecovery`
-        /// holds the relationships.
-        public static let zapBuzzSeconds: TimeInterval = 0.8
+        public static let zapSeconds: TimeInterval = 1.7
+        /// How long the jolt itself cycles before the recovery: four passes of the three
+        /// buzz frames at the clip's 10fps. 0.8 still read as short on screen — Hamzah
+        /// wanted a proper second of cooking — and every 0.3 here is one more full pass.
+        /// `theBuzzLoopsBeforeTheRecovery` holds the relationships.
+        public static let zapBuzzSeconds: TimeInterval = 1.2
         public static let vibeSeconds: TimeInterval = 8
         public static let droopSeconds: TimeInterval = 4.2
         public static let curiousSeconds: TimeInterval = 1.6
