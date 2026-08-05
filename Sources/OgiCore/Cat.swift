@@ -1082,6 +1082,18 @@ public enum Cat {
         }
 
         guard let intent = s.intent else {
+            // A show is owed: the wake-up stretch, or one of the machine-event pieces.
+            // First in the region on purpose, so it interrupts every waiting pose and every
+            // in-place performance — a jolt of electricity through a lounging cat is the
+            // entire gag, and queued behind the lounge it played up to a spell late, which
+            // Hamzah felt as "kinda slow". Only the real interrupts outrank it: the freeze,
+            // the yield and sleep all returned long before this.
+            if let show = s.owed {
+                s.owed = nil
+                s.activity = show
+                s.activityElapsed = 0
+                return s
+            }
             // The pose he waits in tracks how settled he is, so a cat who was standing when
             // the room went quiet sits down rather than only settling into it after his next
             // idea. Only ever swaps one waiting pose for another: a wash or a walk still wins.
@@ -1197,15 +1209,6 @@ public enum Cat {
                     s.activity = .land
                     s.activityElapsed = 0
                 }
-                return s
-            }
-            // A show is owed: the wake-up stretch, or one of the machine-event pieces.
-            // Below the freeze by structure (holdingStill returned long ago), so a hot mic
-            // holds the show until the call ends rather than eating it.
-            if let show = s.owed {
-                s.owed = nil
-                s.activity = show
-                s.activityElapsed = 0
                 return s
             }
             // Nothing to do. Sit still until boredom wins.

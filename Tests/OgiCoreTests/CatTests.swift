@@ -772,6 +772,20 @@ private func landing(fromHeight h: CGFloat, routing: Bool = false) -> (Activity,
     }
 }
 
+@Test func aLoungingCatIsStillZapped() {
+    // The show interrupts the in-place performances rather than queueing behind them: owed
+    // consumption used to sit below the hold block, so a plug-in during a lounge played up
+    // to a whole spell late — Hamzah felt it as "kinda slow".
+    let floor = surface(.floor, y: 90, from: 0, to: 1920, z: .max)
+    var cat = CatState(position: CGPoint(x: 900, y: 90))
+    cat.support = .grounded(Perch(id: .floor, dx: 900))
+    cat.activity = .lounge
+    cat.activityElapsed = 2
+    cat.owed = .zap
+    cat = Cat.step(cat, world: sky([floor]), dt: dt)
+    #expect(cat.activity == .zap, "the jolt queued behind the lounge")
+}
+
 @Test func anOwedShowPlaysItsWholeSpell() {
     // The generic slot, exercised with the zap: consumed once, held for its spell, settled.
     let bar = surface(.menuBar, y: 1205, from: 0, to: 1920, z: -1)
