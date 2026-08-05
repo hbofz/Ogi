@@ -302,6 +302,11 @@ public struct CatState: Sendable {
     /// strolling across it. He still glances, still yields, and still answers a retreat.
     public var screenCovered = false
 
+    /// The doorway he calls home, screen-global. Set by `App` each poll (the notch lip, or
+    /// under his own menu bar item on a notchless Mac), so the simulation can act on "he
+    /// belongs at home" without a stimulus carrying the x every time.
+    public var homeX: CGFloat?
+
     /// A stretch is owed: he just woke, the screen just unlocked, or you plugged the
     /// machine in. Set by `App` on the edges only it can see, consumed by `standing` once
     /// he is grounded, free and calm. The manifesto's morning stretch, wake stretch and
@@ -1083,6 +1088,23 @@ public enum Cat {
             case .alert where s.glanceLeft > 0: break
             default: s.activity = s.repose.restingActivity
             }
+            // While the screen is covered he belongs at the top, and that is a STANDING
+            // ORDER rather than an event. The edge-triggered retreat alone was losable:
+            // it fired on the first sighting of the fullscreen window, before that window
+            // had aged into furniture he may climb, and a one-shot stimulus consumed
+            // against an unroutable world is simply gone. Hamzah watched the result — a
+            // cat chilling at the bottom of a covered screen, no urgency anywhere. This
+            // asks again on every idle tick he is not up top, so the moment the covering
+            // window's face becomes climbable he is on his way up it.
+            if s.screenCovered, let home = s.homeX, !upTop(s, on: surface, world: world),
+               let move = nextMove(from: s, on: surface, toward: .menuBar, x: home,
+                                   world: world) {
+                s.intent = Intent(destination: .menuBar, destinationX: home, move: move)
+                if case .jump = move { s.activity = .crouch } else { s.activity = .walk }
+                s.activityElapsed = 0
+                return s
+            }
+
             // He wants to be seen, and it outranks the in-place holds below: a cat behind a
             // window is a cat doing nothing, however good the thing he is doing — and the
             // lounge made that real, because a 45-second spell held behind a window blind to
@@ -1985,6 +2007,14 @@ public enum Cat {
             if mark < 0 { return i }
         }
         return scores.count - 1
+    }
+
+    /// Home enough, for the standing order: on the menu bar itself, or on any surface
+    /// sharing the top line — which is what a fullscreen window's own top edge is.
+    static func upTop(_ s: CatState, on surface: Surface, world: Skyline) -> Bool {
+        surface.id == .menuBar
+            || surface.y >= (world.surface(.menuBar)?.y ?? .infinity)
+                - Feel.World.coplanarTolerance
     }
 
     /// Is he behind something, where you cannot see him?

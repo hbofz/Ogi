@@ -22,6 +22,55 @@ import CoreGraphics
         return World.build(windows: [w], screen: screen, ownPID: 99)
     }
 
+    @Test func aCoveredScreenIsAStandingOrderNotAnEvent() {
+        // What Hamzah watched: close everything, open Chrome fullscreen. The edge-triggered
+        // retreat fired on the first sighting, before the fullscreen window had aged into
+        // furniture he may climb, consumed itself against an unroutable world, and was gone:
+        // he sat at the bottom of a covered screen, chilling, with no urgency at all. No
+        // stimulus is delivered in this test — only the level signal — and he must still
+        // end up at the top, by climbing the covering window's own face.
+        let world = fullscreenWorld()
+        let floor = world.surface(.floor)!
+        let barY = world.surface(.menuBar)!.y
+        var cat = CatState(position: CGPoint(x: 700, y: floor.y))
+        cat.support = .grounded(Perch(id: .floor, dx: 700 - floor.extent.lowerBound))
+        cat.screenCovered = true
+        cat.homeX = 500
+        cat.restLeft = .greatestFiniteMagnitude   // taste must not be what saves him
+
+        let dt = Feel.Timing.fixedDT
+        var formed = false
+        for _ in 0..<Int(60 / dt) {
+            cat = Cat.step(cat, world: world, dt: dt)
+            formed = formed || cat.intent != nil
+            if case .grounded(let p) = cat.support, let s = world.surface(p.id),
+               s.y >= barY - Feel.World.coplanarTolerance { break }
+        }
+        #expect(formed, "the standing order never formed an intent")
+        guard case .grounded(let p) = cat.support, let top = world.surface(p.id) else {
+            Issue.record("not grounded at the end, at y=\(cat.position.y)")
+            return
+        }
+        #expect(top.y >= barY - Feel.World.coplanarTolerance,
+                "still at y=\(Int(cat.position.y)): chilling at the bottom of a covered screen")
+    }
+
+    @Test func upTopTheStandingOrderLeavesHimAlone() {
+        // On the menu bar of a covered screen he is exactly where he belongs, and the
+        // standing order must not make him pace toward homeX for ever.
+        let world = fullscreenWorld()
+        let bar = world.surface(.menuBar)!
+        var cat = CatState(position: CGPoint(x: 1500, y: bar.y))
+        cat.support = .grounded(Perch(id: .menuBar, dx: 1500 - bar.extent.lowerBound))
+        cat.screenCovered = true
+        cat.homeX = 500
+        cat.restLeft = .greatestFiniteMagnitude
+
+        let dt = Feel.Timing.fixedDT
+        for _ in 0..<Int(10 / dt) { cat = Cat.step(cat, world: world, dt: dt) }
+        #expect(abs(cat.position.x - 1500) < 1, "he paced toward home despite being up top")
+    }
+
     @Test func heDoesNotJumpAtASurfaceCoplanarWithHisOwn() {
         let world = fullscreenWorld()
         let bar = world.surface(.menuBar)!

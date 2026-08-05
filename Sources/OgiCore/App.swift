@@ -632,6 +632,8 @@ public final class OgiApp: NSObject, NSApplicationDelegate {
         lastRaw = raw
         let fresh = World.build(windows: raw, screen: ScreenGeometry(screen), ownPID: ownPID)
         skyline = tracker.ingest(fresh)
+        // The simulation's copy of where home is, for the covered-screen standing order.
+        cat.homeX = effectiveHomeX
 
         // New furniture. He looks at the first one: a stimulus is one-shot and two arriving in
         // the same poll would mean the second silently overwrote the first, so taking the first
