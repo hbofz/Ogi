@@ -379,6 +379,13 @@ public enum Feel {
         public static let restJitter: TimeInterval = restless ? 0.8 : 9.0
         /// How long one washing bout lasts. Six lick cycles at the clip's 8fps.
         public static let groomSeconds: TimeInterval = 4.5
+        /// How long the wake-up bow and yawn runs. Sized for the coming 5-frame sheet at
+        /// 5fps plus a beat holding its settled last frame; pin against the clip when it
+        /// lands, the way the shake and the peek are pinned.
+        public static let stretchSeconds: TimeInterval = 1.3
+        /// Chance an in-place bout of boredom is a stretch rather than a wash. Below half:
+        /// the wash stays the commoner idle behaviour.
+        public static let stretchChance: Double = 0.25
         /// Chance that a bout of boredom becomes a wash rather than a trip somewhere.
         /// Manifesto §7.1 wants an occasional in-place behaviour roughly every few minutes,
         /// and washing is currently the only one of those that exists.

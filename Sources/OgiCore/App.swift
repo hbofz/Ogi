@@ -18,6 +18,8 @@ public final class OgiApp: NSObject, NSApplicationDelegate {
     /// Edge-triggered: the retreat fires when the world BECOMES fullscreen, not on every poll
     /// for as long as it stays that way.
     private var wasFullscreen = false
+    /// The previous power sample, for the plug-in edge. Nil until the first sample.
+    private var wasCharging: Bool?
     private var skyline = Skyline(surfaces: [], occluders: [],
                                   screen: ScreenGeometry(frame: .zero, visibleFrame: .zero, notch: nil))
     private var cat = CatState(position: .zero)
@@ -129,7 +131,10 @@ public final class OgiApp: NSObject, NSApplicationDelegate {
 
         signals.onWake = { [weak self] in
             guard let self else { return }
-            // He was asleep too: stretch and shake off before resuming.
+            // He was asleep too: stretch and shake off before resuming. Set here as well as
+            // in leaveSlumber, because a lock-and-unlock suspends the overlay without ever
+            // entering slumber, and coming back deserves the same greeting.
+            self.cat.stretchDue = true
             self.leaveSlumber()
             self.lastTick = 0
             self.overlay.resume()
@@ -380,6 +385,12 @@ public final class OgiApp: NSObject, NSApplicationDelegate {
             ? sense.typingRate > Feel.Mind.typingCalm
             : sense.typingRate > Feel.Mind.typingAlert
         cat.languor = sense.languor
+        // Power arrived: he perks up and stretches — the manifesto's plug-in behaviour,
+        // through the same flag the wake uses, because it is the same beat. Edge-triggered
+        // against the previous sample, and the first sample only records, so a Mac that
+        // launches already charging does not open with a stretch.
+        if let was = wasCharging, sense.charging, !was { cat.stretchDue = true }
+        wasCharging = sense.charging
 
         // Cats approach when you go still, so how long it has NOT moved is the signal.
         //
@@ -612,6 +623,8 @@ public final class OgiApp: NSObject, NSApplicationDelegate {
         slumberTimer?.cancel()
         slumberTimer = nil
         lastTick = 0            // do not integrate the whole nap in one step
+        // He was asleep too: one stretch before life resumes.
+        cat.stretchDue = true
         overlay.resume()
         log("awake")
     }

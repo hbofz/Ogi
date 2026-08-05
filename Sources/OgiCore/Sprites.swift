@@ -176,6 +176,9 @@ public enum Sprites {
         case .curl:                 return .curl
         case .sleep:                return .sleep
         case .lounge:               return .lounge
+        // Placeholder until the stretch sheet lands (ART-BRIEF §4.12b): a cat doing an
+        // in-place cat thing, which is wrong in the right direction.
+        case .stretch:              return .groom
         case .alert, .brace:        return .alert
         case .groom:                return .groom
         case .idle:                 return .idle

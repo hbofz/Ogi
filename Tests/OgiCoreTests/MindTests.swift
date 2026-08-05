@@ -596,6 +596,62 @@ private func twoLedges() -> Skyline {
     #expect(s.languor == 0)
 }
 
+@Test func wakingOwesHimAStretch() {
+    // The manifesto's three tier-1 stretch moments — first unlock of the morning, the Mac
+    // waking, power plugged in — are one flag: the first unlock of the morning IS a wake,
+    // so no wall clock exists anywhere in the simulation.
+    let bar = surface(.menuBar, y: 1205, from: 0, to: 1920, z: -1)
+    var cat = CatState(position: CGPoint(x: 900, y: 1205))
+    cat.support = .grounded(Perch(id: .menuBar, dx: 900))
+    cat.stretchDue = true
+    cat = Cat.step(cat, world: sky([bar]), dt: dt)
+    #expect(cat.activity == .stretch)
+    #expect(!cat.stretchDue, "the flag must be consumed or he stretches for ever")
+
+    // It runs its little arc and hands back to ordinary life.
+    for _ in 0..<Int((Feel.Timing.stretchSeconds + 0.5) / dt) {
+        cat = Cat.step(cat, world: sky([bar]), dt: dt)
+    }
+    #expect(cat.activity != .stretch, "the stretch never ends")
+}
+
+@Test func aFrozenCatDoesNotStretchMidCall() {
+    // The flag survives the freeze; the stretch plays after the call ends, not during it.
+    let bar = surface(.menuBar, y: 1205, from: 0, to: 1920, z: -1)
+    var cat = CatState(position: CGPoint(x: 900, y: 1205))
+    cat.support = .grounded(Perch(id: .menuBar, dx: 900))
+    cat.stretchDue = true
+    cat.listening = true
+    for _ in 0..<120 { cat = Cat.step(cat, world: sky([bar]), dt: dt) }
+    #expect(cat.activity == .alert)
+    #expect(cat.stretchDue, "the freeze ate the stretch")
+
+    cat.listening = false
+    cat = Cat.step(cat, world: sky([bar]), dt: dt)
+    #expect(cat.activity == .stretch)
+}
+
+@Test func boredomSometimesStretchesInsteadOfWashing() {
+    // Manifesto §7.1 wants more in-place behaviours than the wash, and until now the wash
+    // was the only one that existed. Statistical: over many bouts both must appear, and the
+    // wash must stay the commoner.
+    let bar = surface(.menuBar, y: 1205, from: 0, to: 1920, z: -1)
+    var stretches = 0, washes = 0
+    for _ in 0..<200 {
+        var cat = CatState(position: CGPoint(x: 900, y: 1205))
+        cat.support = .grounded(Perch(id: .menuBar, dx: 900))
+        cat.repose = .curled          // inPlaceChance 0.95: the roll is almost always in place
+        cat.restLeft = 0.01
+        for _ in 0..<60 {
+            cat = Cat.step(cat, world: sky([bar]), dt: dt)
+            if cat.activity == .stretch { stretches += 1; break }
+            if cat.activity == .groom { washes += 1; break }
+        }
+    }
+    #expect(stretches > 5, "he never stretches out of boredom (\(stretches)/200)")
+    #expect(washes > stretches, "a wash should stay the commoner idle behaviour")
+}
+
 @Test func aTapIsAPetNotAScruffing() {
     // Manifesto §7.7's first line: click him and he responds. mouseDown used to go straight
     // to the grab, so the most basic interaction there is read as rough handling. A pet

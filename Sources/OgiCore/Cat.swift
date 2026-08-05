@@ -64,6 +64,7 @@ public enum Activity: Sendable, Equatable {
     case curl
     case sleep
     case lounge     // sprawled flat, head up, watching the room: "nothing to do here" as a behaviour
+    case stretch    // the wake-up bow and yawn; also an occasional in-place idea
     case alert      // frozen and listening: the mic went live
     case scruffed   // limp, legs tucked, dangling
     case righting   // the twist, mid-air
@@ -297,6 +298,13 @@ public struct CatState: Sendable {
     /// becomes an investigation, so a movie — or a presentation — does not gain a cat
     /// strolling across it. He still glances, still yields, and still answers a retreat.
     public var screenCovered = false
+
+    /// A stretch is owed: he just woke, the screen just unlocked, or you plugged the
+    /// machine in. Set by `App` on the edges only it can see, consumed by `standing` once
+    /// he is grounded, free and calm. The manifesto's morning stretch, wake stretch and
+    /// plug-in perk are all this one flag: the first unlock of the morning IS a wake, so
+    /// no wall clock exists anywhere in the simulation.
+    public var stretchDue = false
 
     /// What he remembers about a place. Session-only by design: quit and he forgets, which
     /// is the product call that keeps the README's uninstall promise intact.
@@ -1064,7 +1072,7 @@ public enum Cat {
             // the room went quiet sits down rather than only settling into it after his next
             // idea. Only ever swaps one waiting pose for another: a wash or a walk still wins.
             switch s.activity {
-            case .groom, .lounge, .land, .landHard, .brace: break   // busy; each times out on its own
+            case .groom, .lounge, .stretch, .land, .landHard, .brace: break   // busy; each times out on its own
             // Mid-glance at something that just appeared. `glanceLeft` is what tells this apart
             // from a STALE alert left over after the mic went quiet, which this branch has to go
             // on clearing: the hold-still branch returns early, so without that reset he stayed
@@ -1128,6 +1136,26 @@ public enum Cat {
                 }
                 return s
             }
+            // Mid-stretch: same shape again.
+            if s.activity == .stretch {
+                if s.activityElapsed > Feel.Timing.stretchSeconds {
+                    s.activity = s.repose.restingActivity
+                    s.activityElapsed = 0
+                    s.restLeft = Feel.Timing.restMin + Double.random(in: 0...Feel.Timing.restJitter)
+                }
+                return s
+            }
+            // He was asleep too — or you plugged the machine in. One stretch before life
+            // resumes: the most universally recognised cat behaviour there is, and it costs
+            // one flag because all three of the manifesto's stretch moments are the same
+            // beat. Below the freeze by structure (holdingStill returned long ago), so a
+            // hot mic holds the stretch until the call ends rather than eating it.
+            if s.stretchDue {
+                s.stretchDue = false
+                s.activity = .stretch
+                s.activityElapsed = 0
+                return s
+            }
             // Nothing to do. Sit still until boredom wins.
             // Low battery makes him idle longer. A sluggish cat means plug in.
             // Settledness stretches the same timer rather than stopping it.
@@ -1164,7 +1192,11 @@ public enum Cat {
                 // ...and a stirred-up cat is likelier to go somewhere than to wash.
                 let inPlace = s.repose.inPlaceChance * (1 - s.arousal * Feel.Mind.travelUrgency)
                 if Double.random(in: 0...1) < inPlace {
-                    s.activity = .groom
+                    // Usually a wash, sometimes a stretch: manifesto §7.1 wants more than
+                    // one in-place behaviour, and until the stretch the wash was the only
+                    // one that existed.
+                    s.activity = Double.random(in: 0...1) < Feel.Timing.stretchChance
+                        ? .stretch : .groom
                     s.activityElapsed = 0
                 } else if !s.screenCovered,
                           let choice = idea(from: s, on: surface, world: world) {
