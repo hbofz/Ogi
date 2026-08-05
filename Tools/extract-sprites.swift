@@ -210,6 +210,35 @@ for b in blobs {
     merged.append(b)
 }
 
+// FRAMES=N slices the sheet into N equal cells and pools ink by cell, ignoring blobs
+// entirely. The generator does not always honour the 80px rule: droop came back with its
+// frames close enough to TOUCH, one connected blob across the whole row, which no
+// clustering tolerance can ever split. An evenly spaced row makes the cell assignment
+// trivial and exact instead; the cost is that a whisker crossing a cell boundary is
+// clipped at it, which on a crowded sheet was already lost.
+if let n = ProcessInfo.processInfo.environment["FRAMES"].flatMap(Int.init) {
+    merged = (0..<n).compactMap { i -> Blob? in
+        // Inset each cell so a neighbour's paw poking over the boundary (the reason this
+        // mode exists is exactly that the frames crowd) stays out of the box, and a noise
+        // floor on rows and columns so a stray speck cannot stretch the shared band to the
+        // whole sheet — which it did, and a full-height band is a full-height hit rect.
+        let inset = (w / n) / 18
+        let x0 = w * i / n + inset, x1 = w * (i + 1) / n - inset
+        var rows = [Int](repeating: 0, count: h)
+        var cols = [Int](repeating: 0, count: w)
+        var b = Blob()
+        for y in 0..<h {
+            for x in x0..<x1 where isInk(y * w + x) {
+                rows[y] += 1; cols[x] += 1; b.count += 1
+            }
+        }
+        for y in 0..<h where rows[y] >= 6 { b.minY = min(b.minY, y); b.maxY = max(b.maxY, y) }
+        for x in x0..<x1 where cols[x] >= 3 { b.minX = min(b.minX, x); b.maxX = max(b.maxX, x) }
+        return b.count > 400 && b.maxY >= 0 && b.maxX >= 0 ? b : nil
+    }
+    print("FRAMES=\(n): pooled by equal cells")
+}
+
 // Left to right, and nothing else. This used to sort by `(minY / 60, minX)` to group a sheet
 // into rows, and that silently reordered frames: the bucket is each blob's own ink top, which
 // moves with the pose, so two frames side by side in the same row whose ink happened to

@@ -1,6 +1,7 @@
 #if canImport(AppKit)
 import AppKit
 import CoreAudio
+import IOKit
 import IOKit.ps
 
 /// What the machine feels like right now.
@@ -20,6 +21,10 @@ public struct Sensations: Sendable {
     /// The user has told the OS that things moving on screen hurt. No panel, no toggle:
     /// he reads the room through the accessibility setting that already exists.
     public var reduceMotion = false
+    /// One-shots, true on the sample after the event and never again: an audio device
+    /// arrived (AirPods in his ears), or something plugged into a USB port (a phone).
+    public var audioArrived = false
+    public var usbArrived = false
 
     /// He conserves energy when the machine is. Manifesto: a sluggish cat means plug in.
     /// Reduce Motion pins the same dial: a permanently calm cat, through the mechanism the
@@ -43,6 +48,12 @@ public final class Signals {
 
     private var battery: (percent: Int, charging: Bool)?
     private var lastPowerPoll: CFTimeInterval = 0
+
+    private var audioDeviceCount = -1
+    private var audioArrived = false
+    private var usbArrived = false
+    private var usbPort: IONotificationPortRef?
+    private var usbIterator: io_iterator_t = 0
 
     public private(set) var screenAsleep = false
     /// Fired when the machine comes back. Load-bearing: once the display link is paused it
@@ -68,6 +79,59 @@ public final class Signals {
             MainActor.assumeIsolated { self?.screenAsleep = false; self?.onWake?() }
         }
         screenAsleep = Self.isLockedNow()
+
+        // New ears. The device LIST is watched rather than any stream: connecting AirPods
+        // changes which devices exist, which is a count, and a count cannot carry a sound.
+        // Only additions count — devices leaving are not an arrival.
+        var devicesAddr = AudioObjectPropertyAddress(
+            mSelector: kAudioHardwarePropertyDevices,
+            mScope: kAudioObjectPropertyScopeGlobal,
+            mElement: kAudioObjectPropertyElementMain)
+        AudioObjectAddPropertyListenerBlock(AudioObjectID(kAudioObjectSystemObject),
+                                            &devicesAddr, DispatchQueue.main) { [weak self] _, _ in
+            MainActor.assumeIsolated {
+                guard let self else { return }
+                let n = Self.audioDeviceTally()
+                if n > self.audioDeviceCount, self.audioDeviceCount >= 0 {
+                    self.audioArrived = true
+                }
+                self.audioDeviceCount = n
+            }
+        }
+        audioDeviceCount = Self.audioDeviceTally()
+
+        // Something on the cable. IOKit announces USB devices as they match; the iterator
+        // is drained once at setup so the devices already present are not "arrivals", and
+        // drained again on each callback because an undrained iterator never fires again.
+        if let port = IONotificationPortCreate(kIOMainPortDefault) {
+            IONotificationPortSetDispatchQueue(port, DispatchQueue.main)
+            let usbCtx = Unmanaged.passUnretained(self).toOpaque()
+            var iterator: io_iterator_t = 0
+            let matched = IOServiceAddMatchingNotification(
+                port, kIOFirstMatchNotification, IOServiceMatching("IOUSBHostDevice"),
+                { context, iterator in
+                    guard let context else { return }
+                    var arrived = false
+                    while case let device = IOIteratorNext(iterator), device != 0 {
+                        IOObjectRelease(device)
+                        arrived = true
+                    }
+                    guard arrived else { return }
+                    let signals = Unmanaged<Signals>.fromOpaque(context).takeUnretainedValue()
+                    DispatchQueue.main.async {
+                        MainActor.assumeIsolated { signals.usbArrived = true }
+                    }
+                }, usbCtx, &iterator)
+            if matched == KERN_SUCCESS {
+                while case let device = IOIteratorNext(iterator), device != 0 {
+                    IOObjectRelease(device)
+                }
+                usbPort = port
+                usbIterator = iterator
+            } else {
+                IONotificationPortDestroy(port)
+            }
+        }
 
         // Power events arrive as a notification rather than waiting for the battery poll:
         // the 30s cadence is fine for a percentage and terrible for the plug-in stretch,
@@ -116,6 +180,11 @@ public final class Signals {
         s.lowPower = ProcessInfo.processInfo.isLowPowerModeEnabled
         s.reduceMotion = NSWorkspace.shared.accessibilityDisplayShouldReduceMotion
         s.asleep = screenAsleep
+        // One-shots: handed over exactly once.
+        s.audioArrived = audioArrived
+        s.usbArrived = usbArrived
+        audioArrived = false
+        usbArrived = false
         return s
     }
 
@@ -174,6 +243,18 @@ public final class Signals {
         var vsize = UInt32(MemoryLayout<UInt32>.size)
         guard AudioObjectGetPropertyData(device, &running, 0, nil, &vsize, &value) == noErr else { return false }
         return value != 0
+    }
+
+    /// How many audio devices exist right now. Which ones is nobody's business.
+    private static func audioDeviceTally() -> Int {
+        var addr = AudioObjectPropertyAddress(
+            mSelector: kAudioHardwarePropertyDevices,
+            mScope: kAudioObjectPropertyScopeGlobal,
+            mElement: kAudioObjectPropertyElementMain)
+        var size: UInt32 = 0
+        guard AudioObjectGetPropertyDataSize(AudioObjectID(kAudioObjectSystemObject),
+                                             &addr, 0, nil, &size) == noErr else { return 0 }
+        return Int(size) / MemoryLayout<AudioObjectID>.size
     }
 
     static func power() -> (percent: Int, charging: Bool)? {

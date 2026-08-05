@@ -20,6 +20,8 @@ public final class OgiApp: NSObject, NSApplicationDelegate {
     private var wasFullscreen = false
     /// The previous power sample, for the plug-in edge. Nil until the first sample.
     private var wasCharging: Bool?
+    /// ...and the previous battery percentage, for the crossing-below-20 edge.
+    private var lastPercent: Int?
     private var skyline = Skyline(surfaces: [], occluders: [],
                                   screen: ScreenGeometry(frame: .zero, visibleFrame: .zero, notch: nil))
     private var cat = CatState(position: .zero)
@@ -132,7 +134,7 @@ public final class OgiApp: NSObject, NSApplicationDelegate {
             // He was asleep too: stretch and shake off before resuming. Set here as well as
             // in leaveSlumber, because a lock-and-unlock suspends the overlay without ever
             // entering slumber, and coming back deserves the same greeting.
-            self.cat.stretchDue = true
+            self.cat.owed = .stretch
             self.leaveSlumber()
             self.lastTick = 0
             self.overlay.resume()
@@ -383,12 +385,18 @@ public final class OgiApp: NSObject, NSApplicationDelegate {
             ? sense.typingRate > Feel.Mind.typingCalm
             : sense.typingRate > Feel.Mind.typingAlert
         cat.languor = sense.languor
-        // Power arrived: he perks up and stretches — the manifesto's plug-in behaviour,
-        // through the same flag the wake uses, because it is the same beat. Edge-triggered
-        // against the previous sample, and the first sample only records, so a Mac that
-        // launches already charging does not open with a stretch.
-        if let was = wasCharging, sense.charging, !was { cat.stretchDue = true }
+        // The performances. Power arriving is the zap — Hamzah's electrocution — an audio
+        // device is the groove, something on the cable is curiosity, and the battery going
+        // properly low is the power-down. All edges only App can see; each first sample
+        // records rather than fires, so a Mac that launches plugged in does not open with
+        // a jolt.
+        if let was = wasCharging, sense.charging, !was { cat.owed = .zap }
         wasCharging = sense.charging
+        if sense.audioArrived { cat.owed = .vibe }
+        if sense.usbArrived { cat.owed = .curious }
+        if let p = sense.batteryPercent, let was = lastPercent, p < 20, was >= 20,
+           !sense.charging { cat.owed = .droop }
+        lastPercent = sense.batteryPercent ?? lastPercent
 
         // Cats approach when you go still, so how long it has NOT moved is the signal.
         //
@@ -600,7 +608,7 @@ public final class OgiApp: NSObject, NSApplicationDelegate {
         slumberTimer = nil
         lastTick = 0            // do not integrate the whole nap in one step
         // He was asleep too: one stretch before life resumes.
-        cat.stretchDue = true
+        cat.owed = .stretch
         overlay.resume()
         log("awake")
     }

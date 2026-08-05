@@ -25,6 +25,7 @@ public enum Sprites {
         case climbUp
         case lounge, stretch
         case peer
+        case zap, vibe, droop, curious
 
         var count: Int {
             switch self {
@@ -49,6 +50,7 @@ public enum Sprites {
             case .lounge: 4
             case .stretch: 5
             case .peer: 4
+            case .zap, .vibe, .droop, .curious: 6
             }
         }
 
@@ -86,6 +88,10 @@ public enum Sprites {
             case .lounge: 2.5   // breathing, like idle and sleep: he is watching, not doing
             case .stretch: 5    // a bow and a yawn take a second; the last frame holds
             case .peer: 2.5     // a nosy look over a lip: glances and a blink, nothing more
+            case .zap: 10       // a gag is quick; the settled last frame holds
+            case .vibe: 4       // a groove, looping until the spell ends
+            case .droop: 5      // powering down decelerates into the flat last frame
+            case .curious: 6    // a head-tilt has to read; the settled last frame holds
             }
         }
 
@@ -95,8 +101,10 @@ public enum Sprites {
             // returns to the sitting pose it started from, so the seam is invisible.
             // cling loops: he holds on until he lets go.
             // lounge loops: a sprawl is a spell, and its breath cycles back to frame 1.
+            // vibe loops: he grooves until the spell ends, and its last frame returns to
+            // the first's pose so the seam is invisible.
             case .walk, .run, .idle, .sleep, .held, .alert, .groom, .cling, .climbUp,
-                 .lounge, .peer: true
+                 .lounge, .peer, .vibe: true
             // curl settles into the sleep pose and holds it until sleep takes over.
             // lookDown holds its last frame too: he leans out over the lip and stays there
             // while he thinks. The hold IS the tell, so it must not cycle back to standing.
@@ -109,7 +117,7 @@ public enum Sprites {
             // stretch too: it ends standing neutral, the idle handoff, and a looping bow
             // would be a cat doing calisthenics.
             case .jump, .land, .fall, .sitdown, .curl, .lookDown, .peek, .turn, .shake,
-                 .stretch: false
+                 .stretch, .zap, .droop, .curious: false
             }
         }
     }
@@ -186,6 +194,10 @@ public enum Sprites {
         case .lounge:               return .lounge
         case .stretch:              return .stretch
         case .peer:                 return .peer
+        case .zap:                  return .zap
+        case .vibe:                 return .vibe
+        case .droop:                return .droop
+        case .curious:              return .curious
         case .alert, .brace:        return .alert
         case .groom:                return .groom
         case .idle:                 return .idle

@@ -757,6 +757,42 @@ private func landing(fromHeight h: CGFloat, routing: Bool = false) -> (Activity,
     #expect(Feel.Physics.hardLanding < Feel.Physics.terminalVelocity)
 }
 
+@Test @MainActor func theEventPerformancesOutlastTheirSheets() {
+    // Same floor the stretch, the shake and the peek have: none of these loop, so a hold
+    // shorter than the sheet cuts the gag off mid-jolt, the power-down mid-collapse, or
+    // the head-tilt mid-tilt.
+    let pairs: [(Sprites.Clip, TimeInterval)] = [
+        (.zap, Feel.Timing.zapSeconds),
+        (.droop, Feel.Timing.droopSeconds),
+        (.curious, Feel.Timing.curiousSeconds),
+    ]
+    for (clip, hold) in pairs {
+        #expect(hold > Double(clip.count) / clip.fps,
+                "\(clip.rawValue) settles back before its \(clip.count) frames at \(clip.fps)fps have played")
+    }
+}
+
+@Test func anOwedShowPlaysItsWholeSpell() {
+    // The generic slot, exercised with the zap: consumed once, held for its spell, settled.
+    let bar = surface(.menuBar, y: 1205, from: 0, to: 1920, z: -1)
+    var cat = CatState(position: CGPoint(x: 900, y: 1205))
+    cat.support = .grounded(Perch(id: .menuBar, dx: 900))
+    cat.restLeft = .greatestFiniteMagnitude
+    cat.owed = .zap
+    cat = Cat.step(cat, world: sky([bar]), dt: dt)
+    #expect(cat.activity == .zap)
+    // Half the spell in, still performing.
+    for _ in 0..<Int(Feel.Timing.zapSeconds / 2 / dt) {
+        cat = Cat.step(cat, world: sky([bar]), dt: dt)
+    }
+    #expect(cat.activity == .zap, "the jolt was cut short")
+    // Past the end, settled.
+    for _ in 0..<Int(Feel.Timing.zapSeconds / dt) {
+        cat = Cat.step(cat, world: sky([bar]), dt: dt)
+    }
+    #expect(cat.activity != .zap, "the jolt never ends")
+}
+
 @Test @MainActor func theStretchOutlastsItsOwnSheet() {
     // Same floor the shake and the peek have: the clip does not loop, so a timeout shorter
     // than the sheet cuts the yawn off mid-gape and snaps him to standing.

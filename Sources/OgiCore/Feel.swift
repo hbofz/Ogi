@@ -389,6 +389,16 @@ public enum Feel {
         /// How long he peers over the lip of the window that was hiding him before pulling
         /// himself up onto it. A good long nosy look: about four blink-loops of the sheet.
         public static let peerSeconds: TimeInterval = 6
+
+        /// The event performances. Each non-looping one is floored by its own sheet, the
+        /// way the stretch and the shake are, and `theEventPerformancesOutlastTheirSheets`
+        /// holds the floors. The zap is a gag and reads quick; the droop decelerates into
+        /// lying flat and stays there a while, because running out of battery should look
+        /// like running out of battery; the vibe loops for a proper little groove.
+        public static let zapSeconds: TimeInterval = 0.9
+        public static let vibeSeconds: TimeInterval = 8
+        public static let droopSeconds: TimeInterval = 4.2
+        public static let curiousSeconds: TimeInterval = 1.6
         /// Chance that a bout of boredom becomes a wash rather than a trip somewhere.
         /// Manifesto §7.1 wants an occasional in-place behaviour roughly every few minutes,
         /// and washing is currently the only one of those that exists.

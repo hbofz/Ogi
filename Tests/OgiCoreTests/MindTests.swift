@@ -639,10 +639,10 @@ private func twoLedges() -> Skyline {
     let bar = surface(.menuBar, y: 1205, from: 0, to: 1920, z: -1)
     var cat = CatState(position: CGPoint(x: 900, y: 1205))
     cat.support = .grounded(Perch(id: .menuBar, dx: 900))
-    cat.stretchDue = true
+    cat.owed = .stretch
     cat = Cat.step(cat, world: sky([bar]), dt: dt)
     #expect(cat.activity == .stretch)
-    #expect(!cat.stretchDue, "the flag must be consumed or he stretches for ever")
+    #expect(cat.owed == nil, "the show must be consumed or he performs it for ever")
 
     // It runs its little arc and hands back to ordinary life.
     for _ in 0..<Int((Feel.Timing.stretchSeconds + 0.5) / dt) {
@@ -656,11 +656,11 @@ private func twoLedges() -> Skyline {
     let bar = surface(.menuBar, y: 1205, from: 0, to: 1920, z: -1)
     var cat = CatState(position: CGPoint(x: 900, y: 1205))
     cat.support = .grounded(Perch(id: .menuBar, dx: 900))
-    cat.stretchDue = true
+    cat.owed = .stretch
     cat.listening = true
     for _ in 0..<120 { cat = Cat.step(cat, world: sky([bar]), dt: dt) }
     #expect(cat.activity == .alert)
-    #expect(cat.stretchDue, "the freeze ate the stretch")
+    #expect(cat.owed == .stretch, "the freeze ate the stretch")
 
     cat.listening = false
     cat = Cat.step(cat, world: sky([bar]), dt: dt)

@@ -66,6 +66,10 @@ public enum Activity: Sendable, Equatable {
     case lounge     // sprawled flat, head up, watching the room: "nothing to do here" as a behaviour
     case stretch    // the wake-up bow and yawn; also an occasional in-place idea
     case peer       // head and paws over the lip of the window that was hiding him
+    case zap        // comically electrocuted: power just arrived
+    case vibe       // grooving: an audio device just connected
+    case droop      // powering down: the battery crossed properly low
+    case curious    // head-tilt at a question mark: something plugged into the machine
     case alert      // frozen and listening: the mic went live
     case scruffed   // limp, legs tucked, dangling
     case righting   // the twist, mid-air
@@ -308,12 +312,13 @@ public struct CatState: Sendable {
     /// belongs at home" without a stimulus carrying the x every time.
     public var homeX: CGFloat?
 
-    /// A stretch is owed: he just woke, the screen just unlocked, or you plugged the
-    /// machine in. Set by `App` on the edges only it can see, consumed by `standing` once
-    /// he is grounded, free and calm. The manifesto's morning stretch, wake stretch and
-    /// plug-in perk are all this one flag: the first unlock of the morning IS a wake, so
-    /// no wall clock exists anywhere in the simulation.
-    public var stretchDue = false
+    /// A performance is owed: the wake-up stretch, or one of the machine-event pieces (the
+    /// zap, the groove, the power-down, the curious look). Set by `App` on the edges only
+    /// it can see, consumed by `standing` once he is grounded, free and calm — so a hot
+    /// mic holds the show until the call ends rather than eating it. One slot deep: a
+    /// later event replaces an unplayed earlier one, which at these frequencies is
+    /// nothing.
+    public var owed: Activity?
 
     /// What he remembers about a place. Session-only by design: quit and he forgets, which
     /// is the product call that keeps the README's uninstall promise intact.
@@ -1081,7 +1086,8 @@ public enum Cat {
             // the room went quiet sits down rather than only settling into it after his next
             // idea. Only ever swaps one waiting pose for another: a wash or a walk still wins.
             switch s.activity {
-            case .groom, .lounge, .stretch, .peek, .peer, .land, .landHard, .brace: break   // busy; each times out on its own
+            case .groom, .lounge, .stretch, .peek, .peer, .zap, .vibe, .droop, .curious,
+                 .land, .landHard, .brace: break   // busy; each times out on its own
             // Mid-glance at something that just appeared. `glanceLeft` is what tells this apart
             // from a STALE alert left over after the mic went quiet, which this branch has to go
             // on clearing: the hold-still branch returns early, so without that reset he stayed
@@ -1173,22 +1179,11 @@ public enum Cat {
                 }
             }
 
-            // Already washing: keep at it for a few seconds, then settle back. Anything that
-            // actually matters — settling to sleep, the mic going live, being hidden — is
-            // handled above this and overrides it, which is the right precedence.
-            if s.activity == .groom {
-                if s.activityElapsed > Feel.Timing.groomSeconds {
-                    s.activity = s.repose.restingActivity
-                    s.activityElapsed = 0
-                    s.restLeft = Feel.Timing.restMin + Double.random(in: 0...Feel.Timing.restJitter)
-                }
-                return s
-            }
-            // Already sprawled: hold the lounge for its spell, then settle back. The same
-            // shape as the wash above, and everything that matters more — the freeze, the
-            // yield, sleep, being hidden — already returned before this.
-            if s.activity == .lounge {
-                if s.activityElapsed > Feel.Taste.loungeSeconds {
+            // Mid-performance: a wash, a lounge, a stretch, or one of the event pieces.
+            // Held for its spell, then settled back. Everything that actually matters —
+            // the freeze, the yield, sleep, being hidden — already returned before this.
+            if let hold = inPlaceHold(s.activity) {
+                if s.activityElapsed > hold {
                     s.activity = s.repose.restingActivity
                     s.activityElapsed = 0
                     s.restLeft = Feel.Timing.restMin + Double.random(in: 0...Feel.Timing.restJitter)
@@ -1204,23 +1199,12 @@ public enum Cat {
                 }
                 return s
             }
-            // Mid-stretch: same shape again.
-            if s.activity == .stretch {
-                if s.activityElapsed > Feel.Timing.stretchSeconds {
-                    s.activity = s.repose.restingActivity
-                    s.activityElapsed = 0
-                    s.restLeft = Feel.Timing.restMin + Double.random(in: 0...Feel.Timing.restJitter)
-                }
-                return s
-            }
-            // He was asleep too — or you plugged the machine in. One stretch before life
-            // resumes: the most universally recognised cat behaviour there is, and it costs
-            // one flag because all three of the manifesto's stretch moments are the same
-            // beat. Below the freeze by structure (holdingStill returned long ago), so a
-            // hot mic holds the stretch until the call ends rather than eating it.
-            if s.stretchDue {
-                s.stretchDue = false
-                s.activity = .stretch
+            // A show is owed: the wake-up stretch, or one of the machine-event pieces.
+            // Below the freeze by structure (holdingStill returned long ago), so a hot mic
+            // holds the show until the call ends rather than eating it.
+            if let show = s.owed {
+                s.owed = nil
+                s.activity = show
                 s.activityElapsed = 0
                 return s
             }
@@ -1612,6 +1596,22 @@ public enum Cat {
             break   // resolved into a walk above; unreachable
         }
         return s
+    }
+
+    /// How long an in-place performance holds before he settles back, or nil if the
+    /// activity is not one. One table because the busy-list, the timeout and the pin tests
+    /// all have to agree on what counts as a performance.
+    static func inPlaceHold(_ activity: Activity) -> TimeInterval? {
+        switch activity {
+        case .groom: return Feel.Timing.groomSeconds
+        case .lounge: return Feel.Taste.loungeSeconds
+        case .stretch: return Feel.Timing.stretchSeconds
+        case .zap: return Feel.Timing.zapSeconds
+        case .vibe: return Feel.Timing.vibeSeconds
+        case .droop: return Feel.Timing.droopSeconds
+        case .curious: return Feel.Timing.curiousSeconds
+        default: return nil
+        }
     }
 
     /// How long a landing reads for before he is a cat again, or nil if he is not landing.
