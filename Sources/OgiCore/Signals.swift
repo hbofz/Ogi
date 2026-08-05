@@ -68,6 +68,21 @@ public final class Signals {
             MainActor.assumeIsolated { self?.screenAsleep = false; self?.onWake?() }
         }
         screenAsleep = Self.isLockedNow()
+
+        // Power events arrive as a notification rather than waiting for the battery poll:
+        // the 30s cadence is fine for a percentage and terrible for the plug-in stretch,
+        // which Hamzah tested by connecting the charger and watching nothing happen. The
+        // callback just invalidates the poll clock, so the next sample re-reads at once.
+        let ctx = Unmanaged.passUnretained(self).toOpaque()
+        if let source = IOPSNotificationCreateRunLoopSource({ context in
+            guard let context else { return }
+            let signals = Unmanaged<Signals>.fromOpaque(context).takeUnretainedValue()
+            DispatchQueue.main.async {
+                MainActor.assumeIsolated { signals.lastPowerPoll = 0 }
+            }
+        }, ctx)?.takeRetainedValue() {
+            CFRunLoopAddSource(CFRunLoopGetMain(), source, .defaultMode)
+        }
     }
 
     /// Sampled from inside the display link. No timers, no listeners, no lifecycles.
