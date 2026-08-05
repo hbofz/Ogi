@@ -1080,7 +1080,7 @@ public enum Cat {
             // the room went quiet sits down rather than only settling into it after his next
             // idea. Only ever swaps one waiting pose for another: a wash or a walk still wins.
             switch s.activity {
-            case .groom, .lounge, .stretch, .land, .landHard, .brace: break   // busy; each times out on its own
+            case .groom, .lounge, .stretch, .peek, .land, .landHard, .brace: break   // busy; each times out on its own
             // Mid-glance at something that just appeared. `glanceLeft` is what tells this apart
             // from a STALE alert left over after the mic went quiet, which this branch has to go
             // on clearing: the hold-still branch returns early, so without that reset he stayed
@@ -1088,6 +1088,21 @@ public enum Cat {
             case .alert where s.glanceLeft > 0: break
             default: s.activity = s.repose.restingActivity
             }
+            // At a den door he waits IN the doorway, facing out, instead of sitting beside
+            // it. The notch is a hardware hole with no pixels behind it, so a cat resting
+            // at its lip half-overlaps the cutout and the mask eats half of him — Hamzah
+            // watched him "disappear" next to it. Held as the peek pose (the same drawing
+            // the launch arrival uses: hindquarters in the dark, face out) it reads as him
+            // watching the room from inside his den. Boredom still drains underneath it,
+            // so in ordinary life the next idea gets him up; on a covered screen, where
+            // elections are gated, the den is how he watches the whole film.
+            if s.activity == s.repose.restingActivity, s.repose != .asleep,
+               let out = denDoor(s, on: surface) {
+                s.facing = out
+                s.activity = .peek
+                s.activityElapsed = 0
+            }
+
             // While the screen is covered he belongs at the top, and that is a STANDING
             // ORDER rather than an event. The edge-triggered retreat alone was losable:
             // it fired on the first sighting of the fullscreen window, before that window
@@ -2007,6 +2022,22 @@ public enum Cat {
             if mark < 0 { return i }
         }
         return scores.count - 1
+    }
+
+    /// Is he standing at the lip of an interior hole — a den door — and if so, which way
+    /// faces OUT of it. Nil everywhere else, which is all of a notchless Mac and all of
+    /// the bar except the two lips of the cutout. `isGap` alone is not enough: it answers
+    /// "does solid resume somewhere ahead", which is true anywhere left of the notch, so
+    /// the lip itself has to be underfoot.
+    static func denDoor(_ s: CatState, on surface: Surface) -> CGFloat? {
+        for dir: CGFloat in [1, -1] {
+            if let edge = edgeAhead(from: s.position.x, facing: dir, on: surface),
+               abs(edge - s.position.x) <= Feel.Physics.arrivalSlop * 3,
+               isGap(at: edge, facing: dir, on: surface) {
+                return -dir
+            }
+        }
+        return nil
     }
 
     /// Home enough, for the standing order: on the menu bar itself, or on any surface

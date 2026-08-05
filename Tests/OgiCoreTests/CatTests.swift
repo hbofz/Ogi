@@ -423,6 +423,29 @@ private let notched = ScreenGeometry(frame: CGRect(x: 0, y: 0, width: 1920, heig
             "his own overlay counted as the world being covered")
 }
 
+@Test func heWaitsInTheDoorwayFacingOut() {
+    // The notch is a hardware hole with no pixels behind it, so a cat resting AT its lip
+    // half-overlaps the cutout and the mask eats half of him — "he disappears", Hamzah
+    // said, watching. At a den door his waiting pose is the peek instead: hindquarters in
+    // the dark, face out, watching the room from inside his den.
+    let world = World.build(windows: [], screen: notched, ownPID: 99)
+    let bar = world.surface(.menuBar)!
+    let notch = notched.notch!
+    var cat = CatState(position: CGPoint(x: notch.minX, y: bar.y))
+    cat.support = .grounded(Perch(id: .menuBar, dx: notch.minX - bar.extent.lowerBound))
+    cat.restLeft = .greatestFiniteMagnitude
+    for _ in 0..<(120 * 2) { cat = Cat.step(cat, world: world, dt: dt) }
+    #expect(cat.activity == .peek, "at the den door he should wait in the doorway")
+    #expect(cat.facing == -1, "at the left lip, out is away from the cutout")
+
+    // Mid-bar, resting is just resting: the den pose belongs to the doorway alone.
+    var away = CatState(position: CGPoint(x: 300, y: bar.y))
+    away.support = .grounded(Perch(id: .menuBar, dx: 300 - bar.extent.lowerBound))
+    away.restLeft = .greatestFiniteMagnitude
+    for _ in 0..<(120 * 2) { away = Cat.step(away, world: world, dt: dt) }
+    #expect(away.activity != .peek, "he peeked at a doorway that is not there")
+}
+
 @MainActor
 @Test func heGoesHomeToTheDoorwayOnHisOwnSide() {
     // `homeX` is fixed at launch to the ONE edge he came out of. Walking to it from the far
