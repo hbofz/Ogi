@@ -1,6 +1,7 @@
 #if canImport(AppKit)
 import AppKit
 import CoreAudio
+import CoreMediaIO
 import IOKit
 import IOKit.ps
 
@@ -14,6 +15,12 @@ public struct Sensations: Sendable {
     public var idleSeconds: Double = 0
     public var typingRate: Double = 0        // keystrokes per minute
     public var micLive = false
+    /// The camera is running. Permission-free, and it reports *that* a device is on and
+    /// nothing about what it sees — the same shape of read as `micLive`.
+    ///
+    /// The camera lives in the notch, which is his house, so this is the one signal that can
+    /// evict him from it.
+    public var cameraLive = false
     public var batteryPercent: Int? = nil
     public var charging = false
     public var lowPower = false
@@ -36,6 +43,37 @@ public struct Sensations: Sendable {
     }
 }
 
+/// A boolean that has to mean it.
+///
+/// **Slow to arm, instant to clear.** Both of Ogi's "is a device live" reads are true the
+/// instant *any* process opens the stream, and on a real Mac that includes things which are not
+/// a call: `corespeechd`, the always-on "Hey Siri" listener, takes the microphone in bursts
+/// shorter than a second. Measured on Hamzah's machine mid-verification, which is how this was
+/// found — he had a cat in a headset with nobody on the other end.
+///
+/// v2 wore that as a flicker between two nearly identical poses and nobody noticed. v3a draws a
+/// headset on him for it, so the same blip became a visible lie.
+///
+/// The asymmetry is the design. Arming late costs a second and a half of a privacy tell that
+/// macOS's own orange dot has already given you; clearing late would leave him wearing the rig
+/// after your call ended, which is the failure that actually reads as broken.
+struct Settling {
+    private var since: CFTimeInterval?
+    private(set) var value = false
+
+    mutating func update(_ raw: Bool, now: CFTimeInterval, settle: Double) -> Bool {
+        guard raw else {
+            since = nil
+            value = false
+            return false
+        }
+        let start = since ?? now
+        since = start
+        value = now - start >= settle
+        return value
+    }
+}
+
 @MainActor
 public final class Signals {
 
@@ -43,7 +81,8 @@ public final class Signals {
     private var lastKeySample = CACurrentMediaTime()
     private var smoothedRate: Double = 0
 
-    private var micLive = false
+    private var mic = Settling()
+    private var camera = Settling()
     private var lastMicPoll: CFTimeInterval = 0
 
     private var battery: (percent: Int, charging: Bool)?
@@ -171,8 +210,13 @@ public final class Signals {
 
         // 4Hz is plenty for a cat noticing something, and polling removes an entire
         // listener lifecycle.
-        if now - lastMicPoll > 0.25 { micLive = Self.micRunning(); lastMicPoll = now }
-        s.micLive = micLive
+        if now - lastMicPoll > 0.25 {
+            _ = mic.update(Self.micRunning(), now: now, settle: Feel.Mind.deviceSettleSeconds)
+            _ = camera.update(Self.cameraRunning(), now: now, settle: Feel.Mind.deviceSettleSeconds)
+            lastMicPoll = now
+        }
+        s.micLive = mic.value
+        s.cameraLive = camera.value
 
         // 2s, not the 30s this shipped with: the IOPS notification should make the re-read
         // instant, but three rounds of Hamzah plugging the cable in and watching nothing
@@ -213,11 +257,86 @@ public final class Signals {
             var ids = [AudioObjectID](repeating: 0, count: Int(size) / MemoryLayout<AudioObjectID>.size)
             if AudioObjectGetPropertyData(AudioObjectID(kAudioObjectSystemObject),
                                           &addr, 0, nil, &size, &ids) == noErr {
-                for id in ids where processIsRunningInput(id) { return true }
+                for id in ids where processIsRunningInput(id) && !isAlwaysListening(id) {
+                    return true
+                }
                 return false
             }
         }
         return deviceRunningSomewhere()
+    }
+
+    /// Is anything using the camera?
+    ///
+    /// The same question the green privacy LED answers, asked of CoreMediaIO: enumerate the
+    /// video devices and ask each whether it is running somewhere. **No permission**, and
+    /// structurally incapable of capturing an image — it returns a flag per device and there is
+    /// no path from here to a frame. MANIFESTO Appendix A has listed this as permission-free
+    /// since the beginning; nothing had used it until now.
+    ///
+    /// Unlike the microphone there is no per-*process* CoreMediaIO property, so the device
+    /// property is the only read available. That is the same family of property that misreports
+    /// for Bluetooth microphones, but a camera is not a Bluetooth audio device and is not
+    /// affected. **Still wants confirming against the LED on real hardware.**
+    static func cameraRunning() -> Bool {
+        var addr = CMIOObjectPropertyAddress(
+            mSelector: CMIOObjectPropertySelector(kCMIOHardwarePropertyDevices),
+            mScope: CMIOObjectPropertyScope(kCMIOObjectPropertyScopeGlobal),
+            mElement: CMIOObjectPropertyElement(kCMIOObjectPropertyElementMain))
+        var size: UInt32 = 0
+        guard CMIOObjectGetPropertyDataSize(CMIOObjectID(kCMIOObjectSystemObject),
+                                            &addr, 0, nil, &size) == noErr, size > 0
+        else { return false }
+        var ids = [CMIOObjectID](repeating: 0, count: Int(size) / MemoryLayout<CMIOObjectID>.size)
+        var used: UInt32 = 0
+        guard CMIOObjectGetPropertyData(CMIOObjectID(kCMIOObjectSystemObject),
+                                        &addr, 0, nil, size, &used, &ids) == noErr
+        else { return false }
+        for id in ids where deviceIsRunningSomewhere(id) { return true }
+        return false
+    }
+
+    private static func deviceIsRunningSomewhere(_ id: CMIOObjectID) -> Bool {
+        var addr = CMIOObjectPropertyAddress(
+            mSelector: CMIOObjectPropertySelector(kCMIODevicePropertyDeviceIsRunningSomewhere),
+            mScope: CMIOObjectPropertyScope(kCMIOObjectPropertyScopeGlobal),
+            mElement: CMIOObjectPropertyElement(kCMIOObjectPropertyElementMain))
+        var value: UInt32 = 0
+        var used: UInt32 = 0
+        guard CMIOObjectGetPropertyData(id, &addr, 0, nil,
+                                        UInt32(MemoryLayout<UInt32>.size), &used, &value) == noErr
+        else { return false }
+        return value != 0
+    }
+
+    /// Daemons that hold the microphone open as a matter of course, and whose doing so does not
+    /// mean anybody is listening to you.
+    ///
+    /// **Measured, not guessed.** On Hamzah's Mac `com.apple.CoreSpeech` — the "Hey Siri"
+    /// listener, on by default — reports a running input *continuously*, while
+    /// `kAudioDevicePropertyDeviceIsRunningSomewhere` reports the microphone idle at the same
+    /// instant. Without this filter the per-process read is true forever on any Mac with Siri
+    /// enabled, and in v3a that is a cat wearing a headset all day.
+    ///
+    /// **The obvious alternative is worse.** The device property gets this case right, and v2b
+    /// deliberately moved *away* from it because it always reports false for Bluetooth
+    /// microphones — an Apple bug — which would silently break the signal for everyone who takes
+    /// calls on AirPods. That trades a false positive for a false negative on the commonest
+    /// calling setup. So: keep the per-process read, name the daemon.
+    ///
+    /// Deliberately not "anything from Apple". `com.apple.FaceTime` is a call.
+    static let alwaysListening: Set<String> = ["com.apple.CoreSpeech"]
+
+    private static func isAlwaysListening(_ id: AudioObjectID) -> Bool {
+        var addr = AudioObjectPropertyAddress(
+            mSelector: kAudioProcessPropertyBundleID,
+            mScope: kAudioObjectPropertyScopeGlobal,
+            mElement: kAudioObjectPropertyElementMain)
+        var cf: CFString?
+        var size = UInt32(MemoryLayout<CFString?>.size)
+        guard AudioObjectGetPropertyData(id, &addr, 0, nil, &size, &cf) == noErr,
+              let bundle = cf as String? else { return false }
+        return alwaysListening.contains(bundle)
     }
 
     private static func processIsRunningInput(_ id: AudioObjectID) -> Bool {

@@ -153,7 +153,7 @@ private let dt = Feel.Timing.fixedDT
     cat.activity = .lounge
     cat.listening = true
     cat = Cat.step(cat, world: sky([floor]), dt: dt)
-    #expect(cat.activity == .alert, "a hot mic must interrupt a lounge")
+    #expect(cat.activity == .onCall, "a hot mic must interrupt a lounge")
 }
 
 // MARK: - Task 1: session memory

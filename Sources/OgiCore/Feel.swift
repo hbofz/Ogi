@@ -219,6 +219,17 @@ public enum Feel {
         public static let typingAlert: Double = 240
         public static let typingCalm: Double = 140
 
+        /// How long the microphone or the camera has to stay live before he believes it.
+        ///
+        /// Not zero, which is what it was. Both reads go true the instant *any* process opens
+        /// the stream, and `corespeechd` — the always-on "Hey Siri" listener — takes the
+        /// microphone in bursts well under a second. Caught on Hamzah's machine while verifying
+        /// v3a: a cat in a headset with nobody on the other end.
+        ///
+        /// Long enough to swallow those bursts, short enough that joining a call still feels
+        /// like a reaction. Only the arming is delayed; releasing is instant. See `Settling`.
+        public static let deviceSettleSeconds: Double = 1.5
+
         /// How long your cursor has to sit still, and how close to him, before he comes over.
         ///
         /// `cursorNearby` is a **radius**, not a horizontal gap. Coming over only ever walks him
@@ -427,6 +438,28 @@ public enum Feel {
         static let restless = ProcessInfo.processInfo.environment["OGI_RESTLESS"] != nil
     }
 
+    /// The notch as a place with rules. v3a.
+    ///
+    /// Everything here follows from one fact `World.punchNotch` already encodes: the cutout is a
+    /// hole in `solid` sitting **above** the menu bar line, and `notch.minY` IS that line. So he
+    /// cannot stand under it, cannot be seen inside it, and can both pass through it and hang
+    /// from it with every drawn pixel in live display.
+    public enum Notch {
+        /// How much of his walking speed he keeps while crossing behind the camera housing.
+        /// He is squeezing past hardware, not strolling. Tune by eye: too low reads as lag,
+        /// too high loses the squeeze.
+        public static let squeezeFactor: CGFloat = 0.6
+        /// How long he hangs off the lower lip before he pulls himself back up. Long enough
+        /// for two reps of the `hang` sheet's loop plus the lowering-in, so the second rep is
+        /// what tells you the first was not a slip.
+        public static let hangSeconds: TimeInterval = 4.0
+        /// How long he stays draped over the lip looking down at you.
+        public static let peerDownSeconds: TimeInterval = 10
+        /// Chance that a bout of boredom at a notch lip becomes a hang or a look down rather
+        /// than the usual wash. Only reachable standing at a lip, so it is rarer than it looks.
+        public static let lipIdeaChance: Double = 0.5
+    }
+
     public enum World {
         public static let pollHz: Double = 10
         /// Burst rate while a mouse button is down, so dragged windows don't strobe.
@@ -503,6 +536,35 @@ public enum Feel {
         /// points. Sized so the head over the lip matches the head on his side-view body;
         /// tune by eye.
         public static let peerHeight: CGFloat = 19
+        /// The same yardstick for v3a's two front-facing clips. See `Sprites.frontFacingHeight`.
+        ///
+        /// `peerDown` is the same subject as `peer` — his head and his two front paws over a
+        /// lip — in a squarer band, so it starts near `peerHeight` scaled for the taller frame.
+        /// `hang` is a whole cat drawn head-on and stretched out by his own weight, so it is
+        /// the tallest thing he ever renders as: longer than his standing height, because a
+        /// hanging cat is longer than a standing one.
+        ///
+        /// Both are tune-by-eye and neither has been seen on screen.
+        public static let peerDownHeight: CGFloat = 22
+        public static let hangHeight: CGFloat = 46
+        /// ...and the same yardstick again for the three call sheets, which need it for a
+        /// different reason: they have a dark prop drawn on them, and the eye finder picks the
+        /// prop. See `Sprites.bandHeight`.
+        ///
+        /// `callTalk` is a sitting cat and nothing else, so its band is his sitting height.
+        /// `callWork` and `callFull` share a band with the laptop beside him, so theirs is a
+        /// shade taller for the same cat, and the two must stay equal or he changes size when
+        /// you put your headphones on mid-call.
+        public static let callTalkHeight: CGFloat = 34
+        public static let callDeskHeight: CGFloat = 35
+        /// ...and once more for the den, for a third reason: his eyes are *closed*, and the
+        /// lids measure 30x22 — wide rather than small in both directions, so eye-width
+        /// normalisation rendered the whole clip about 30% short. Seen on screen: 17pt of tail
+        /// hanging out of the notch, which reads as a stub rather than a tail.
+        ///
+        /// Half the band is tail and half is the body that the cutout masks away, so this is
+        /// roughly twice the length of tail you want hanging below the lip.
+        public static let denSleepHeight: CGFloat = 50
         /// How far from a hole in his world he has to stand to be drawn whole. Half his
         /// nominal box, so it covers every pose rather than the one clip that happens to play
         /// there.

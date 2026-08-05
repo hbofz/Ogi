@@ -1621,7 +1621,10 @@ private func steppingOff() -> CatState {
 
     cat.listening = true
     cat = Cat.step(cat, world: world, dt: dt)
-    #expect(cat.activity == .alert)
+    // `.onCall` and not `.alert` since v3a: a live mic is a call and he joins it, wearing the
+    // boom mic. What this test is actually about is unchanged — the freeze still interrupts the
+    // edge tell, and the trip below still survives it.
+    #expect(cat.activity == .onCall)
     // The trip SURVIVES the freeze now, and this line used to assert the opposite. That was the
     // hot-mic bug written down as a requirement: clearing the intent here is exactly what
     // destroyed the walk out of the notch when the app launched during a call. What this test is

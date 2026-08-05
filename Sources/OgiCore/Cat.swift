@@ -71,6 +71,9 @@ public enum Activity: Sendable, Equatable {
     case droop      // powering down: the battery crossed properly low
     case curious    // head-tilt at a question mark: something plugged into the machine
     case alert      // frozen and listening: the mic went live
+    case onCall     // your mic or your camera is live, and he has joined in. See CatState.rig
+    case hang       // hanging off the notch's lower lip by his front paws, doing reps
+    case peerDown   // lying in the notch, head and paws over its lower lip, watching you
     case scruffed   // limp, legs tucked, dangling
     case righting   // the twist, mid-air
     case walk
@@ -108,6 +111,17 @@ public enum Move: Sendable, Equatable {
     /// bar's only lips are the screen corners, so stepping off it walked the whole bar and
     /// dropped a thousand points into a corner — windows were never stepping stones down.
     case drop(SurfaceID, CGFloat)
+    /// Walk in one notch doorway and out the other, to the far lip's x.
+    ///
+    /// The cutout is a hole in the *display*, not a hole in the *world*: there is real
+    /// aluminium behind it at exactly the height of the bar. `solid` excludes it because a cat
+    /// standing there is invisible, not because he is unsupported — `World.build` says so where
+    /// it punches the hole. So walking through is a truer model of the hardware than falling
+    /// through, and it is the only way the two halves of the menu bar were ever going to join up.
+    ///
+    /// No `SurfaceID`: a crossing never leaves the menu bar, so the parameter every other case
+    /// carries would be a constant here.
+    case crossNotch(CGFloat)
 }
 
 /// Where he is ultimately going, and the current step toward it. Nil means he is content
@@ -274,19 +288,50 @@ public struct CatState: Sendable {
     /// Frozen and listening because the microphone went live. Also a privacy indicator: if he
     /// has gone rigid, your mic is hot.
     public var listening = false
+    /// Your camera is live. The camera lives in the notch, so this is the one signal that can
+    /// throw him out of his own house — see `Den.barred`.
+    public var onCamera = false
     /// You are typing hard enough that he stays out of your way. Set by `App` with hysteresis
     /// (`Feel.Mind.typingAlert` to enter, `typingCalm` to leave) or he flickers at the boundary.
     public var typingHard = false
 
-    /// He holds completely still, for either reason.
+    /// Which drawing the call wears, or nil when this is not a call.
     ///
-    /// One condition rather than two parallel branches, because the behaviour is identical:
-    /// freeze, stay alert, keep the trip you were on. The two are still distinguishable to
-    /// watch, by how they end. A mic freeze holds for the length of the call; a typing freeze
-    /// relaxes the moment you pause. They do share the `alert` drawing, which slightly dilutes
-    /// the mic's value as a privacy indicator, and a second sheet is the fix if that ever
-    /// matters more than the sheet costs.
-    public var holdingStill: Bool { listening || typingHard }
+    /// The camera and the microphone are one event seen twice, so they share one pose and one
+    /// prop that assembles: a boom mic when you are talking, a laptop when you are on screen,
+    /// both when you are properly on a call. Derived rather than stored, so it can never
+    /// disagree with the two signals it is made of.
+    ///
+    /// This is also the fix for a v2 defect: the mic and fast typing shared the `alert`
+    /// drawing, so "ears up means your mic is hot" had quietly stopped being true. Typing keeps
+    /// `alert`; a live mic no longer looks like it.
+    public enum Rig: Sendable, Equatable { case talk, work, full }
+    public var rig: Rig? {
+        switch (listening, onCamera) {
+        case (true, true):   .full
+        case (true, false):  .talk
+        case (false, true):  .work
+        case (false, false): nil
+        }
+    }
+
+    /// He holds completely still, for any of three reasons.
+    ///
+    /// One condition rather than three parallel branches, because the behaviour is identical:
+    /// stop, keep the trip you were on, and wait. They stay distinguishable to watch, by the
+    /// drawing and by how they end — a typing freeze relaxes the moment you pause, a call holds
+    /// for the length of it.
+    ///
+    /// **The camera counts, which is new in v3a and is not only about the drawing.** The call
+    /// sheets have a laptop drawn into them, so they are only honest on a stationary cat; and a
+    /// video call is precisely the moment you do not want something scampering across your
+    /// windows. Restraint (MANIFESTO §3.4) argues for it independently of the art.
+    ///
+    /// **What "still" means moved slightly here.** v2's freeze meant a cat that does not move at
+    /// all. `callTalk` has him yapping, mouth and head. The invariant that matters is that he
+    /// stops *travelling*, and that is untouched: `perchSpeed` still goes to zero and he walks
+    /// nowhere. Only his head moves, in place.
+    public var holdingStill: Bool { listening || typingHard || onCamera }
 
     /// Your cursor, screen-global. Set by `App` each tick, and in practice never nil today:
     /// he is pinned to one screen and the global mouse location is always somewhere, so a
@@ -311,6 +356,49 @@ public struct CatState: Sendable {
     /// under his own menu bar item on a notchless Mac), so the simulation can act on "he
     /// belongs at home" without a stimulus carrying the x every time.
     public var homeX: CGFloat?
+
+    /// His position is inside the cutout: asleep in the den, hanging off its lower lip, or
+    /// lying in it looking down over that lip.
+    ///
+    /// The one place in his world where the ground model and the hardware disagree. `solid`
+    /// excludes the notch because a cat standing there is invisible, not because he is
+    /// unsupported — there is aluminium behind it at exactly the bar's height.
+    ///
+    /// **Stored rather than derived from `activity`, and that is not a style choice.** Derived,
+    /// every interrupt in `standing` became a trapdoor: the mic going live mid-hang swaps the
+    /// activity for `.onCall`, the flag evaporates with it, and the *next* tick's ground test —
+    /// which runs before anything that could have caught it — drops a cat out of the notch onto
+    /// the desktop, wearing a laptop. The freeze, the yield and the sleep gate all did it. Held
+    /// as state, the exemption outlives whatever took the behaviour away, and `standing` puts
+    /// him back on the lip in its own time. See `leaveNotch`.
+    public var inNotch = false
+
+    /// ...and asleep in there specifically, which is the one that changes the drawing.
+    public var inDen: Bool { inNotch && repose == .asleep }
+
+    /// May he still be in there? The three entitlements, in one place, so the check that pulls
+    /// him out cannot drift from the branches that put him in.
+    public var mayStayInNotch: Bool {
+        // About to do one. Waking up in the den owes him a hang instead of a stretch, and the
+        // check that pulls him out of the cutout runs *before* the owed show is consumed — so
+        // without this he would be hauled onto the lip on the very tick he was going to swing
+        // off it.
+        if owed == .hang || owed == .peerDown { return true }
+        if repose == .asleep { return !onCamera }
+        return activity == .hang || activity == .peerDown
+    }
+
+    /// Inside the cutout by any route, including passing through it.
+    ///
+    /// Exactly one thing depends on this — the ground test in the `.grounded` branch — and it
+    /// is deliberately a single named condition rather than checks in four places, because what
+    /// it means is one idea: the hole in `solid` is a hole in the *display*, not in the *world*,
+    /// and while he is in there he is standing on the camera housing.
+    public var insideNotch: Bool {
+        if inNotch { return true }
+        if case .crossNotch = intent?.move { return true }
+        return false
+    }
 
     /// A performance is owed: the wake-up stretch, or one of the machine-event pieces (the
     /// zap, the groove, the power-down, the curious look). Set by `App` on the edges only
@@ -669,7 +757,10 @@ public enum Cat {
             // the edge itself, below, so what reaches this is a surface that moved rather
             // than a cat that did.
             let standingOn = surface.extent.lowerBound + perch.dx
-            guard surface.solid.contains(where: { $0.contains(standingOn) }) else {
+            // `insideNotch` is the one exemption: the cutout is a hole in `solid` because
+            // nothing drawn there is visible, and this test would therefore drop a cat who is
+            // asleep in his den or halfway through the tunnel onto the desktop below.
+            guard s.insideNotch || surface.solid.contains(where: { $0.contains(standingOn) }) else {
                 s.support = .falling
                 s.activity = .slip
                 s.activityElapsed = 0
@@ -972,6 +1063,15 @@ public enum Cat {
         // speed the last one ended at, in whatever direction that happened to be.
         if s.intent == nil { s.perchSpeed = 0 }
 
+        // Something took the notch behaviour away from him while he was in there — the freeze,
+        // the yield, waking up, your camera coming on. `inNotch` exempts him from the ground
+        // test, so it cannot simply be dropped: he would be standing on a hole. He is put back
+        // on a lip and the flag goes with him, in that order.
+        //
+        // First in the function, before any of the branches that can cause it, so the exit is
+        // never more than one tick late.
+        if s.inNotch, !s.mayStayInNotch { leaveNotch(&s, on: surface, world: world) }
+
         // Frozen. Ears forward, tail dead still. He hears you, or you are typing hard enough
         // that the kind thing is to stay out of the way, and it doubles as a privacy indicator:
         // if he has gone rigid, your microphone is hot.
@@ -987,7 +1087,27 @@ public enum Cat {
         // the display link at 60Hz for the length of every call.
         if s.holdingStill {
             s.perchSpeed = 0
-            s.activity = .alert
+            // **The camera lives in the notch, and the notch is his house.** While it is running
+            // he does not get to stand in the doorway: half of him would be inside a cutout with
+            // no pixels behind it, and the call pose is the one he holds for the whole call.
+            //
+            // A place is barred; he is never summoned. If your call starts while he is at the
+            // other end of the screen he simply puts the headphones on where he is. The joke
+            // needs no script — being evicted is what puts him under the camera in the first
+            // place, because the doorway is where he was.
+            if s.onCamera, case .grounded(var perch) = s.support,
+               let den = denDoor(s, on: surface) {
+                let clear = den.standAt + den.out * Feel.Shape.clearance
+                if surface.solid.contains(where: { $0.contains(clear) }) {
+                    perch.dx = clear - surface.extent.lowerBound
+                    s.support = .grounded(perch)
+                    s.position.x = clear
+                    s.facing = den.out
+                }
+            }
+            // Typing alone is still the startled `alert` pose. A live mic or camera is a call,
+            // and he joins it. `rig` decides which of the three drawings that is.
+            s.activity = s.rig == nil ? .alert : .onCall
             return s
         }
         // Get out of the way. He is a click-through overlay whose window swallows mouse events
@@ -1029,6 +1149,31 @@ public enum Cat {
         if s.repose == .asleep {
             s.intent = nil
             s.activity = .sleep
+            // Asleep at the doorway, he goes all the way IN.
+            //
+            // Here, inside the hard stop, rather than down among the other resting behaviours,
+            // because this gate returns long before any of them run — which is exactly what the
+            // first version of this got wrong, and what `asleepAtTheDoorwayHeSleepsInsideTheCutout`
+            // now holds.
+            //
+            // This is the one place his position is allowed inside the cutout, and the whole
+            // reason `insideNotch` exists. His body sits above the bar line where the permanent
+            // occluder masks it away, so the entire visible animation is a tail hanging out of
+            // the hole and swaying — which is why `denSleep` was drawn with the tail as its
+            // lowest ink, and why its `footAnchor` is the join between the two.
+            //
+            // Sticky once entered, because `denDoor` asks what lies ahead on `solid` and by then
+            // he is standing in the hole in it: re-asking answers no on the very next tick and
+            // drops him. The clear at the top of this function is what keeps sticky from
+            // meaning stuck — he leaves the den the moment he wakes or your camera comes on.
+            if !s.onCamera, let notch = world.screen.notch,
+               s.inNotch || denDoor(s, on: surface) != nil {
+                let x = notch.midX
+                s.position.x = x
+                s.support = .grounded(Perch(id: surface.id, dx: x - surface.extent.lowerBound))
+                s.perchSpeed = 0
+                s.inNotch = true
+            }
             return s
         }
 
@@ -1130,6 +1275,7 @@ public enum Cat {
             // idea. Only ever swaps one waiting pose for another: a wash or a walk still wins.
             switch s.activity {
             case .groom, .lounge, .stretch, .peek, .peer, .zap, .vibe, .droop, .curious,
+                 .hang, .peerDown,
                  .land, .landHard, .brace: break   // busy; each times out on its own
             // Mid-glance at something that just appeared. `glanceLeft` is what tells this apart
             // from a STALE alert left over after the mic went quiet, which this branch has to go
@@ -1162,6 +1308,7 @@ public enum Cat {
                 s.activity = .peek
                 s.activityElapsed = 0
             }
+
 
             // While the screen is covered he belongs at the top, and that is a STANDING
             // ORDER rather than an event. The edge-triggered retreat alone was losable:
@@ -1220,6 +1367,29 @@ public enum Cat {
                 }
             }
 
+            // Off the notch, and back onto the bar.
+            //
+            // **Above the general hold below, and that ordering is load-bearing.** Both notch
+            // behaviours are in `inPlaceHold`, so the general branch would otherwise catch them
+            // first, hand him back his resting pose and leave him standing at `notch.midX` —
+            // where `insideNotch` has just gone false, so the ground test drops a cat who was
+            // hanging perfectly happily one tick ago. Anything that puts him inside the cutout
+            // has to own its own way out.
+            //
+            // He comes back out the side he went in, which `facing` remembers for free: it was
+            // pointed at his entry lip on the way in and nothing between turns him, because
+            // both clips are drawn head-on and never consult it.
+            if s.activity == .hang || s.activity == .peerDown {
+                if let hold = inPlaceHold(s.activity), s.activityElapsed > hold {
+                    leaveNotch(&s, on: surface, world: world)
+                    // The pull-up back over the lip. `land` is the same clip the peer-over uses
+                    // to haul itself up, for the same event.
+                    s.activity = .land
+                    s.activityElapsed = 0
+                }
+                return s
+            }
+
             // Mid-performance: a wash, a lounge, a stretch, or one of the event pieces.
             // Held for its spell, then settled back. Everything that actually matters —
             // the freeze, the yield, sleep, being hidden — already returned before this.
@@ -1276,11 +1446,34 @@ public enum Cat {
                 // ...and a stirred-up cat is likelier to go somewhere than to wash.
                 let inPlace = s.repose.inPlaceChance * (1 - s.arousal * Feel.Mind.travelUrgency)
                 if Double.random(in: 0...1) < inPlace {
-                    // Usually a wash, sometimes a stretch: manifesto §7.1 wants more than
-                    // one in-place behaviour, and until the stretch the wash was the only
-                    // one that existed.
-                    s.activity = Double.random(in: 0...1) < Feel.Timing.stretchChance
-                        ? .stretch : .groom
+                    // Standing at a notch lip there are two things to do that exist nowhere
+                    // else on the screen, both of them the same geometric fact used twice: the
+                    // cutout is a hole in `solid` sitting above the bar line, so the one
+                    // stretch of ledge he cannot STAND on is the only stretch he can hang from
+                    // or lie in.
+                    //
+                    // In the in-place branch rather than as a taste candidate, because the
+                    // election scores *places to go* and this is something to do where he
+                    // already is. It is rarer than `lipIdeaChance` suggests: reaching it at all
+                    // needs boredom to come up in-place while he happens to be at a doorway.
+                    if let notch = world.screen.notch, denDoor(s, on: surface) != nil,
+                       Double.random(in: 0...1) < Feel.Notch.lipIdeaChance {
+                        // Facing back at the lip he came from, which is how he finds his way
+                        // out again — see the exit above.
+                        s.facing = s.position.x > notch.midX ? 1 : -1
+                        s.position.x = notch.midX
+                        s.support = .grounded(
+                            Perch(id: surface.id, dx: notch.midX - surface.extent.lowerBound))
+                        s.perchSpeed = 0
+                        s.inNotch = true
+                        s.activity = Bool.random() ? .hang : .peerDown
+                    } else {
+                        // Usually a wash, sometimes a stretch: manifesto §7.1 wants more than
+                        // one in-place behaviour, and until the stretch the wash was the only
+                        // one that existed.
+                        s.activity = Double.random(in: 0...1) < Feel.Timing.stretchChance
+                            ? .stretch : .groom
+                    }
                     s.activityElapsed = 0
                 } else if !s.screenCovered,
                           let choice = idea(from: s, on: surface, world: world) {
@@ -1554,6 +1747,32 @@ public enum Cat {
             s.activity = .walk
             advance(&s, on: far)
 
+        case .crossNotch(let farX):
+            // Squeezing past the camera housing, in the dark, between the two lips of the
+            // cutout. A plain walk with a lower ceiling and none of the edge machinery: there
+            // is no lip inside the tunnel to look over, and `insideNotch` is already holding
+            // the ground test off him for the duration.
+            //
+            // No acceleration ramp either, unlike `.walk`. He entered this at a walk and comes
+            // out of it at one; the whole crossing is shorter than the wind-up would be.
+            let dx = farX - s.position.x
+            let top = Feel.Physics.walkSpeed * Feel.Notch.squeezeFactor
+            s.hurrying = false
+            s.activity = .walk
+            if abs(dx) > Feel.Physics.arrivalSlop {
+                s.facing = dx > 0 ? 1 : -1
+                s.perchSpeed = top * s.facing
+                s.position.x += min(abs(dx), top * CGFloat(dt)) * s.facing
+                s.support = .grounded(
+                    Perch(id: surface.id, dx: s.position.x - surface.extent.lowerBound))
+            } else {
+                // Out the far side and standing on real ground again.
+                s.position.x = farX
+                s.perchSpeed = 0
+                s.support = .grounded(Perch(id: surface.id, dx: farX - surface.extent.lowerBound))
+                advance(&s, on: surface)
+            }
+
         case .climb(let destID, _):
             // In position under the face. Same crouch as a jump — the wind-up is the whole
             // difference between a cat and a teleporting rectangle — and the same reason for
@@ -1652,6 +1871,8 @@ public enum Cat {
         case .vibe: return Feel.Timing.vibeSeconds
         case .droop: return Feel.Timing.droopSeconds
         case .curious: return Feel.Timing.curiousSeconds
+        case .hang: return Feel.Notch.hangSeconds
+        case .peerDown: return Feel.Notch.peerDownSeconds
         default: return nil
         }
     }
@@ -1736,8 +1957,12 @@ public enum Cat {
     public static func nextMove(from s: CatState, on surface: Surface,
                                 toward destID: SurfaceID, x destX: CGFloat,
                                 world: Skyline, mayWalk: Bool = true) -> Move? {
-        // Already there: just walk.
-        if destID == surface.id { return .walk(destX) }
+        // Already there: just walk — unless the cutout is in the way, in which case it is a
+        // tunnel rather than a wall and he goes through it.
+        if destID == surface.id {
+            return notchCrossing(from: s.position.x, to: destX, on: surface, world: world)
+                ?? .walk(destX)
+        }
 
         guard let dest = world.surface(destID) else { return nil }
         let here = s.position
@@ -2378,6 +2603,67 @@ public enum Cat {
     }
 
     /// Does the surface resume past that edge? Then it is a hole, not the end of it.
+    /// Back out of the cutout and onto a lip, wherever he was in there and whatever ended it.
+    ///
+    /// One function because four things can end a stay in the notch — the hold expiring, the
+    /// freeze, the yield, waking up — and every one of them has to reposition him, not merely
+    /// stop the behaviour. Standing inside the hole is legal only while `inNotch` says so, and
+    /// clearing that without moving him is the trapdoor described on `CatState.inNotch`.
+    ///
+    /// He comes back out the side he went in, which `facing` remembers for free: it was pointed
+    /// at his entry lip on the way in, and neither notch clip consults it, both being drawn
+    /// head-on. Falls back to the other lip if his own has been inset away by a screen edge.
+    static func leaveNotch(_ s: inout CatState, on surface: Surface, world: Skyline) {
+        s.inNotch = false
+        guard let notch = world.screen.notch else { return }
+        let goRight = s.facing > 0
+        let near = goRight ? notch.maxX + Feel.Shape.clearance
+                           : notch.minX - Feel.Shape.clearance
+        let far = goRight ? notch.minX - Feel.Shape.clearance
+                          : notch.maxX + Feel.Shape.clearance
+        let x = surface.solid.contains(where: { $0.contains(near) }) ? near : far
+        guard surface.solid.contains(where: { $0.contains(x) }) else { return }
+        s.position.x = x
+        s.support = .grounded(Perch(id: surface.id, dx: x - surface.extent.lowerBound))
+        s.perchSpeed = 0
+    }
+
+    /// Going through the cutout rather than stopping at it.
+    ///
+    /// Until v3a the notch made the menu bar two ledges that could not reach each other. `isGap`
+    /// reads the hole as a wall, correctly — walking *into* it is walking into a region with no
+    /// pixels — but there was nothing that read it as a doorway either, so the far half of the
+    /// bar was only ever reachable by going down onto a window and back up.
+    ///
+    /// Returns nil unless the cutout lies strictly between him and where he is going, so on a
+    /// notchless Mac and on every surface that does not reach the cutout this costs one optional
+    /// unwrap and disappears.
+    ///
+    /// The vertical test is the same one `World.punchNotch` uses to decide the hole exists at
+    /// all, and it must stay that way: this is only legal on a ledge whose `solid` actually has
+    /// the notch subtracted from it, and a fullscreen window's top edge is one of those too.
+    static func notchCrossing(from x: CGFloat, to destX: CGFloat,
+                              on surface: Surface, world: Skyline) -> Move? {
+        guard let notch = world.screen.notch,
+              surface.y < notch.maxY, surface.y + Feel.Shape.height > notch.minY,
+              // Inclusive on both lips, because standing ON the near one is the normal way to
+              // arrive here: the two-stage walk below aims at exactly `notch.minX`, and a
+              // strict test made the second stage unreachable — he walked to the doorway and
+              // then re-planned a walk to a destination he could not get to.
+              min(x, destX) <= notch.minX, notch.maxX <= max(x, destX) else { return nil }
+        let goingRight = destX > x
+        let nearLip = goingRight ? notch.minX : notch.maxX
+        let farLip = goingRight ? notch.maxX : notch.minX
+        // The tunnel has to open onto something. Both lips are the bounds of the runs either
+        // side, so this is normally true and is here for the screen edge case where the cutout
+        // is not centred and one side has been inset away to nothing.
+        guard surface.solid.contains(where: { $0.contains(farLip) }) else { return nil }
+        // Walk to the doorway first, then step in. Same two-stage shape as `stepAcross`, and
+        // for the same reason: the entry has to start from the lip or he clips the housing.
+        return abs(x - nearLip) <= Feel.Physics.arrivalSlop * 3
+            ? .crossNotch(farLip) : .walk(nearLip)
+    }
+
     static func isGap(at x: CGFloat, facing: CGFloat, on surface: Surface) -> Bool {
         surface.solid.contains { facing > 0 ? $0.lowerBound > x : $0.upperBound < x }
     }

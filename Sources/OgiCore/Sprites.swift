@@ -26,6 +26,9 @@ public enum Sprites {
         case lounge, stretch
         case peer
         case zap, vibe, droop, curious
+        // v3a, the notch and the call.
+        case callTalk, callWork, callFull
+        case denSleep, hang, peerDown
 
         var count: Int {
             switch self {
@@ -55,6 +58,10 @@ public enum Sprites {
             // on the jolt now, which is what a surprise looks like.
             case .zap: 5
             case .vibe, .droop, .curious: 6
+            case .callTalk: 6
+            case .callWork, .callFull: 4
+            case .denSleep, .peerDown: 4
+            case .hang: 6
             }
         }
 
@@ -96,6 +103,16 @@ public enum Sprites {
             case .vibe: 4       // a groove, looping until the spell ends
             case .droop: 5      // powering down decelerates into the flat last frame
             case .curious: 6    // a head-tilt has to read; the settled last frame holds
+            // Fast enough that the mouth reads as speech rather than a twitch. The head bob
+            // is what actually carries it at his size, and it moves on the same clock.
+            case .callTalk: 6
+            // Typing. Two paws alternating, so a full cycle is four frames and this is about
+            // three keystrokes a second, which is a cat pretending to work rather than a
+            // person actually working.
+            case .callWork, .callFull: 8
+            case .denSleep: 2.5   // breathing and a tail, like sleep, which is what it is
+            case .hang: 6         // a rep takes two thirds of a second
+            case .peerDown: 4     // a nosy look down, a shade quicker than peer's 2.5
             }
         }
 
@@ -107,8 +124,15 @@ public enum Sprites {
             // lounge loops: a sprawl is a spell, and its breath cycles back to frame 1.
             // vibe loops: he grooves until the spell ends, and its last frame returns to
             // the first's pose so the seam is invisible.
+            // The three call clips loop: he is on the call until you are not, and each sheet's
+            // last frame returns to the first's pose so the seam is invisible.
+            // denSleep loops: it is the sleep clip with a tail, and it breathes.
+            // hang loops, but only its tail — see `index`, where frames 0 and 1 are him
+            // lowering himself over the lip and play once.
+            // peerDown loops: a nosy look is a spell, like peer's.
             case .walk, .run, .idle, .sleep, .held, .alert, .groom, .cling, .climbUp,
-                 .lounge, .peer, .vibe: true
+                 .lounge, .peer, .vibe,
+                 .callTalk, .callWork, .callFull, .denSleep, .hang, .peerDown: true
             // curl settles into the sleep pose and holds it until sleep takes over.
             // lookDown holds its last frame too: he leans out over the lip and stays there
             // while he thinks. The hold IS the tell, so it must not cycle back to standing.
@@ -149,7 +173,8 @@ public enum Sprites {
     }
 
     public static func frame(for cat: CatState, pose: Body.Pose) -> Frame {
-        let c = clip(for: cat.activity, dangling: pose.dangling, hurrying: cat.hurrying)
+        let c = clip(for: cat.activity, dangling: pose.dangling, hurrying: cat.hurrying,
+                     rig: cat.rig, inDen: cat.inDen)
         let i = index(c, activity: cat.activity,
                       walkPhase: pose.walkPhase, elapsed: cat.activityElapsed)
         return Frame(clip: c, index: i, size: size(c, i), anchor: footAnchor(c))
@@ -173,9 +198,26 @@ public enum Sprites {
     }
 
     /// Which animation a given behaviour plays.
-    public static func clip(for activity: Activity, dangling: Bool, hurrying: Bool = false) -> Clip {
+    ///
+    /// `rig` and `inDen` are the two cases where one behaviour has more than one drawing.
+    /// A call is one state wearing one of three sets of equipment, and sleeping is one state
+    /// drawn differently in the one place his body is invisible. Both are passed in rather
+    /// than split into extra `Activity` cases, because neither changes what he is *doing*.
+    public static func clip(for activity: Activity, dangling: Bool, hurrying: Bool = false,
+                            rig: CatState.Rig? = nil, inDen: Bool = false) -> Clip {
         if dangling { return .held }
         switch activity {
+        case .onCall:
+            switch rig {
+            case .talk:      return .callTalk
+            case .work:      return .callWork
+            case .full:      return .callFull
+            // Unreachable: `Cat.step` only sets `.onCall` when `rig` is non-nil. `alert` is the
+            // honest fallback rather than a crash, since it is the pose the call replaced.
+            case .none:      return .alert
+            }
+        case .hang:                 return .hang
+        case .peerDown:             return .peerDown
         case .walk:                 return hurrying ? .run : .walk
         case .turn:                 return .turn
         case .edgeLook:             return .lookDown
@@ -194,7 +236,9 @@ public enum Sprites {
         case .land:                 return .land
         case .sit:                  return .sitdown
         case .curl:                 return .curl
-        case .sleep:                return .sleep
+        // Asleep in the den, his body is inside the cutout and masked away, so the whole of
+        // the animation you can see is a tail hanging below the bar line and swaying.
+        case .sleep:                return inDen ? .denSleep : .sleep
         case .lounge:               return .lounge
         case .stretch:              return .stretch
         case .peer:                 return .peer
@@ -235,11 +279,23 @@ public enum Sprites {
             }
             let after = Int((elapsed - Feel.Timing.zapBuzzSeconds) * clip.fps)
             return min(buzzFrames + after, clip.count - 1)
+        case .hang:
+            // Frames 0 and 1 are him lowering himself over the lip, and they play once. The
+            // rep is frames 2 to 5 and loops. Same shape as `jump`, which skips its own
+            // wind-up frames for exactly the same reason: a prefix that is a transition
+            // rather than part of the cycle.
+            let raw = Int(elapsed * clip.fps)
+            guard raw >= lowerInFrames else { return raw }
+            return lowerInFrames + (raw - lowerInFrames) % (clip.count - lowerInFrames)
         default:
             let raw = Int(elapsed * clip.fps)
             return clip.loops ? raw % clip.count : min(raw, clip.count - 1)
         }
     }
+
+    /// How many frames of `hang` are him getting into it rather than doing it. Named because
+    /// `index` and `theHangLowersInBeforeItLoops` both need the same number.
+    static let lowerInFrames = 2
 
     /// Which way to flip the drawing: +1 for the sheet as drawn, -1 mirrored.
     ///
@@ -291,6 +347,31 @@ public enum Sprites {
         // would snap him up or down the face at that instant. `theClimbAndTheClingHangFromTheSamePoint`
         // pins them together.
         case .climbUp: return 0.875
+        // Hanging off the notch's lower lip by his front paws. Same situation as `cling`:
+        // the fixed point is his grip, not his feet, and a bottom-of-ink reading would find
+        // his dangling back legs and hang him upside down under the menu bar.
+        //
+        // Measured off the cut sheet: the top of the ink sits 11px into a 598px band on five
+        // of the six frames and 0px on the pulled-up one, so his paws are at 0.982-1.0 and
+        // this is the low end of that. `theHangGripsAtTheTopOfItsBand` holds it to the sheet.
+        case .hang: return 0.982
+        // His head and his two paws hang below the notch's bottom lip and the rest of him is
+        // inside the cutout, where the permanent occluder masks him away. So the point pinned
+        // to his world position is **the top of his head**, and the lip is the line it sits on.
+        //
+        // 0.908 is the top of the ink on the two ears-down frames of a 413px band. The two
+        // ears-up frames reach 0.998, and that difference is the point rather than drift: on
+        // those his ear tips cross the lip and the mask eats them, which is what being inside
+        // a hole looks like. Anchoring at the ears instead would bob the whole head by 37px.
+        case .peerDown: return 0.908
+        // Curled asleep inside the cutout with his tail hanging out of it. His body is above
+        // the bar line and masked; the tail below it is the entire animation you can see. The
+        // anchor is therefore where the body stops and the tail starts, so that the bar line
+        // falls exactly there.
+        //
+        // Row 248 of a 500px band, and it is row 248 on all four frames — the sheet holds his
+        // body still to the pixel while the tail swings, which is what it was asked for.
+        case .denSleep: return 0.504
         default:    return 0
         }
     }
@@ -428,11 +509,10 @@ public enum Sprites {
     /// sheets disagree about the other half. See `sheetCorrection`.
     static func clipScale(_ clip: Clip) -> CGFloat {
         if let s = scaleCache[clip.rawValue] { return s }
-        // peer is normalised on ink height instead: a front-facing head-shot's eyes are
-        // stylistically huge, and keying on them renders the whole peeking head at nine
-        // points. See `Feel.Shape.peerHeight`.
-        if clip == .peer, let img = image(clip, 0) {
-            let s = Feel.Shape.peerHeight / CGFloat(img.height)
+        // Some sheets cannot be measured by their eyes at all, and are given their band height
+        // outright instead. See `bandHeight` for which and why.
+        if let target = bandHeight(clip), let img = image(clip, 0) {
+            let s = target / CGFloat(img.height)
             scaleCache[clip.rawValue] = s
             return s
         }
@@ -451,6 +531,46 @@ public enum Sprites {
         }
         scaleCache[clip.rawValue] = scale
         return scale
+    }
+
+    /// On-screen band height, in points, for the sheets whose eyes cannot be used as the
+    /// yardstick. Nil means eye width, which is every other clip.
+    ///
+    /// **Two different failures both land here**, and it is worth keeping them straight because
+    /// they suggest different fixes if a sheet is ever redrawn.
+    ///
+    /// *Drawn head-on* (`peer`, `peerDown`, `hang`): his eyes are stylistically huge from the
+    /// front, so dividing a fixed reference width by the measured eye renders the whole clip
+    /// tiny. `peer` proved it by arriving at nine points tall. The rule is "a front view must
+    /// bring its own yardstick", not "no front views".
+    ///
+    /// *Wearing a dark prop* (`callTalk`, `callWork`, `callFull`): `eyes()` finds whatever
+    /// contrasts hardest with the fur, and on a ginger cat that is whatever is darkest. A matte
+    /// dark-grey headset sits against his eye and a matte dark-grey laptop sits under his paw,
+    /// and both are darker and far bigger than he is. Measured, `callTalk`'s "eye" came back as
+    /// **126x172** (the headset) and `callWork`'s as **314x191** (the laptop), rendering both
+    /// clips at **three points tall**. The `count * 6 < ink` guard in `eyes()` is meant to stop
+    /// exactly this and does not, because a laptop really is under a sixth of the drawing.
+    ///
+    /// **So: any future sheet with a dark prop on it belongs here from the start.** Do not try
+    /// to teach `eyes()` the difference. A prop drawn beside his eye in his eye's own colour is
+    /// not separable by contrast, which is the only signal that function has.
+    ///
+    /// Every number is a **tune-by-eye knob**, sized so the cat matches the cat in the
+    /// side-view clips. None has been seen on screen.
+    static func bandHeight(_ clip: Clip) -> CGFloat? {
+        switch clip {
+        case .peer:     Feel.Shape.peerHeight
+        case .peerDown: Feel.Shape.peerDownHeight
+        case .hang:     Feel.Shape.hangHeight
+        case .callTalk: Feel.Shape.callTalkHeight
+        case .callWork, .callFull: Feel.Shape.callDeskHeight
+        // *Eyes closed* (`denSleep`): the third way this measurement fails. A shut lid is a
+        // wide flat blob, so dividing the reference width by it renders the clip short — 17pt
+        // of tail out of the notch on screen, which reads as a stub.
+        case .denSleep: Feel.Shape.denSleepHeight
+        default:        nil
+        }
     }
 
     /// A per-sheet correction on top of the eye-width normalisation, for the sheets that drew

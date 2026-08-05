@@ -190,8 +190,22 @@ public enum World {
         // surface's top edge (its underside is the menu bar line, and the bar's own hole is cut
         // structurally out of `solid` below), so letting it carve walkable spans would delete
         // ground for no reason beyond which array it happened to be added to.
-        let occluders = screen.notch.map { [Occluder(rect: $0, z: -2, layer: 0)] + fromWindows }
-            ?? fromWindows
+        // ...and it is extended DOWN to the menu bar line before being used as one.
+        //
+        // `safeAreaInsets.top` and the menu bar's own height disagree by a point on real
+        // hardware — measured 37 against 38 on an M2 — so the cutout's underside sits one point
+        // ABOVE the line he walks on. That leaves a one-point seam of live pixels under the
+        // hole, and a cat standing in it (crossing the tunnel, or asleep in the den) shows as a
+        // thin orange line under the notch. Seen on screen while verifying the crossing.
+        //
+        // Extending the occluder cannot hide anything it should not: everything v3a draws under
+        // there hangs BELOW the bar line by construction — the tail, the dangling body, the
+        // head and paws — and the seam is the only thing between the two numbers.
+        let occluders = screen.notch.map { n -> [Occluder] in
+            let bottom = min(n.minY, screen.visibleFrame.maxY)
+            let sealed = CGRect(x: n.minX, y: bottom, width: n.width, height: n.maxY - bottom)
+            return [Occluder(rect: sealed, z: -2, layer: 0)] + fromWindows
+        } ?? fromWindows
         let screenSpan = screen.visibleFrame.minX...screen.visibleFrame.maxX
 
         /// Where he can stand and still be drawn whole, as opposed to where the desktop

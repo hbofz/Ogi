@@ -405,7 +405,7 @@ private func twoLedges() -> Skyline {
     cat.listening = true
 
     for _ in 0..<(120 * 5) { cat = Cat.step(cat, world: sky([bar]), dt: dt) }
-    #expect(cat.activity == .alert)
+    #expect(cat.activity == .onCall)
     #expect(cat.intent?.destinationX == 804, "the mic ate where he was going")
     #expect(abs(cat.position.x - 900) < 1, "he moved while frozen")
 
@@ -567,7 +567,7 @@ private func twoLedges() -> Skyline {
 
     for _ in 0..<(120 * 5) { cat = Cat.step(cat, world: sky([bar]), dt: dt) }
     #expect(abs(cat.position.x - 900) < 1, "he moved during a call")
-    #expect(cat.activity == .alert)
+    #expect(cat.activity == .onCall)
 }
 
 // MARK: - Task 10: going home
@@ -659,7 +659,7 @@ private func twoLedges() -> Skyline {
     cat.owed = .stretch
     cat.listening = true
     for _ in 0..<120 { cat = Cat.step(cat, world: sky([bar]), dt: dt) }
-    #expect(cat.activity == .alert)
+    #expect(cat.activity == .onCall)
     #expect(cat.owed == .stretch, "the freeze ate the stretch")
 
     cat.listening = false
@@ -891,11 +891,14 @@ private func twoLedges() -> Skyline {
     cat.support = .grounded(Perch(id: .menuBar, dx: 300))
     cat.listening = true
     for _ in 0..<(120 * 2) { cat = Cat.step(cat, world: sky([bar]), dt: dt) }
-    #expect(cat.activity == .alert, "fixture: the mic should have frozen him")
+    #expect(cat.activity == .onCall, "fixture: the mic should have frozen him")
 
     cat.listening = false
     cat = Cat.step(cat, world: sky([bar]), dt: dt)
-    #expect(cat.activity != .alert, "he stayed bolt upright after the mic went quiet")
+    // Since v3a the stale pose is `.onCall` rather than `.alert`, and it has to be cleared for
+    // the same reason: the hold-still branch returns early, so nothing else would.
+    #expect(cat.activity != .onCall && cat.activity != .alert,
+            "he stayed in the call pose after the mic went quiet")
 }
 
 @Test func aGlanceDoesNotInterruptAWalkHeIsAlreadyOn() {

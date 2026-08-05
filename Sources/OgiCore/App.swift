@@ -158,6 +158,23 @@ public final class OgiApp: NSObject, NSApplicationDelegate {
                     self?.log("debug zap owed")
                 }
             }
+            // ...and the same for v3a's notch behaviours, for a sharper reason than
+            // convenience. **A screenshot cannot show what the notch hides**: `screencapture`
+            // fills the cutout with the wallpaper, so a cat drawn inside it looks correct in
+            // the PNG and is invisible on the real panel. Every one of these has to be judged
+            // by a person looking at the hardware, and waiting for boredom to roll a hang at a
+            // doorway is not a way to do that. `notch=<hang|peer|den|cross>`.
+            DistributedNotificationCenter.default().addObserver(
+                forName: .init("com.ogi.debug.notch"), object: nil, queue: .main) { [weak self] n in
+                // Read off the notification BEFORE hopping actors: `Notification` is not
+                // Sendable and capturing one in a main-actor closure is a data race. A String
+                // is.
+                let what = n.object as? String
+                MainActor.assumeIsolated {
+                    guard let self, let what else { return }
+                    self.forceNotchBehaviour(what)
+                }
+            }
         }
 
         poll(force: true)
@@ -166,6 +183,75 @@ public final class OgiApp: NSObject, NSApplicationDelegate {
 
         let g = ScreenGeometry(screen)
         log("screen=\(g.frame) visible=\(g.visibleFrame) notch=\(g.notch.map { "\($0)" } ?? "none")")
+    }
+
+    /// Puts him into one of v3a's notch behaviours on demand, for OGI_DEBUG builds only.
+    ///
+    /// Not a shortcut around the real triggers — they are tested — but the only way a person
+    /// can *look* at these. Three of the four are invisible to `screencapture` by construction,
+    /// since the cutout comes back as wallpaper in a PNG, so judging them means being sat in
+    /// front of the machine when they run.
+    private func forceNotchBehaviour(_ what: String) {
+        guard let notch = skyline.screen.notch, let bar = skyline.surface(.menuBar) else {
+            log("debug notch: no notch on this screen")
+            return
+        }
+        // "wake" is the one command that must not reposition him or clear `inNotch`: the whole
+        // point is to watch what he does on coming out of the den, which is the swing-out.
+        if what == "wake" {
+            debugRepose = nil
+            leaveSlumber()
+            log("debug wake, owed \(cat.owed.map { "\($0)" } ?? "nothing")")
+            return
+        }
+
+        overlay.resume()
+        leaveSlumber()
+        debugRepose = nil
+        debugCall = nil
+        cat.repose = .awake
+        cat.intent = nil
+        cat.inNotch = false
+
+        func stand(at x: CGFloat) {
+            cat.position = CGPoint(x: x, y: bar.y)
+            cat.support = .grounded(Perch(id: .menuBar, dx: x - bar.extent.lowerBound))
+            cat.perchSpeed = 0
+        }
+
+        switch what {
+        case "hang", "peer":
+            stand(at: notch.midX)
+            cat.inNotch = true
+            cat.facing = -1
+            cat.activity = what == "hang" ? .hang : .peerDown
+        case "den":
+            stand(at: notch.midX)
+            cat.inNotch = true
+            // Pinned, not merely set: `tick` re-derives `repose` from your idle time on every
+            // frame, so this has to outlast the next one. Cleared by any other debug command.
+            debugRepose = .asleep
+            cat.repose = .asleep
+            cat.activity = .sleep
+        // The three call rigs, without needing a call. `Signals` re-derives both flags every
+        // tick from the real devices, so these have to be pinned the way the den is.
+        case "talk", "work", "full":
+            stand(at: notch.minX - Feel.Shape.clearance * 2)
+            debugCall = (mic: what != "work", camera: what != "talk")
+            cat.activity = .onCall
+        case "cross":
+            stand(at: notch.minX)
+            cat.facing = 1
+            cat.intent = Intent(destination: .menuBar,
+                                destinationX: notch.maxX + Feel.Shape.clearance * 4,
+                                move: .crossNotch(notch.maxX))
+            cat.activity = .walk
+        default:
+            log("debug notch: unknown '\(what)'")
+            return
+        }
+        cat.activityElapsed = 0
+        log("debug notch \(what) at x=\(cat.position.x)")
     }
 
     /// Optional, and deliberately not defaulted: a screen whose ID cannot be read must match
@@ -287,6 +373,11 @@ public final class OgiApp: NSObject, NSApplicationDelegate {
     /// what the retreats and the goodbye actually use.
     private var homeX: CGFloat?
     private var leaving = false
+    /// OGI_DEBUG only. Holds `repose` and the two call signals against the per-tick
+    /// re-derivation, so a forced state can be looked at for longer than one frame. Both are
+    /// nil in every shipping build.
+    private var debugRepose: Repose?
+    private var debugCall: (mic: Bool, camera: Bool)?
 
     /// Where he goes to be gone. The notch doorway when he came out of one; under his own
     /// menu bar item otherwise, because that is the one piece of him always in the bar and
@@ -410,8 +501,17 @@ public final class OgiApp: NSObject, NSApplicationDelegate {
         }
         // Restless mode keeps him awake as well as impatient, or he simply sits down after
         // 30s of you not touching the machine and there is nothing to watch.
-        cat.repose = Feel.Timing.restless ? .awake : Repose.from(idleSeconds: sense.idleSeconds)
-        cat.listening = sense.micLive
+        // `debugRepose` is set only by the notch harness, and only in OGI_DEBUG builds. Without
+        // it the forced den lasted exactly zero ticks: this line rewrites `repose` every frame
+        // from your HID idle time, so "put him to sleep in the notch so I can look at it" was
+        // overwritten before `Cat.step` ever saw it. Under OGI_RESTLESS it is overwritten with
+        // `.awake` unconditionally, which is worse.
+        cat.repose = debugRepose
+            ?? (Feel.Timing.restless ? .awake : Repose.from(idleSeconds: sense.idleSeconds))
+        cat.listening = debugCall?.mic ?? sense.micLive
+        // The camera lives in the notch. This is what bars him from his own den for the length
+        // of a call, and what puts the headphones on him.
+        cat.onCamera = debugCall?.camera ?? sense.cameraLive
         // Typing hard enough that the kind thing is to stay out of your way. Two thresholds, or
         // he flickers in and out of the pose at every pause for breath.
         cat.typingHard = cat.typingHard
@@ -460,6 +560,25 @@ public final class OgiApp: NSObject, NSApplicationDelegate {
         // merely do less per fire. Since the battery cost of a desktop pet is wakeups
         // rather than pixels, "less work per wakeup" is not the fix — stopping is.
         if cat.repose == .asleep, !cat.isMoving, cat.intent == nil {
+            // One last frame, and then the clock stops.
+            //
+            // This branch used to return without stepping or drawing, which meant **the sleep
+            // pose was never rendered at all**: the last thing on screen was whatever the tick
+            // before had drawn. v2 got away with it because `curl` ends on the sleep pose by
+            // design, so the frozen final frame of the curl looked exactly like a sleeping cat.
+            //
+            // v3a does not get away with it. Falling asleep at the doorway is supposed to move
+            // him *into* the cutout and swap the sheet for `denSleep`, and both of those happen
+            // inside `Cat.step` — which was never called. The den was unreachable, and the
+            // reason was an ordering rather than anything about the den.
+            //
+            // Costs one step and one draw, once, on the tick he settles. The zero-wakeup
+            // guarantee is untouched: `enterSlumber` still stops the display link outright and
+            // this branch cannot run twice, being guarded by `slumberTimer`.
+            if slumberTimer == nil {
+                stepPhysics(now)
+                renderNow()
+            }
             enterSlumber()
             return
         }
@@ -651,8 +770,15 @@ public final class OgiApp: NSObject, NSApplicationDelegate {
         slumberTimer?.cancel()
         slumberTimer = nil
         lastTick = 0            // do not integrate the whole nap in one step
-        // He was asleep too: one stretch before life resumes.
-        cat.owed = .stretch
+        // He was asleep too: one stretch before life resumes — unless he spent the nap in the
+        // notch, in which case he swings out of it and does a couple of pull-ups instead.
+        //
+        // Hamzah's idea, and it is the better trigger: the hang was reachable only through a
+        // boredom roll that also required him to be standing within 35pt of a doorway, which
+        // almost never coincided. Waking up in the den is the one moment both are true by
+        // construction, and it turns a rare accident into the thing you see every time you come
+        // back to a film.
+        cat.owed = cat.inNotch ? .hang : .stretch
         overlay.resume()
         log("awake")
     }

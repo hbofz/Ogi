@@ -223,7 +223,7 @@ final class OgiView: NSView {
         // The z's rise well above his head, and `applyOcclusion` masks everything to this rect,
         // so leaving them out of it means they vanish the moment any window overlaps him —
         // which is most of the time, since he sleeps on a window edge.
-        let sleepRect = cat.activity == .sleep
+        let sleepRect = cat.activity == .sleep && !cat.inDen
             ? CGRect(x: cat.position.x - size.width, y: cat.position.y,
                      width: size.width * 2, height: size.height * 2.4)
             : bodyRect
@@ -290,7 +290,10 @@ final class OgiView: NSView {
         shadowLayer.path = Body.shadow(width: size.width, height: h)
         shadowLayer.position = CGPoint(x: cat.position.x - origin.x,
                                        y: cat.position.y - h - origin.y)
-        shadowLayer.opacity = Float(Body.shadowOpacity(height: h))
+        // Nothing to cast onto inside the cutout. His world position up there is his grip on
+        // the lip or the line his tail hangs through, not a pair of feet on a ledge, so a
+        // contact shadow would be an ellipse floating in the notch's mouth.
+        shadowLayer.opacity = cat.insideNotch ? 0 : Float(Body.shadowOpacity(height: h))
 
         drawSleepiness(cat, size: size, in: padded)
 
@@ -308,7 +311,11 @@ final class OgiView: NSView {
     /// Three of them, evenly staggered across one rise, so there is always one faint near the
     /// top and one just appearing. Each grows and fades as it goes, which reads as distance.
     private func drawSleepiness(_ cat: CatState, size: CGSize, in padded: CGRect) {
-        guard cat.activity == .sleep else {
+        // Not in the den. The z's start just above his head, and asleep in the cutout his head
+        // is inside a hardware hole with no pixels behind it, so every one of them would rise
+        // into the dark and never be seen. The tail swaying below the lip is the sleep tell
+        // there, and it is a better one, being the only thing on screen.
+        guard cat.activity == .sleep, !cat.inDen else {
             zzzLayer.path = nil
             return
         }

@@ -198,6 +198,51 @@ private func report(_ title: String, _ world: Skyline, runs: Int, seconds: Doubl
     }
 }
 
+/// v3a, N5. **The menu bar is one ledge again.**
+///
+/// Until the tunnel, the cutout made the bar two runs that could not reach each other: `isGap`
+/// reads the hole as a wall, correctly, and nothing read it as a doorway. The far half was only
+/// ever reachable by climbing down onto a window and back up, which on a bare desktop is not
+/// reachable at all — `jumpImpulse` buys 190pt of rise against a thousand-point drop.
+///
+/// So this probe cannot pass before N5 and must pass after it. It is the clearest single
+/// statement of what the branch bought.
+@Test(.enabled(if: ProcessInfo.processInfo.environment["OGI_PROBE"] != nil))
+func PROBE_theBarIsOneLedgeAgain() {
+    let world = bareDesktop()
+    let notch = probeScreen.notch!
+    let runs = 40, seconds = 600.0
+    let dt = Feel.Timing.fixedDT
+    var crossed = 0
+    var farSideSeconds = 0.0, barSeconds = 0.0
+
+    for _ in 0..<runs {
+        // Started on the LEFT of the cutout every time, so reaching the right of it is a
+        // crossing rather than luck about where he woke up.
+        let start = CGPoint(x: 300, y: world.surface(.menuBar)!.y)
+        var cat = CatState(position: start)
+        cat.support = .grounded(Perch(id: .menuBar, dx: start.x))
+        var everFar = false
+        for _ in 0..<Int(seconds / dt) {
+            cat = Cat.step(cat, world: world, dt: dt)
+            guard case .grounded(let p) = cat.support, p.id == .menuBar else { continue }
+            barSeconds += dt
+            if cat.position.x > notch.maxX {
+                farSideSeconds += dt
+                everFar = true
+            }
+        }
+        if everFar { crossed += 1 }
+    }
+
+    print("\n=== v3a N5: the tunnel, \(runs) runs x \(Int(seconds))s ===")
+    print(String(format: "  runs that reached the far side of the notch: %d/%d",
+                 crossed, runs))
+    print(String(format: "  time on the far half, as a share of time on the bar: %.1f%%",
+                 barSeconds > 0 ? farSideSeconds / barSeconds * 100 : 0))
+    #expect(crossed > 0, "the far half of the menu bar is still unreachable")
+}
+
 @Test(.enabled(if: ProcessInfo.processInfo.environment["OGI_PROBE"] != nil))
 func PROBE_currentBehaviour() {
     report("his real desktop (Ghostty + Terminal)", realDesktop(), runs: 40, seconds: 600)

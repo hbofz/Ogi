@@ -379,9 +379,17 @@ private func eyeToInk(_ clip: Sprites.Clip, _ i: Int) -> Double? {
     // and `droop` (28x26) it is a closed one, small in BOTH directions. Nothing in the pixels
     // tells them apart, and correcting the second kind made the sleeping cat visibly too big.
     // `peer` is out for its own reason, as everywhere else: it is normalised on ink height.
-    let lidded: Set<String> = ["sleep", "curl", "vibe", "droop", "peer", "lounge", "cling",
+    //
+    // `denSleep` joins that list for exactly the `sleep` reason: it IS the sleep pose, drawn
+    // with a tail, and its lids measure 30x22.
+    let lidded: Set<String> = ["sleep", "denSleep", "curl", "vibe", "droop", "lounge", "cling",
                                "climbUp", "held", "land", "curious", "zap"]
-    for clip in Sprites.Clip.allCases where !lidded.contains(clip.rawValue) {
+    // ...and every clip normalised on its band height is out by construction, which used to be
+    // the hard-coded string "peer" and is now asked of `Sprites` directly. v3a added four more
+    // of them, and a list that has to be edited in two places when a sheet lands is a list that
+    // will not be.
+    for clip in Sprites.Clip.allCases
+    where !lidded.contains(clip.rawValue) && Sprites.bandHeight(clip) == nil {
         guard let img = Sprites.image(clip, 0), let eye = Sprites.eyes(clip, 0).first,
               let aspect = medianEyeAspect(clip) else { continue }
         _ = img

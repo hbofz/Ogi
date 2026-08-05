@@ -59,14 +59,24 @@ facing out. And the machine's own moments are little performances: plug in the c
 is comically electrocuted, connect your AirPods and he grooves, run the battery low and he
 powers down flat, plug in your phone and he head-tilts at it.
 
-It is covered by 290 unit tests and by simulation (the descent was soaked at 400 runs of 600
+The notch is not just his front door any more. He walks *through* it, in one side and out the
+other, which makes the menu bar one ledge instead of two that could never reach each other. He
+hangs off its lower lip and does pull-ups, because the one stretch of ledge he cannot stand on
+is the only one he can hang from. He drapes over that lip and watches you. And asleep in there,
+the only thing on your screen is a tail.
+
+When your microphone goes live he puts on a headset and talks; when your camera goes live he
+sits down at a tiny laptop and works; on a real call he does both. The camera lives in the
+notch, so while it runs he is evicted from his own house.
+
+It is covered by 327 unit tests and by simulation (the descent was soaked at 400 runs of 600
 seconds, and he was stranded in none of them). The first pass was tuned entirely against that
 simulation; watching him for fifteen minutes then corrected four things it could not see, and
 more of it will need the same. He also still lives on one display: he survives a monitor being
 plugged in, unplugged, or rearranged, and he survives a Space change, but he does not cross to
 another screen.
 
-He is a ginger tabby, drawn across 121 frames in twenty-five animations. Cursor-tracking eyes are
+He is a ginger tabby, drawn across 149 frames in thirty-one animations. Cursor-tracking eyes are
 built and currently switched off: painting a live pupil needs an empty socket in the artwork,
 and the drawn frames have the eye complete. See `docs/ART-BRIEF.md`.
 
