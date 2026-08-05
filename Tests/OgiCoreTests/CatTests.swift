@@ -807,6 +807,14 @@ private func landing(fromHeight h: CGFloat, routing: Bool = false) -> (Activity,
     #expect(cat.intent == nil, "roused, he abandoned the show for a trip")
 }
 
+@Test func aShowRendersLive() {
+    // The zap's tremble at a settled cat's 8-12Hz render rate is a slideshow.
+    var cat = CatState(position: .zero)
+    cat.support = .grounded(Perch(id: .floor, dx: 0))
+    cat.activity = .zap
+    #expect(cat.isMoving, "shows must hold the display link at full rate")
+}
+
 @Test func aSecondShowQueuesBehindTheFirst() {
     // One slot, no stomping: a second event mid-show waits for the first to finish.
     let bar = surface(.menuBar, y: 1205, from: 0, to: 1920, z: -1)

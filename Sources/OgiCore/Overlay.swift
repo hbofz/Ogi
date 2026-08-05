@@ -251,6 +251,17 @@ final class OgiView: NSView {
         // screen space: which way he braces against a moving platform depends on which way he
         // is pointing, and nothing about how his sheet happens to be drawn.
         let lean = -cat.lean * Feel.Physics.maxLean * cat.facing
+        // The electrocution tremble. At his size the zap sheet's bolts are a few pixels,
+        // so the buzz read as a static cat with specks — five rounds of lengthening it
+        // changed nothing because the problem was legibility, not duration. A violent
+        // two-point shake is the cartoon language for current, and it reads at any size.
+        // Driven off his own clock, deterministic, and zero outside the buzz.
+        var shake = CATransform3DIdentity
+        if cat.activity == .zap, cat.activityElapsed < Feel.Timing.zapBuzzSeconds {
+            let t = cat.activityElapsed
+            shake = CATransform3DMakeTranslation(CGFloat(sin(t * 55)) * 2.5,
+                                                 CGFloat(sin(t * 47 + 1)) * 1.5, 0)
+        }
         bodyLayer.anchorPoint = CGPoint(x: 0.5, y: frame.anchor)
         bodyLayer.contents = Sprites.image(frame.clip, frame.index)
         // Nearest-neighbour: these are pixel art, and smoothing turns crisp edges to mush.
@@ -258,9 +269,9 @@ final class OgiView: NSView {
         bodyLayer.minificationFilter = .trilinear
         bodyLayer.path = nil
         bodyLayer.bounds = CGRect(x: 0, y: 0, width: size.width, height: size.height)
-        bodyLayer.transform = CATransform3DConcat(
+        bodyLayer.transform = CATransform3DConcat(CATransform3DConcat(
             CATransform3DMakeScale(s.width * mirror, s.height, 1),
-            CATransform3DMakeRotation(lean, 0, 0, 1))
+            CATransform3DMakeRotation(lean, 0, 0, 1)), shake)
 
         // No live pupils. The drawn frames carry their own eyes and that is deliberate for
         // now: painting a tracking pupil needs an empty socket in the artwork, and the sheets

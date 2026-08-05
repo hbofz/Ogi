@@ -148,6 +148,16 @@ public final class OgiApp: NSObject, NSApplicationDelegate {
                 forName: .init("com.ogi.debug.quit"), object: nil, queue: .main) { [weak self] _ in
                 MainActor.assumeIsolated { self?.goHomeAndQuit() }
             }
+            // Lets the harness fire the zap without touching the power cable, because the
+            // cable cannot be scripted and five rounds of "plug it in and tell me" was four
+            // too many.
+            DistributedNotificationCenter.default().addObserver(
+                forName: .init("com.ogi.debug.zap"), object: nil, queue: .main) { [weak self] _ in
+                MainActor.assumeIsolated {
+                    self?.cat.owed = .zap
+                    self?.log("debug zap owed")
+                }
+            }
         }
 
         poll(force: true)
@@ -463,7 +473,12 @@ public final class OgiApp: NSObject, NSApplicationDelegate {
         }
     }
 
-    private func log(_ m: String) { if debug { print("[ogi] \(m)") } }
+    private let logStart = CACurrentMediaTime()
+    private func log(_ m: String) {
+        if debug {
+            print(String(format: "[ogi +%07.2f] %@", CACurrentMediaTime() - logStart, m))
+        }
+    }
 
     // MARK: - Being handled
 

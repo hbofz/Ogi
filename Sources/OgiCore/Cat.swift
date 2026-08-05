@@ -401,6 +401,9 @@ public struct CatState: Sendable {
         // He scrabbles, then slides. Always a bounded state — he mantles onto the ledge or
         // runs out of wall — so this cannot hold the render rate up indefinitely.
         if case .clinging = support { return true }
+        // A show is motion: the zap's tremble at a settled cat's 8-12Hz render rate is a
+        // slideshow. Bounded by each show's own hold, so it cannot pin the link.
+        if Cat.isShow(activity) { return true }
         // The intent SURVIVES a freeze by design, so that a hot mic at launch no longer destroys
         // the walk out of the notch. Without this clause that same design would pin the display
         // link at 60Hz for the length of every call, which is a far worse bug than the one it
