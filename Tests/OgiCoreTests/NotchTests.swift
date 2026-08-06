@@ -301,11 +301,73 @@ private func onBar(at x: CGFloat, world: Skyline) -> CatState {
     }
     #expect(sawHang, "he woke up and did not swing out; he is \(cat.activity)")
 
-    // ...and it still ends properly, back on a lip.
-    for _ in 0..<(120 * 10) { cat = Cat.step(cat, world: world, dt: dt) }
-    #expect(!cat.inNotch)
-    #expect(world.surface(.menuBar)!.solid.contains { $0.contains(cat.position.x) },
-            "the wake-up hang left him at \(cat.position.x), which is not standable")
+    // ...and it still ends properly. Not "back on a lip and staying there", which is what this
+    // asserted at first and why it failed one run in four: once he is awake at a doorway,
+    // boredom can start another notch pose, and being at `notch.midX` is then correct rather
+    // than broken. The invariant that actually holds is the one the ground test enforces —
+    // **he is always either on standable ground or legitimately inside the cutout.**
+    for _ in 0..<(120 * 10) {
+        cat = Cat.step(cat, world: world, dt: dt)
+        let standable = world.surface(.menuBar)!.solid.contains { $0.contains(cat.position.x) }
+        guard case .grounded = cat.support else { continue }
+        #expect(standable || cat.insideNotch,
+                "he is grounded at \(cat.position.x), which is neither standable nor the cutout")
+    }
+}
+
+@MainActor
+@Test func aFilmWalksHimToTheDoorEvenIfHeIsAlreadyUpTop() {
+    // Hamzah's report, reproduced: fullscreen Chrome, and he fell asleep in the ordinary curl
+    // on some arbitrary spot instead of going into the notch.
+    //
+    // The cause was that the standing order asked only that he be "up top", which being
+    // anywhere on the menu bar satisfies. No goHome stimulus is sent here on purpose — that is
+    // the case that used to work — so this is the *other* route: already up there when the film
+    // starts, or wandered along the bar afterwards.
+    let world = notchedWorld([
+        RawWindow(id: 1, pid: 100, layer: 0, rect: CGRect(x: 0, y: 90, width: 1920, height: 1115),
+                  alpha: 1, owner: "Chrome"),
+    ])
+    var cat = onBar(at: 300, world: world)
+    cat.screenCovered = true
+    cat.homeX = OgiApp.denX(notch.minX, notch: notch)
+
+    for _ in 0..<(120 * 180) { cat = Cat.step(cat, world: world, dt: dt) }
+    #expect(abs(cat.position.x - cat.homeX!) < Feel.Physics.arrivalSlop * 3,
+            "he is still at \(cat.position.x) with a film on, not at the door")
+    #expect(Cat.denDoor(cat, on: world.surface(.menuBar)!) != nil)
+
+    // ...and the ladder then finds him there, which is the only way into the den.
+    cat.repose = .asleep
+    for _ in 0..<(120 * 5) { cat = Cat.step(cat, world: world, dt: dt) }
+    #expect(cat.inDen, "he slept on the bar instead of in the notch")
+}
+
+@MainActor
+@Test func heSettlesAtTheDoorRatherThanPacingAtIt() {
+    // The other half: once he is there the standing order must stop asking, or a film is a cat
+    // walking on the spot for two hours.
+    let world = notchedWorld([
+        RawWindow(id: 1, pid: 100, layer: 0, rect: CGRect(x: 0, y: 90, width: 1920, height: 1115),
+                  alpha: 1, owner: "Chrome"),
+    ])
+    let home = OgiApp.denX(notch.minX, notch: notch)
+    var cat = onBar(at: home, world: world)
+    cat.screenCovered = true
+    cat.homeX = home
+
+    // Distance covered *walking* only. The notch poses move him without walking — into the
+    // middle of the cutout and back out to a lip — and that is the branch doing its job, not
+    // pacing. What must not happen is him treading the bar.
+    var walked: CGFloat = 0
+    var last = cat.position.x
+    for _ in 0..<(120 * 120) {
+        cat = Cat.step(cat, world: world, dt: dt)
+        if cat.activity == .walk { walked += abs(cat.position.x - last) }
+        last = cat.position.x
+    }
+    #expect(walked < Feel.Shape.width,
+            "he walked \(Int(walked))pt at the door over two minutes of film")
 }
 
 @Test func heDoesNotFallOutOfTheDenHeIsAsleepIn() {

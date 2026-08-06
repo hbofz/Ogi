@@ -136,9 +136,31 @@ import CoreGraphics
                 "twenty surfacings landed in \(seen.count) places; he is still popping up on a mark")
     }
 
-    @Test func upTopTheStandingOrderLeavesHimAlone() {
-        // On the menu bar of a covered screen he is exactly where he belongs, and the
-        // standing order must not make him pace toward homeX for ever.
+    @Test func atTheDoorTheStandingOrderLeavesHimAlone() {
+        // The standing order must stop asking once it is satisfied, or a film is a cat walking
+        // on the spot for two hours.
+        //
+        // **What satisfies it changed in v3a, and this test changed with it.** It used to be
+        // "anywhere up top", which is what let Hamzah watch him fall asleep in the ordinary
+        // curl on an arbitrary spot with a fullscreen Chrome up: he was on the bar, so nothing
+        // ever walked him the rest of the way to the doorway, and the den was unreachable. It
+        // is "at the door" now, so this asserts the settling rather than the staying put.
+        let world = fullscreenWorld()
+        let bar = world.surface(.menuBar)!
+        var cat = CatState(position: CGPoint(x: 500, y: bar.y))
+        cat.support = .grounded(Perch(id: .menuBar, dx: 500 - bar.extent.lowerBound))
+        cat.screenCovered = true
+        cat.homeX = 500
+        cat.restLeft = .greatestFiniteMagnitude
+
+        let dt = Feel.Timing.fixedDT
+        for _ in 0..<Int(10 / dt) { cat = Cat.step(cat, world: world, dt: dt) }
+        #expect(abs(cat.position.x - 500) < 1, "he paced away from the door he was already at")
+    }
+
+    @Test func awayFromTheDoorTheStandingOrderWalksHimToIt() {
+        // The other half, and the bug itself: up top but not at the doorway is NOT where he
+        // belongs during a film, because the den is the only place the sleep goes.
         let world = fullscreenWorld()
         let bar = world.surface(.menuBar)!
         var cat = CatState(position: CGPoint(x: 1500, y: bar.y))
@@ -148,8 +170,9 @@ import CoreGraphics
         cat.restLeft = .greatestFiniteMagnitude
 
         let dt = Feel.Timing.fixedDT
-        for _ in 0..<Int(10 / dt) { cat = Cat.step(cat, world: world, dt: dt) }
-        #expect(abs(cat.position.x - 1500) < 1, "he paced toward home despite being up top")
+        for _ in 0..<Int(60 / dt) { cat = Cat.step(cat, world: world, dt: dt) }
+        #expect(abs(cat.position.x - 500) < Feel.Physics.arrivalSlop * 3,
+                "he stayed at \(cat.position.x) with a film on instead of going to the door")
     }
 
     @Test func heDoesNotJumpAtASurfaceCoplanarWithHisOwn() {

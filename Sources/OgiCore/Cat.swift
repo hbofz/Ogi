@@ -1335,7 +1335,22 @@ public enum Cat {
             // cat chilling at the bottom of a covered screen, no urgency anywhere. This
             // asks again on every idle tick he is not up top, so the moment the covering
             // window's face becomes climbable he is on his way up it.
-            if s.screenCovered, let home = s.homeX, !upTop(s, on: surface, world: world),
+            // **At the DOOR, not merely up top.** `upTop` is satisfied by being anywhere on the
+            // menu bar, so a cat who was already up there when the film started never walked
+            // the rest of the way and simply fell asleep where he stood — ordinary `curl`, on
+            // some arbitrary x, with the den and its tail never reached. Hamzah watched exactly
+            // that happen on a fullscreen Chrome.
+            //
+            // The comment on the den has claimed "a covered screen is watched from the den"
+            // since v2; this is the line that makes it true. He walks home while the film runs,
+            // and is therefore standing at the doorway when the idle ladder reaches sleep,
+            // which is the only way into it.
+            //
+            // The arrival slop has to be wider than the walk's overshoot and narrower than
+            // `denDoor`'s reach, or he either paces at the door forever or stops short of it.
+            if s.screenCovered, let home = s.homeX,
+               !upTop(s, on: surface, world: world)
+                   || abs(s.position.x - home) > Feel.Physics.arrivalSlop * 3,
                let move = nextMove(from: s, on: surface, toward: .menuBar, x: home,
                                    world: world) {
                 s.intent = Intent(destination: .menuBar, destinationX: home, move: move)
