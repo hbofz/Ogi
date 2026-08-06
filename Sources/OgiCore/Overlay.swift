@@ -212,9 +212,14 @@ final class OgiView: NSView {
 
     func apply(_ cat: CatState, pose: Body.Pose, gaze: Gaze, frame: Sprites.Frame,
                heightAboveGround h: CGFloat, occluders: [CGRect]) {
+        // Where the drawing goes, which is his world position except for the notch poses that
+        // grip the cutout's wall above the bar line. His position cannot go up there — the
+        // grounded branch rewrites it from the surface every tick — so the lift lives here, on
+        // the drawing, and the physics is left alone. See `CatState.notchLift`.
+        let drawAt = CGPoint(x: cat.position.x, y: cat.position.y + cat.notchLift)
         // The REAL drawn rect, not a nominal 52x34. Building the mask box from the nominal
         // size cropped the top of his head whenever an occluder existed.
-        let bodyRect = frame.rect(at: cat.position)
+        let bodyRect = frame.rect(at: drawAt)
         let size = frame.size
         // The shadow separates from him as he rises, so the box has to follow it down.
         let shadowRect = CGRect(x: cat.position.x - size.width / 2 - 12,
@@ -227,7 +232,25 @@ final class OgiView: NSView {
             ? CGRect(x: cat.position.x - size.width, y: cat.position.y,
                      width: size.width * 2, height: size.height * 2.4)
             : bodyRect
-        let padded = bodyRect.union(shadowRect).union(sleepRect).insetBy(dx: -8, dy: -8)
+        // A quarter turn onto one of the cutout's vertical edges, so his paws grip the side of
+        // the hole and his head comes out sideways into the lit strip beside it. Pivots on the
+        // anchor, like the flip, so the paws stay where they were put.
+        //
+        // **Read off the FRAME, not off `cat.notchSide` alone.** That flag outlives the pose it
+        // belongs to, and taken on its own it turned every drawing he has: he walked away from
+        // the notch still lying on his side and sat rotated on a Finder title bar. The rotation
+        // is a property of this one pose, so only the clip that has it may be turned.
+        let turn = Sprites.turn(frame.clip, side: cat.notchSide)
+
+        // Turned, the drawn content no longer lives inside `bodyRect` — it swings out sideways
+        // from the anchor. The occlusion mask is built in this box's coordinates, so a box that
+        // misses him clips the wrong thing or hides him outright. A square about his position
+        // covers every rotation without needing the exact geometry.
+        let reach = max(bodyRect.width, bodyRect.height)
+        let rotatedBox = CGRect(x: drawAt.x - reach, y: drawAt.y - reach,
+                                width: reach * 2, height: reach * 2)
+        let padded = (turn != 0 ? bodyRect.union(rotatedBox) : bodyRect)
+            .union(shadowRect).union(sleepRect).insetBy(dx: -8, dy: -8)
 
         CATransaction.begin()
         CATransaction.setDisableActions(true)
@@ -236,7 +259,7 @@ final class OgiView: NSView {
         let origin = padded.origin   // children are positioned relative to the container
 
         // Anchor at the feet so squash keeps them planted.
-        bodyLayer.position = CGPoint(x: cat.position.x - origin.x, y: cat.position.y - origin.y)
+        bodyLayer.position = CGPoint(x: drawAt.x - origin.x, y: drawAt.y - origin.y)
         // Squash, plus a lean into the motion of whatever he is standing on. Rotating
         // about the feet (the anchor point) is what makes it read as bracing rather than
         // sliding: his paws stay put and his body tips.
@@ -247,6 +270,9 @@ final class OgiView: NSView {
         // The flip only. `turn` is drawn as the transition right -> left, so its mirror is
         // inverted from every other clip. See `Sprites.mirror`.
         let mirror = Sprites.mirror(frame.clip, facing: cat.facing)
+        // ...and the vertical one, for the single clip drawn upside down. See
+        // `Sprites.flipsVertically`. It pivots on the anchor, which for that clip is his paws.
+        let flipY: CGFloat = Sprites.flipsVertically(frame.clip) ? -1 : 1
         // The lean is NOT the mirror. The rotation is concatenated after the flip, so it is in
         // screen space: which way he braces against a moving platform depends on which way he
         // is pointing, and nothing about how his sheet happens to be drawn.
@@ -270,8 +296,8 @@ final class OgiView: NSView {
         bodyLayer.path = nil
         bodyLayer.bounds = CGRect(x: 0, y: 0, width: size.width, height: size.height)
         bodyLayer.transform = CATransform3DConcat(CATransform3DConcat(
-            CATransform3DMakeScale(s.width * mirror, s.height, 1),
-            CATransform3DMakeRotation(lean, 0, 0, 1)), shake)
+            CATransform3DMakeScale(s.width * mirror, s.height * flipY, 1),
+            CATransform3DMakeRotation(lean + turn, 0, 0, 1)), shake)
 
         // No live pupils. The drawn frames carry their own eyes and that is deliberate for
         // now: painting a tracking pupil needs an empty socket in the artwork, and the sheets

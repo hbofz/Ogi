@@ -212,6 +212,8 @@ public final class OgiApp: NSObject, NSApplicationDelegate {
         cat.repose = .awake
         cat.intent = nil
         cat.inNotch = false
+        cat.notchSide = .below
+        cat.notchLift = 0
 
         func stand(at x: CGFloat) {
             cat.position = CGPoint(x: x, y: bar.y)
@@ -225,6 +227,17 @@ public final class OgiApp: NSObject, NSApplicationDelegate {
             cat.inNotch = true
             cat.facing = -1
             cat.activity = what == "hang" ? .hang : .peerDown
+        // The two side placements: a quarter turn onto a VERTICAL edge of the cutout, paws on
+        // the edge and head out sideways into the lit strip of menu bar beside the hole. His
+        // world position is that point on the edge, halfway up the notch band.
+        case "peerL", "peerR":
+            let onLeft = what == "peerL"
+            stand(at: onLeft ? notch.minX : notch.maxX)
+            cat.inNotch = true
+            cat.facing = onLeft ? -1 : 1
+            cat.notchSide = onLeft ? .left : .right
+            cat.notchLift = notch.height * Feel.Notch.sidePeekHeight
+            cat.activity = .peerDown
         case "den":
             stand(at: notch.midX)
             cat.inNotch = true
@@ -506,8 +519,12 @@ public final class OgiApp: NSObject, NSApplicationDelegate {
         // from your HID idle time, so "put him to sleep in the notch so I can look at it" was
         // overwritten before `Cat.step` ever saw it. Under OGI_RESTLESS it is overwritten with
         // `.awake` unconditionally, which is worse.
+        // A covered screen settles him faster: five minutes to sleep rather than ten. See
+        // `Feel.Notch.coveredSlumberScale` for why that is the situation and not a shortcut.
+        let slumber = Repose.timeScale * (cat.screenCovered ? Feel.Notch.coveredSlumberScale : 1)
         cat.repose = debugRepose
-            ?? (Feel.Timing.restless ? .awake : Repose.from(idleSeconds: sense.idleSeconds))
+            ?? (Feel.Timing.restless ? .awake
+                : Repose.from(idleSeconds: sense.idleSeconds, scale: slumber))
         cat.listening = debugCall?.mic ?? sense.micLive
         // The camera lives in the notch. This is what bars him from his own den for the length
         // of a call, and what puts the headphones on him.

@@ -163,11 +163,18 @@ public enum Sprites {
         public let size: CGSize
         /// Fraction up the frame where he attaches. 0 = his feet, 0.95 = his nape.
         public let anchor: CGFloat
+        /// Drawn one way up and rendered the other. See `Sprites.flipsVertically`.
+        public let flippedY: Bool
 
         /// Where this frame lands on screen for a cat standing at `p`.
+        ///
+        /// The flip pivots on the anchor, so the drawn content ends up on the opposite side of
+        /// it and the box has to follow. Getting this wrong is not cosmetic: `Overlay` builds
+        /// the occlusion mask in this rect's coordinates, so a box on the wrong side of him
+        /// clips the wrong half — and the hit rect for petting comes from here too.
         public func rect(at p: CGPoint) -> CGRect {
             CGRect(x: p.x - size.width / 2,
-                   y: p.y - size.height * anchor,
+                   y: p.y - size.height * (flippedY ? 1 - anchor : anchor),
                    width: size.width, height: size.height)
         }
     }
@@ -177,7 +184,8 @@ public enum Sprites {
                      rig: cat.rig, inDen: cat.inDen)
         let i = index(c, activity: cat.activity,
                       walkPhase: pose.walkPhase, elapsed: cat.activityElapsed)
-        return Frame(clip: c, index: i, size: size(c, i), anchor: footAnchor(c))
+        return Frame(clip: c, index: i, size: size(c, i), anchor: footAnchor(c),
+                     flippedY: flipsVertically(c))
     }
 
     // Everything in this app runs on the main actor, so a plain cache needs no lock.
@@ -297,6 +305,40 @@ public enum Sprites {
     /// `index` and `theHangLowersInBeforeItLoops` both need the same number.
     static let lowerInFrames = 2
 
+    /// Clips drawn one way up and rendered the other.
+    ///
+    /// Exactly one, and it is a correction rather than a technique. `peerDown` was specified as
+    /// a head hanging *down* over an edge and generated as a head peeking *up* over one, with
+    /// the paws below the face. That was first worked around by placement — put the top of his
+    /// head on the lip and let his ears clip into the cutout — and on screen it read as what it
+    /// is: a right-way-up cat poking out from under the notch, rather than one draped over the
+    /// edge looking down at you.
+    ///
+    /// Flipping it costs one transform and turns the drawing into the pose it was asked for:
+    /// paws over the lip at the top, head hanging below them, upside down, the way a cat
+    /// actually looks over the front of a shelf.
+    ///
+    /// The flip is about `footAnchor`, so that anchor has to be the part that stays put — his
+    /// paws, at the very bottom of the ink as drawn.
+    static func flipsVertically(_ clip: Clip) -> Bool { clip == .peerDown }
+
+    /// How far to turn a drawing, in radians, for the edge of the cutout he is hanging off.
+    ///
+    /// **Takes the clip as well as the side, and that is the whole point.** `CatState.notchSide`
+    /// outlives the pose it belongs to, so a renderer that read it alone rotated *everything* —
+    /// he left the notch still lying on his side and sat turned on a window's title bar.
+    /// Only the clip that can be hung off an edge may be turned by this.
+    ///
+    /// Positive is counter-clockwise, so the head going out to the LEFT is the negative turn.
+    static func turn(_ clip: Clip, side: CatState.NotchSide) -> CGFloat {
+        guard flipsVertically(clip) else { return 0 }
+        switch side {
+        case .below: return 0
+        case .left:  return -.pi / 2
+        case .right: return .pi / 2
+        }
+    }
+
     /// Which way to flip the drawing: +1 for the sheet as drawn, -1 mirrored.
     ///
     /// Normally just `facing`, because every sheet is drawn facing right and mirrored when he
@@ -355,15 +397,15 @@ public enum Sprites {
         // of the six frames and 0px on the pulled-up one, so his paws are at 0.982-1.0 and
         // this is the low end of that. `theHangGripsAtTheTopOfItsBand` holds it to the sheet.
         case .hang: return 0.982
-        // His head and his two paws hang below the notch's bottom lip and the rest of him is
-        // inside the cutout, where the permanent occluder masks him away. So the point pinned
-        // to his world position is **the top of his head**, and the lip is the line it sits on.
+        // His two paws hook over the notch's bottom lip and his head hangs below them, upside
+        // down. The sheet is drawn the other way up and flipped at render time
+        // (`flipsVertically`), and the flip pivots on this anchor — so it has to be the part
+        // that must not move, which is his paws.
         //
-        // 0.908 is the top of the ink on the two ears-down frames of a 413px band. The two
-        // ears-up frames reach 0.998, and that difference is the point rather than drift: on
-        // those his ear tips cross the lip and the mask eats them, which is what being inside
-        // a hole looks like. Anchoring at the ears instead would bob the whole head by 37px.
-        case .peerDown: return 0.908
+        // They sit at the very bottom of the ink in every frame (row 411 of a 413px band, and
+        // 411 on all four), so this is a shade off the floor. Everything else in the drawing is
+        // above them before the flip and below them after it, which is the whole trick.
+        case .peerDown: return 0.005
         // Curled asleep inside the cutout with his tail hanging out of it. His body is above
         // the bar line and masked; the tail below it is the entire animation you can see. The
         // anchor is therefore where the body stops and the tail starts, so that the bar line

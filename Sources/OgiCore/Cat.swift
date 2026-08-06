@@ -376,6 +376,23 @@ public struct CatState: Sendable {
     /// ...and asleep in there specifically, which is the one that changes the drawing.
     public var inDen: Bool { inNotch && repose == .asleep }
 
+    /// Which edge of the cutout he is hanging off, which decides how the drawing is turned.
+    ///
+    /// One sheet, three orientations. `below` hangs him off the underside, head down. `left` and
+    /// `right` rotate him a quarter turn onto a *vertical* edge, so his paws grip the side of
+    /// the hole and his head sticks out sideways into the lit strip of menu bar beside it.
+    public enum NotchSide: Sendable, Equatable { case below, left, right }
+    public var notchSide: NotchSide = .below
+
+    /// How far above his world position the notch pose is drawn, in points.
+    ///
+    /// The side peeks grip the cutout's wall well above the menu bar line, and his position
+    /// cannot go up there: the `.grounded` branch rewrites `position.y` from the surface on
+    /// every tick, so anything stored there is gone before it is drawn. The lift is a property
+    /// of the drawing, applied at render time, and it leaves the physics alone — he is still a
+    /// cat standing on the bar as far as everything else is concerned.
+    public var notchLift: CGFloat = 0
+
     /// May he still be in there? The three entitlements, in one place, so the check that pulls
     /// him out cannot drift from the branches that put him in.
     public var mayStayInNotch: Bool {
@@ -1456,17 +1473,14 @@ public enum Cat {
                     // election scores *places to go* and this is something to do where he
                     // already is. It is rarer than `lipIdeaChance` suggests: reaching it at all
                     // needs boredom to come up in-place while he happens to be at a doorway.
-                    if let notch = world.screen.notch, denDoor(s, on: surface) != nil,
+                    if let notch = world.screen.notch, let den = denDoor(s, on: surface),
                        Double.random(in: 0...1) < Feel.Notch.lipIdeaChance {
-                        // Facing back at the lip he came from, which is how he finds his way
-                        // out again — see the exit above.
-                        s.facing = s.position.x > notch.midX ? 1 : -1
-                        s.position.x = notch.midX
-                        s.support = .grounded(
-                            Perch(id: surface.id, dx: notch.midX - surface.extent.lowerBound))
-                        s.perchSpeed = 0
-                        s.inNotch = true
-                        s.activity = Bool.random() ? .hang : .peerDown
+                        // Three things to do in a hole, and which one is a coin flip between
+                        // going *into* it and leaning out of the side he is already standing at.
+                        //
+                        // `facing` is set to point back at the lip he entered by in every case,
+                        // because that is how `leaveNotch` finds its way out again.
+                        enterNotch(&s, on: surface, notch: notch, out: den.out)
                     } else {
                         // Usually a wash, sometimes a stretch: manifesto §7.1 wants more than
                         // one in-place behaviour, and until the stretch the wash was the only
@@ -2603,6 +2617,47 @@ public enum Cat {
     }
 
     /// Does the surface resume past that edge? Then it is a hole, not the end of it.
+    /// Into the cutout, one of three ways.
+    ///
+    /// `out` is the direction that faces away from the hole, which `denDoor` already worked out
+    /// — so it says which lip he is standing at, and therefore which wall is his to lean out of.
+    ///
+    /// - **hang**: from the middle of the underside, paws on the lower lip, doing pull-ups.
+    /// - **peer down**: from the middle of the underside, head and paws over the lower lip.
+    /// - **peer sideways**: from his own lip's *vertical* edge, head out into the lit strip
+    ///   beside the cutout. Two thirds of the way up it, which is `notchLift`'s only job.
+    ///
+    /// The side one is drawn by turning the same sheet a quarter circle, so it costs no art —
+    /// see `Sprites.turn`. That is also why it is the one that most wants its own drawing later.
+    static func enterNotch(_ s: inout CatState, on surface: Surface,
+                           notch: CGRect, out: CGFloat) {
+        s.inNotch = true
+        s.perchSpeed = 0
+        s.activityElapsed = 0
+        // Pointing back at the lip he came in by, which is how he gets out again.
+        s.facing = out
+
+        switch Int.random(in: 0..<3) {
+        case 0, 1:
+            // Under the middle of the hole. `facing` has to be re-derived here: he is no longer
+            // at the lip he entered by, so "which way is out" becomes "which lip is nearer".
+            s.position.x = notch.midX
+            s.facing = out
+            s.notchSide = .below
+            s.notchLift = 0
+            s.activity = Bool.random() ? .hang : .peerDown
+        default:
+            // Out of the side wall he is already standing at.
+            let x = out < 0 ? notch.minX : notch.maxX
+            s.position.x = x
+            s.notchSide = out < 0 ? .left : .right
+            s.notchLift = notch.height * Feel.Notch.sidePeekHeight
+            s.activity = .peerDown
+        }
+        s.support = .grounded(Perch(id: surface.id,
+                                    dx: s.position.x - surface.extent.lowerBound))
+    }
+
     /// Back out of the cutout and onto a lip, wherever he was in there and whatever ended it.
     ///
     /// One function because four things can end a stay in the notch — the hold expiring, the
@@ -2615,6 +2670,10 @@ public enum Cat {
     /// head-on. Falls back to the other lip if his own has been inset away by a screen edge.
     static func leaveNotch(_ s: inout CatState, on surface: Surface, world: Skyline) {
         s.inNotch = false
+        // Back the right way up, and back down onto the bar. Both belong to the pose, not to
+        // the cat, and a stale one turns or lifts every drawing he has afterwards.
+        s.notchSide = .below
+        s.notchLift = 0
         guard let notch = world.screen.notch else { return }
         let goRight = s.facing > 0
         let near = goRight ? notch.maxX + Feel.Shape.clearance

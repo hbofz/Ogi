@@ -458,6 +458,19 @@ public enum Feel {
         /// Chance that a bout of boredom at a notch lip becomes a hang or a look down rather
         /// than the usual wash. Only reachable standing at a lip, so it is rarer than it looks.
         public static let lipIdeaChance: Double = 0.5
+        /// How much sooner he settles while the screen is covered, as a multiple of the whole
+        /// idle ladder. Half: asleep in **five** minutes rather than ten, sitting at fifteen
+        /// seconds, curled at ninety.
+        ///
+        /// Not a shortcut — it is the situation being different. With a film up there is
+        /// nowhere to go and nothing to look at, the taste election is gated off entirely, and
+        /// ten minutes of a cat waiting in a doorway is ten minutes of nothing. Five is roughly
+        /// how long it takes to stop fidgeting with the volume and actually watch.
+        public static let coveredSlumberScale: Double = 0.5
+        /// How far up the cutout's side he grips when he peeks out of a vertical edge, as a
+        /// fraction of its height. Two thirds: level with the top of the strip rather than
+        /// straddling the menu bar line.
+        public static let sidePeekHeight: CGFloat = 0.65
     }
 
     public enum World {

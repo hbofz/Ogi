@@ -435,6 +435,86 @@ private func onBar(at x: CGFloat, world: Skyline) -> CatState {
     }
 }
 
+@MainActor
+@Test func onlyTheNotchPoseIsEverTurned() {
+    // Hamzah found this one on his own screen: the quarter turn was read off `notchSide` alone,
+    // which outlives the pose, so he walked away from the cutout still lying on his side and
+    // sat rotated on a Finder title bar. Every other drawing must be immune to that flag.
+    for clip in Sprites.Clip.allCases where clip != .peerDown {
+        for side in [CatState.NotchSide.left, .right, .below] {
+            #expect(Sprites.turn(clip, side: side) == 0,
+                    "\(clip.rawValue) can be turned by a flag that is not about it")
+        }
+    }
+    #expect(Sprites.turn(.peerDown, side: .left) != 0)
+    #expect(Sprites.turn(.peerDown, side: .right) != 0)
+    #expect(Sprites.turn(.peerDown, side: .below) == 0)
+}
+
+@Test func boredomAtALipReachesAllThreeNotchPoses() {
+    // The hang, the look down, and the sideways lean out of his own wall. All three come from
+    // one branch, so this is really asking that none of them is unreachable — the failure mode
+    // v2a named: a structure that is right and a number that makes part of it dead.
+    let world = notchedWorld()
+    let bar = world.surface(.menuBar)!
+    var seen: Set<String> = []
+    for _ in 0..<300 {
+        var cat = onBar(at: notch.minX - Feel.Shape.clearance, world: world)
+        let den = Cat.denDoor(cat, on: bar)!
+        Cat.enterNotch(&cat, on: bar, notch: notch, out: den.out)
+        seen.insert("\(cat.activity)/\(cat.notchSide)")
+    }
+    #expect(seen.contains("hang/below"), "he never hangs")
+    #expect(seen.contains("peerDown/below"), "he never looks down")
+    #expect(seen.contains("peerDown/left"), "he never leans out of the side he is standing at")
+    #expect(!seen.contains("peerDown/right"),
+            "he leaned out of the far wall, across the hole he is standing next to")
+}
+
+@Test func theSidePeekLeansOutOfTheWallHeIsStandingAt() {
+    // From the RIGHT lip he must lean right, into the strip on that side. Leaning the other way
+    // would put his head inside the cutout, where there are no pixels, and he would vanish.
+    let world = notchedWorld()
+    let bar = world.surface(.menuBar)!
+    var cat = onBar(at: notch.maxX + Feel.Shape.clearance, world: world)
+    let den = Cat.denDoor(cat, on: bar)!
+    for _ in 0..<200 {
+        var c = cat
+        Cat.enterNotch(&c, on: bar, notch: notch, out: den.out)
+        if c.notchSide == .below { continue }
+        #expect(c.notchSide == .right)
+        #expect(abs(c.position.x - notch.maxX) < 1)
+        #expect(c.notchLift > 0, "the side peek was drawn down on the menu bar line")
+        cat = c
+        break
+    }
+}
+
+@Test func aCoveredScreenPutsHimToSleepInFiveMinutesRatherThanTen() {
+    // Hamzah's number. With a film up there is nowhere to go, the election is gated off
+    // entirely, and ten minutes of a cat waiting in a doorway is ten minutes of nothing.
+    let covered = Repose.timeScale * Feel.Notch.coveredSlumberScale
+    #expect(Repose.from(idleSeconds: 299, scale: covered) != .asleep)
+    #expect(Repose.from(idleSeconds: 301, scale: covered) == .asleep)
+    // ...and an uncovered screen is untouched.
+    #expect(Repose.from(idleSeconds: 301) != .asleep)
+    #expect(Repose.from(idleSeconds: 601) == .asleep)
+}
+
+@Test func leavingTheNotchPutsHimBackTheRightWayUp() {
+    let world = notchedWorld()
+    var cat = onBar(at: notch.midX, world: world)
+    cat.activity = .peerDown
+    cat.inNotch = true
+    cat.notchSide = .left
+    cat.notchLift = 24
+    cat.facing = -1
+    cat.activityElapsed = Cat.inPlaceHold(.peerDown)! + 1
+    cat = Cat.step(cat, world: world, dt: dt)
+    #expect(cat.notchSide == .below, "he left the cutout still on his side")
+    #expect(cat.notchLift == 0, "he left the cutout still floating above the bar")
+}
+
 // MARK: - The sheets
 
 @MainActor

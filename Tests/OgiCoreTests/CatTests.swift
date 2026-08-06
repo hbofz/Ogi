@@ -1662,10 +1662,15 @@ private func steppingOff() -> CatState {
         // Until he leaves the bar, however he leaves it. Threading a jump down through the
         // doorway is legal and is not what this is about.
         guard case .grounded(let p) = cat.support, p.id == .menuBar else { break }
-        westmost = min(westmost, cat.position.x)
+        // v3a made the cutout a tunnel, so being inside it is no longer forbidden outright —
+        // but it is only ever legal as a CROSSING. Wandering in, hesitating at it, or coming
+        // to rest in it are all still the trap this test was written for, and `insideNotch` is
+        // exactly the difference. Sampled rather than asserted so the failure names the x.
+        if !cat.insideNotch { westmost = min(westmost, cat.position.x) }
         if cat.activity == .edgeLook { lookedNear = min(lookedNear, cat.position.x) }
     }
-    #expect(westmost >= notch.maxX, "he stood in the cutout at x=\(Int(westmost))")
+    #expect(westmost >= notch.maxX,
+            "he stood in the cutout at x=\(Int(westmost)) without crossing it")
     #expect(lookedNear < .greatestFiniteMagnitude, "he never looked at anything")
     #expect(lookedNear > notch.maxX + Feel.Physics.edgeApproach,
             "he put his head over the cutout at x=\(Int(lookedNear))")
