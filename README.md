@@ -5,12 +5,12 @@
 </p>
 
 <p align="center">
-  <img src="docs/ogi-hero.gif" width="820" alt="Ogi stepping down onto a window's title bar, leaping the gaps between windows, climbing a window face, being petted, and sitting at a laptop during a call">
+  <img src="docs/ogi-hero.gif" width="820" alt="Ogi stepping down onto a window's title bar, leaping the gap to another window, being petted, and sitting at a laptop during a call">
 </p>
 
 <p align="center">
-  <sub>Real screen recording, five shots: he steps down onto a window, leaps the gaps between
-  them, climbs a window face to get back up, gets petted, and joins a call.</sub>
+  <sub>Real screen recording: he steps down onto a window, leaps the gap to another, gets
+  petted, and joins a call.</sub>
 </p>
 
 <p align="center">
@@ -26,7 +26,8 @@ Ogi walks along the top edges of your open windows, jumps between them, and fall
 the one he was standing on. He goes **behind** windows that are in front of him, which nothing
 else on any platform does.
 
-He asks for no permissions, has no settings, no account, and no network. He is just there.
+He asks for no permissions, has no settings, no account, and no network. He reads the position
+and size of your windows, never their titles and never their pixels. He is just there.
 
 ## Install
 
@@ -64,22 +65,12 @@ bar, hangs off its lower lip doing pull-ups, and sleeps inside it with only his 
 into your hand, and **purrs through your trackpad** using haptic feedback. A purr you can
 physically feel.
 
+**[Every animation is documented](docs/animations.md)** — all 32 of them, playing, with what
+each one is for.
+
 **He costs nothing.** 0.0% CPU when idle, measured. Once he settles, the display link stops
 outright and he wakes once a second to check whether you are back. The battery cost of a desktop
 pet is processor wakeups, not pixels.
-
-## He cannot spy on you, by construction
-
-**Ogi requests no permissions. Not one.** There is no prompt on first launch, because there is
-nothing he needs to ask for.
-
-He reads the *position and size* of your windows, never their titles and never their pixels.
-Titles would need Screen Recording permission, so he does not read them. He feels your typing
-*rhythm* through a system keystroke counter that reports a number and cannot report a key. He
-can tell your microphone is live without listening to it.
-
-This is a constraint, not a claim: **if a feature needs a permission, it does not ship.** Several
-planned behaviours were cut for exactly that reason.
 
 ## Build from source
 
