@@ -10,8 +10,15 @@ cd "$(dirname "$0")"
 CONFIG="${1:-debug}"
 # Stamped into the bundle so a downloaded build can say which one it is. `release.sh` sets it.
 VERSION="${OGI_VERSION:-0.1}"
-swift build -c "$CONFIG"
-BIN="$(swift build -c "$CONFIG" --show-bin-path)/Ogi"
+
+# A release build is UNIVERSAL. `swift build` produces the host architecture only, so a release
+# cut on an Apple Silicon Mac is arm64-only and simply will not launch on any Intel Mac — and
+# macOS 14, which this targets, still runs on Intel hardware from 2018 onwards. Debug builds
+# stay native because nobody is debugging the other architecture and it doubles the build.
+ARCH=()
+[ "$CONFIG" = "release" ] && ARCH=(--arch arm64 --arch x86_64)
+swift build -c "$CONFIG" "${ARCH[@]}"
+BIN="$(swift build -c "$CONFIG" "${ARCH[@]}" --show-bin-path)/Ogi"
 
 APP=".build/Ogi.app"
 rm -rf "$APP"
@@ -42,6 +49,9 @@ cat > "$APP/Contents/Info.plist" <<PLIST
   <key>NSHighResolutionCapable</key><true/>
   <!-- No Dock icon, no Cmd-Tab. The menu bar cat is the way out. -->
   <key>LSUIElement</key><true/>
+  <!-- Without this a macOS 13 user gets a dyld crash with no explanation instead of being told
+       what they need. The binary's own minos says 14.0; this is what the Finder reads. -->
+  <key>LSMinimumSystemVersion</key><string>14.0</string>
   <!-- Deliberately no usage-description keys. We need none of them, and their
        presence would signal intent we do not have. -->
 </dict></plist>
