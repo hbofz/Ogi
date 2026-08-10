@@ -1,7 +1,4 @@
-# This workflow will build a Swift project
-# For more information see: https://docs.github.com/en/actions/automating-builds-and-tests/building-and-testing-swift
-
-name: Swift
+name: Build and test
 
 on:
   push:
@@ -9,14 +6,62 @@ on:
   pull_request:
     branches: [ "main" ]
 
+# A new push makes the previous run pointless. Without this they queue up and the badge shows
+# the result of a commit that has already been replaced.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   build:
-
     runs-on: macos-latest
 
     steps:
     - uses: actions/checkout@v4
+
+    - name: Toolchain
+      run: swift --version
+
     - name: Build
-      run: swift build -v
-    - name: Run tests
-      run: swift test -v
+      run: swift build
+
+    - name: Test
+      run: swift test
+
+    # Everything below tests the *shipping* path rather than the source, because that is where
+    # this project's worst bug lived: v1.0.0 built, tested and ran perfectly on the machine that
+    # made it, and crashed on launch for everyone else.
+    - name: Package a release bundle
+      run: OGI_NO_LAUNCH=1 OGI_VERSION=0.0.0-ci ./run.sh release
+
+    - name: It has to run on Intel too
+      run: |
+        archs=$(lipo -archs .build/Ogi.app/Contents/MacOS/Ogi)
+        echo "architectures: $archs"
+        case "$archs" in
+          *arm64*) ;; *) echo "::error::missing arm64"; exit 1 ;;
+        esac
+        case "$archs" in
+          *x86_64*) ;; *) echo "::error::missing x86_64 — this build would not launch on an Intel Mac"; exit 1 ;;
+        esac
+
+    - name: It has to carry its own drawings
+      run: |
+        # SwiftPM emits resources as a separate .bundle beside the binary, not inside it. Copy
+        # only the executable into the .app and you ship 206KB of cat with no cat in it.
+        test -d .build/Ogi.app/Contents/Resources/Ogi_OgiCore.bundle \
+          || { echo "::error::no resource bundle inside the .app"; exit 1; }
+        find .build/Ogi.app -name 'walk0.png' -print -quit | grep -q . \
+          || { echo "::error::no sprites inside the .app"; exit 1; }
+        echo "sprite frames shipped: $(find .build/Ogi.app -name '*.png' | wc -l | tr -d ' ')"
+
+    - name: It has to be signed, and survive being zipped
+      run: |
+        ditto -c -k --keepParent .build/Ogi.app /tmp/ci.zip
+        rm -rf /tmp/unz && mkdir -p /tmp/unz && ditto -x -k /tmp/ci.zip /tmp/unz
+        codesign --verify --deep --strict /tmp/unz/Ogi.app
+
+    # NOT here: launching the packaged app with the build tree's resources hidden, which is the
+    # only check that catches the resource bug directly. It needs a window server to get past
+    # NSScreen, and a headless runner would pass it without ever loading a sprite. That one
+    # lives in release.sh, where a real screen is present.
