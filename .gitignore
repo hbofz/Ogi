@@ -16,3 +16,6 @@ art/
 
 # Local agent config and skills.
 .claude/
+
+# The generated iconset; Ogi.icns and the source art are committed.
+icon/Ogi.iconset/

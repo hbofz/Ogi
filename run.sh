@@ -31,6 +31,7 @@ cp "$BIN" "$APP/Contents/MacOS/Ogi"
 # `Bundle.module` accessor falls back to the absolute build path, which exists only here. The
 # first release zip was built without this and was 206KB of cat with no cat in it.
 mkdir -p "$APP/Contents/Resources"
+cp icon/Ogi.icns "$APP/Contents/Resources/Ogi.icns"
 BUNDLES=("$(dirname "$BIN")"/*.bundle)
 [ -e "${BUNDLES[0]}" ] || { echo "no resource bundle beside $BIN — he would ship with no art" >&2; exit 1; }
 cp -R "${BUNDLES[@]}" "$APP/Contents/Resources/"
@@ -43,6 +44,7 @@ cat > "$APP/Contents/Info.plist" <<PLIST
   <key>CFBundleName</key><string>Ogi</string>
   <key>CFBundleExecutable</key><string>Ogi</string>
   <key>CFBundlePackageType</key><string>APPL</string>
+  <key>CFBundleIconFile</key><string>Ogi</string>
   <key>CFBundleShortVersionString</key><string>$VERSION</string>
   <key>CFBundleVersion</key><string>1</string>
   <key>NSPrincipalClass</key><string>NSApplication</string>
