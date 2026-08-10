@@ -9,7 +9,7 @@ leave this page quietly wrong. Run it after installing any new clip:
 
 Needs ffmpeg (brew install ffmpeg).
 """
-import os, re, subprocess, sys
+import math, os, re, struct, subprocess, sys
 
 REPO = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 SPRITES = os.path.join(REPO, "Sources/OgiCore/Resources/Sprites")
@@ -98,6 +98,25 @@ def parse_switch(src, header, computed=None):
     return out
 
 
+def png_size(path):
+    with open(path, "rb") as f:
+        return struct.unpack(">II", f.read(24)[16:24])
+
+
+def canvas(clip, n):
+    """The common canvas a clip's frames have to be padded onto, and why it is needed.
+
+    The cutter crops each frame tight, so several clips have frames of DIFFERENT widths —
+    `run` goes 256, 247, 239, 242, 254, 230, 222, 243. Handed that, ffmpeg quietly inserts its
+    own scaler to reconcile them, which stretches every frame to the width of the first and,
+    worse, loses the alpha channel on the way. And the sprites' transparent pixels still carry
+    the green screen in their RGB, so losing alpha does not give a white background, it gives
+    a bright green rectangle. That is what `run`, `fall` and `cling` looked like on the page.
+    """
+    sizes = [png_size(os.path.join(SPRITES, f"{clip}{i}.png")) for i in range(n)]
+    return max(w for w, _ in sizes), max(h for _, h in sizes)
+
+
 def looping_clips(src):
     """The `case ...: true` arm of the loops switch, and only that arm.
 
@@ -143,11 +162,22 @@ def main():
                 print(f"warning: {clip} not found in Sprites.swift", file=sys.stderr)
                 continue
             gif = f"{clip}.gif"
+            w, h = canvas(clip, n)
+            scale = HEIGHT / h
+            # Ceil, not round: rounding down put the box a pixel narrower than the widest
+            # frame and pad refuses to shrink its input.
+            box = math.ceil(w * scale)
+            box += box % 2
+            # Each frame keeps its own width and is centred on the clip's widest canvas, with
+            # the padding fully transparent. `format=rgba` first so the pad has an alpha channel
+            # to write into.
             subprocess.run(
                 ["ffmpeg", "-y", "-loglevel", "error", "-framerate", str(rate),
                  "-i", os.path.join(SPRITES, f"{clip}%d.png"),
-                 "-vf", f"scale=-1:{HEIGHT}:flags=lanczos,split[s0][s1];"
-                        "[s0]palettegen=reserve_transparent=1[p];[s1][p]paletteuse=alpha_threshold=128",
+                 "-vf", f"format=rgba,scale=iw*{scale:.6f}:{HEIGHT}:flags=lanczos,"
+                        f"pad={box}:{HEIGHT}:({box}-iw)/2:0:color=0x00000000,"
+                        "split[s0][s1];[s0]palettegen=reserve_transparent=1[p];"
+                        "[s1][p]paletteuse=alpha_threshold=128",
                  "-loop", "0", os.path.join(OUT_DIR, gif)], check=True)
             held = "" if clip in loops else " (holds its last frame)"
             lines.append(f'| <img src="clips/{gif}" height="{HEIGHT}"> | `{clip}` | {n} | '
