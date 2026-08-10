@@ -98,7 +98,7 @@ public enum Move: Sendable, Equatable {
     case jump(SurfaceID, CGFloat)
     /// Walk to the edge ahead and keep going. This is how he descends, on gravity alone.
     case stepOff
-    /// A gap small enough to stride over. No crouch, no arc — a full ballistic leap over a
+    /// A gap small enough to stride over. No crouch, no arc: a full ballistic leap over a
     /// six-point crack between two tiled windows reads as a comedy pratfall.
     case stepAcross(SurfaceID, CGFloat)
     /// Walk under a window's face at this x, then leap at it, grab on the way up and climb.
@@ -108,13 +108,13 @@ public enum Move: Sendable, Equatable {
     /// Walk to the spot on his own surface directly above a lower ledge, look down, and hop
     /// off the glass onto it. The descent a full-width surface could never make: the menu
     /// bar's only lips are the screen corners, so stepping off it walked the whole bar and
-    /// dropped a thousand points into a corner — windows were never stepping stones down.
+    /// dropped a thousand points into a corner. Windows were never stepping stones down.
     case drop(SurfaceID, CGFloat)
     /// Walk in one notch doorway and out the other, to the far lip's x.
     ///
     /// The cutout is a hole in the *display*, not a hole in the *world*: there is real
     /// aluminium behind it at exactly the height of the bar. `solid` excludes it because a cat
-    /// standing there is invisible, not because he is unsupported — `World.build` says so where
+    /// standing there is invisible, not because he is unsupported. `World.build` says so where
     /// it punches the hole. So walking through is a truer model of the hardware than falling
     /// through, and it is the only way the two halves of the menu bar were ever going to join up.
     ///
@@ -288,7 +288,7 @@ public struct CatState: Sendable {
     /// has gone rigid, your mic is hot.
     public var listening = false
     /// Your camera is live. The camera lives in the notch, so this is the one signal that can
-    /// throw him out of his own house — see `Den.barred`.
+    /// throw him out of his own house. See `Den.barred`.
     public var onCamera = false
     /// You are typing hard enough that he stays out of your way. Set by `App` with hysteresis
     /// (`Feel.Mind.typingAlert` to enter, `typingCalm` to leave) or he flickers at the boundary.
@@ -317,7 +317,7 @@ public struct CatState: Sendable {
     ///
     /// One condition rather than three parallel branches, because the behaviour is identical:
     /// stop, keep the trip you were on, and wait. They stay distinguishable to watch, by the
-    /// drawing and by how they end — a typing freeze relaxes the moment you pause, a call holds
+    /// drawing and by how they end: a typing freeze relaxes the moment you pause, a call holds
     /// for the length of it.
     ///
     /// **The camera counts, and not only because of the drawing.** The call sheets have a
@@ -344,7 +344,7 @@ public struct CatState: Sendable {
 
     /// The whole screen is one window right now. Set by `App` from the same signal as the
     /// fullscreen retreat; while it holds, boredom never becomes a trip and a stimulus never
-    /// becomes an investigation, so a movie — or a presentation — does not gain a cat
+    /// becomes an investigation, so a movie (or a presentation) does not gain a cat
     /// strolling across it. He still glances, still yields, and still answers a retreat.
     public var screenCovered = false
 
@@ -358,12 +358,12 @@ public struct CatState: Sendable {
     ///
     /// The one place in his world where the ground model and the hardware disagree. `solid`
     /// excludes the notch because a cat standing there is invisible, not because he is
-    /// unsupported — there is aluminium behind it at exactly the bar's height.
+    /// unsupported. There is aluminium behind it at exactly the bar's height.
     ///
     /// **Stored rather than derived from `activity`, and that is not a style choice.** Derived,
     /// every interrupt in `standing` became a trapdoor: the mic going live mid-hang swaps the
-    /// activity for `.onCall`, the flag evaporates with it, and the *next* tick's ground test —
-    /// which runs before anything that could have caught it — drops a cat out of the notch onto
+    /// activity for `.onCall`, the flag evaporates with it, and the *next* tick's ground test
+    /// (which runs before anything that could have caught it) drops a cat out of the notch onto
     /// the desktop, wearing a laptop. The freeze, the yield and the sleep gate all did it. Held
     /// as state, the exemption outlives whatever took the behaviour away, and `standing` puts
     /// him back on the lip in its own time. See `leaveNotch`.
@@ -385,7 +385,7 @@ public struct CatState: Sendable {
     /// The side peeks grip the cutout's wall well above the menu bar line, and his position
     /// cannot go up there: the `.grounded` branch rewrites `position.y` from the surface on
     /// every tick, so anything stored there is gone before it is drawn. The lift is a property
-    /// of the drawing, applied at render time, and it leaves the physics alone — he is still a
+    /// of the drawing, applied at render time, and it leaves the physics alone: he is still a
     /// cat standing on the bar as far as everything else is concerned.
     public var notchLift: CGFloat = 0
 
@@ -393,7 +393,7 @@ public struct CatState: Sendable {
     /// him out cannot drift from the branches that put him in.
     public var mayStayInNotch: Bool {
         // About to do one. Waking up in the den owes him a hang instead of a stretch, and the
-        // check that pulls him out of the cutout runs *before* the owed show is consumed — so
+        // check that pulls him out of the cutout runs *before* the owed show is consumed, so
         // without this he would be hauled onto the lip on the very tick he was going to swing
         // off it.
         if owed == .hang || owed == .peerDown { return true }
@@ -403,7 +403,7 @@ public struct CatState: Sendable {
 
     /// Inside the cutout by any route, including passing through it.
     ///
-    /// Exactly one thing depends on this — the ground test in the `.grounded` branch — and it
+    /// Exactly one thing depends on this (the ground test in the `.grounded` branch) and it
     /// is deliberately a single named condition rather than checks in four places, because what
     /// it means is one idea: the hole in `solid` is a hole in the *display*, not in the *world*,
     /// and while he is in there he is standing on the camera housing.
@@ -415,7 +415,7 @@ public struct CatState: Sendable {
 
     /// A performance is owed: the wake-up stretch, or one of the machine-event pieces (the
     /// zap, the groove, the power-down, the curious look). Set by `App` on the edges only
-    /// it can see, consumed by `standing` once he is grounded, free and calm — so a hot
+    /// it can see, consumed by `standing` once he is grounded, free and calm, so a hot
     /// mic holds the show until the call ends rather than eating it. One slot deep: a
     /// later event replaces an unplayed earlier one, which at these frequencies is
     /// nothing.
@@ -513,8 +513,8 @@ public struct CatState: Sendable {
     /// the battery complaint about desktop pets is about wakeups, not pixels.
     public var isMoving: Bool {
         if case .falling = support { return true }
-        // He scrabbles, then slides. Always a bounded state — he mantles onto the ledge or
-        // runs out of wall — so this cannot hold the render rate up indefinitely.
+        // He scrabbles, then slides. Always a bounded state (he mantles onto the ledge or
+        // runs out of wall), so this cannot hold the render rate up indefinitely.
         if case .clinging = support { return true }
         // A show is motion: the zap's tremble at a settled cat's 8-12Hz render rate is a
         // slideshow. Bounded by each show's own hold, so it cannot pin the link.
@@ -585,8 +585,8 @@ public enum Cat {
         s.cursorOnHimFor = handOnHim ? s.cursorOnHimFor + dt : 0
         // ...and how much ground that hand is covering ON him, which is the whole of the
         // stroke. Fed a distance and bled at a rate, so what it really measures is how fast
-        // your hand is moving over him: fast enough is a pet, and everything slower — a jiggle,
-        // a pointer drifting to rest — never fills it.
+        // your hand is moving over him: fast enough is a pet, and everything slower (a jiggle,
+        // a pointer drifting to rest) never fills it.
         if handOnHim, let cursor = s.cursor {
             let moved = s.lastCursor.map { hypot(cursor.x - $0.x, cursor.y - $0.y) } ?? 0
             s.strokeTravel = min(max(0, s.strokeTravel + moved - Feel.Mind.strokeDecay * CGFloat(dt)),
@@ -738,7 +738,7 @@ public enum Cat {
                         // The column he climbed is not necessarily somewhere he can stand: a
                         // top edge is inset by the corner radius and clipped to the visible
                         // screen, so a grip in the top corner mantles onto nothing. He gets
-                        // pulled along the lip to the nearest place that is real — and if the
+                        // pulled along the lip to the nearest place that is real, and if the
                         // whole edge is unstandable there is nothing to mantle onto, so he
                         // lets go. Without this he grounds for exactly one tick and the
                         // shrunken-window backstop below drops him straight off again.
@@ -754,8 +754,8 @@ public enum Cat {
                         s.activityElapsed = 0
                         // Re-plan from the ledge he just pulled himself onto, exactly as a
                         // landing does. A deliberate climb keeps its intent all the way up the
-                        // face — that is what tells the branch above to climb rather than slide
-                        // — so without this he arrives on the window he was climbing with
+                        // face (that is what tells the branch above to climb rather than slide),
+                        // so without this he arrives on the window he was climbing with
                         // `.climb` still on the intent and immediately throws himself at it
                         // again.
                         if let intent = s.intent {
@@ -824,7 +824,7 @@ public enum Cat {
                 }
             }
 
-            // World position is derived. Surfing is free — he is already being carried.
+            // World position is derived. Surfing is free: he is already being carried.
             // What this measures is his *reaction* to being carried.
             //
             // The origin arrives as a ~100ms staircase from the world poll, so per-tick
@@ -854,7 +854,7 @@ public enum Cat {
             // overwrote all of them: the landing shake (and once activity is `.brace`,
             // `landingHold` returns nil, so the hold that keeps the shake on screen stops
             // existing), the pivot on the tick it was set, the wash, and the alert. A sleeping
-            // cat is excluded outright — `.brace` draws the alert sheet, so he sat bolt upright
+            // cat is excluded outright: `.brace` draws the alert sheet, so he sat bolt upright
             // on a dragged window and then slumbered in it.
             if s.intent == nil, s.repose != .asleep {
                 let braced = abs(s.lean) > Feel.Physics.braceThreshold
@@ -877,7 +877,7 @@ public enum Cat {
             // surface's `solid` is clipped to the visible frame, so one point outside it there
             // is nothing under him at ANY height. `supportBelow` returns nil for ever, `isMoving`
             // pins the display link at 60Hz, `enterSlumber` becomes unreachable and he is gone
-            // for the session — the whole idle-cost claim with him.
+            // for the session, the whole idle-cost claim with him.
             //
             // Deliberately a catch-all rather than a fix to whichever aim let him out. `aimX`
             // is *supposed* to be able to sail past a far lip (see the margin there), a throw
@@ -922,8 +922,8 @@ public enum Cat {
             // beneath it: a release over the Dock strip puts him below the floor line (the
             // floor is the TOP of a pinned Dock, and the cursor goes lower than that), and
             // `supportBelow` only ever searches downward, so no sweep from there can catch
-            // anything. That is the same fatal exit as the sides — gone for the session,
-            // display link pinned — so it gets the same catch-all: a descent already under
+            // anything. That is the same fatal exit as the sides (gone for the session,
+            // display link pinned), so it gets the same catch-all: a descent already under
             // the floor lands ON the floor, which reads as landing on the Dock shelf.
             // Ordinary falls are untouched, because for them y0 starts above the floor and
             // the sweep catches the crossing.
@@ -941,7 +941,7 @@ public enum Cat {
                 s.righting = 1
                 // Re-plan from where he actually landed, not from where he meant to. Asking
                 // again on every landing is the entire routing mechanism: one hop of lookahead,
-                // repeated, hill-climbs toward a destination without a pathfinder — and a hop
+                // repeated, hill-climbs toward a destination without a pathfinder, and a hop
                 // he fluffed simply becomes the new starting point rather than a dead end.
                 if let intent = s.intent, let surface = world.surface(hit.id) {
                     let next = nextMove(from: s, on: surface, toward: intent.destination,
@@ -951,7 +951,7 @@ public enum Cat {
             } else {
                 s.position = CGPoint(x: x, y: y1)
                 // The righting reflex. He twists, gets his feet under him, and lands on
-                // four paws every single time — by construction, not by luck.
+                // four paws every single time, by construction, not by luck.
                 // The twist itself finishes long before he lands, but he stays in `.righting`
                 // for the whole descent: it draws the same sheet as `.slip`, and staying put
                 // means the clip is never restarted underneath him.
@@ -978,8 +978,8 @@ public enum Cat {
     /// Would letting go from here put him down somewhere he can actually be seen?
     ///
     /// This is the whole of the climb-or-slide rule, and it deliberately never asks whether
-    /// anything is fullscreen. `spans` already answers exactly this question — it is `solid`
-    /// minus everything drawn in front of it — so under a fullscreen window the floor has no
+    /// anything is fullscreen. `spans` already answers exactly this question (it is `solid`
+    /// minus everything drawn in front of it), so under a fullscreen window the floor has no
     /// span beneath his grip and he climbs, while a window merely floating above the desktop
     /// leaves the desktop visible and he still slides down it. It degrades the right way for
     /// a maximized-but-not-fullscreen window for the same reason, with no third case.
@@ -992,8 +992,8 @@ public enum Cat {
         return below.spans.contains { $0.contains(p.x) }
     }
 
-    /// A tap, not a grab. He responds — the first rule of being touched, "he has to respond or
-    /// he is scenery" — with the two things his body can already do: a small press-down
+    /// A tap, not a grab. He responds (the first rule of being touched, "he has to respond or
+    /// he is scenery") with the two things his body can already do: a small press-down
     /// through the same squash a landing uses, and the alert perk held for a glance's beat,
     /// eyes to your hand. He stays exactly where he is: a pet must never move him, or
     /// clicking him becomes a way to lose him.
@@ -1101,7 +1101,7 @@ public enum Cat {
         // speed the last one ended at, in whatever direction that happened to be.
         if s.intent == nil { s.perchSpeed = 0 }
 
-        // Something took the notch behaviour away from him while he was in there — the freeze,
+        // Something took the notch behaviour away from him while he was in there: the freeze,
         // the yield, waking up, your camera coming on. `inNotch` exempts him from the ground
         // test, so it cannot simply be dropped: he would be standing on a hole. He is put back
         // on a lip and the flag goes with him, in that order.
@@ -1129,7 +1129,7 @@ public enum Cat {
             //
             // A place is barred; he is never summoned. If your call starts while he is at the
             // other end of the screen he simply puts the headphones on where he is. The joke
-            // needs no script — being evicted is what puts him under the camera in the first
+            // needs no script: being evicted is what puts him under the camera in the first
             // place, because the doorway is where he was.
             if s.onCamera, case .grounded(var perch) = s.support,
                let den = denDoor(s, on: surface) {
@@ -1195,13 +1195,13 @@ public enum Cat {
             // This is the one place his position is allowed inside the cutout, and the whole
             // reason `insideNotch` exists. His body sits above the bar line where the permanent
             // occluder masks it away, so the entire visible animation is a tail hanging out of
-            // the hole and swaying — which is why `denSleep` was drawn with the tail as its
+            // the hole and swaying, which is why `denSleep` was drawn with the tail as its
             // lowest ink, and why its `footAnchor` is the join between the two.
             //
             // Sticky once entered, because `denDoor` asks what lies ahead on `solid` and by then
             // he is standing in the hole in it: re-asking answers no on the very next tick and
             // drops him. The clear at the top of this function is what keeps sticky from
-            // meaning stuck — he leaves the den the moment he wakes or your camera comes on.
+            // meaning stuck: he leaves the den the moment he wakes or your camera comes on.
             if !s.onCamera, let notch = world.screen.notch,
                s.inNotch || denDoor(s, on: surface) != nil {
                 let x = notch.midX
@@ -1215,7 +1215,7 @@ public enum Cat {
 
         // Coming out of the doorway. He is standing on the notch's lip with the rest of him
         // still inside the cutout, where the mask clips him away, so the emergence has to
-        // finish before anything moves him — otherwise the walk starts on the first tick and
+        // finish before anything moves him. Otherwise the walk starts on the first tick and
         // the peek plays while he is already leaving. Above the intent handling rather than
         // inside it for the same reason `edgeLook` holds where it does: the hold IS the beat.
         if s.activity == .peek, s.activityElapsed < Feel.Timing.peekSeconds {
@@ -1397,7 +1397,7 @@ public enum Cat {
                     s.activityElapsed = 0
                     return s
                 }
-                // His whole ledge is covered — but the window burying him has a top edge of
+                // His whole ledge is covered, but the window burying him has a top edge of
                 // its own, and surfacing there, head and paws over the lip of the thing
                 // that hid him, is better than fleeing. The climb up its back is unseen by
                 // construction: he is hidden, which is the premise. The visible event is a
@@ -1422,7 +1422,7 @@ public enum Cat {
             //
             // **Above the general hold below, and that ordering is load-bearing.** Both notch
             // behaviours are in `inPlaceHold`, so the general branch would otherwise catch them
-            // first, hand him back his resting pose and leave him standing at `notch.midX` —
+            // first, hand him back his resting pose and leave him standing at `notch.midX`,
             // where `insideNotch` has just gone false, so the ground test drops a cat who was
             // hanging perfectly happily one tick ago. Anything that puts him inside the cutout
             // has to own its own way out.
@@ -1455,14 +1455,14 @@ public enum Cat {
             if s.beingStroked, !isShow(s.activity) {
                 if s.activity != .stroked { s.activity = .stroked; s.activityElapsed = 0 }
                 // Boredom does not drain while he is occupied, so he cannot get an idea and
-                // walk off mid-pet — the same failure the yield guard above prevents, arriving
+                // walk off mid-pet, the same failure the yield guard above prevents, arriving
                 // by the other road.
                 return s
             }
 
             // Mid-performance: a wash, a lounge, a stretch, or one of the event pieces.
-            // Held for its spell, then settled back. Everything that actually matters —
-            // the freeze, the yield, sleep, being hidden — already returned before this.
+            // Held for its spell, then settled back. Everything that actually matters
+            // (the freeze, the yield, sleep, being hidden) already returned before this.
             if let hold = inPlaceHold(s.activity) {
                 if s.activityElapsed > hold {
                     s.activity = s.repose.restingActivity
@@ -1472,7 +1472,7 @@ public enum Cat {
                 return s
             }
             // Peering over the lip: a good long nosy look, then he pulls himself up onto
-            // the edge — the landing clip is the pull-up, and its own hold hands to rest.
+            // the edge: the landing clip is the pull-up, and its own hold hands to rest.
             if s.activity == .peer {
                 if s.activityElapsed > Feel.Timing.peerSeconds {
                     s.activity = .land
@@ -1566,17 +1566,17 @@ public enum Cat {
 
         // A step-off is a walk that does not stop, so it is resolved into one here and the
         // walking code stays in one place. Resolved fresh each tick rather than written back,
-        // so a lip that stops being a lip — the window under it closing, say — is noticed.
+        // so a lip that stops being a lip (the window under it closing, say) is noticed.
         //
         // ...but not immediately. He walks to the lip, stops short of it, puts his head over
         // and HOLDS, and only then commits or thinks better of it. That hold is the same idea
         // as the crouch before a jump, one level up: it is the difference between the cat
         // jumped and the cat decided to jump. `stepOffLip` has already refused every lip with
-        // nothing under it, so he can only ever hesitate at a real drop — never at a wall, and
+        // nothing under it, so he can only ever hesitate at a real drop, never at a wall, and
         // never at the interior gap, which he must not so much as consider.
         var move = intent.move
         // A climb starts with a walk to the spot under the face. Resolved into one here, the
-        // way a step-off is, so the walking code stays in one place — and deliberately NOT
+        // way a step-off is, so the walking code stays in one place, and deliberately NOT
         // written back to the intent, because `intent.move` staying `.climb` is the only thing
         // arming the grab on the way up. The walk's own arrival re-plans through `nextMove`,
         // which hands back the same `.climb` with the same x (nothing in choosing it depends
@@ -1618,7 +1618,7 @@ public enum Cat {
                     // refusal from becoming a pace: `advance` re-plans toward whatever the
                     // intent says, so a retreat that kept the old destination would route him
                     // straight back to the lip he just turned down, for ever. Giving the trip up
-                    // is the honest reading anyway — he decided not to go — and the walk back
+                    // is the honest reading anyway (he decided not to go) and the walk back
                     // plus the rest at the end of it is what puts a real gap before he next
                     // thinks about it.
                     s.facing = -lip.dir
@@ -1649,7 +1649,7 @@ public enum Cat {
 
             } else {
                 // The approach, aimed to stop just short of the lip, so that the plant above
-                // catches him at `edgePlant` — with his front paws on solid ground and his
+                // catches him at `edgePlant`, with his front paws on solid ground and his
                 // lowered head out over the drop.
                 //
                 // The plant above intercepts one braking distance outside that mark so the walk
@@ -1658,9 +1658,9 @@ public enum Cat {
                 // own ledge, so re-planning here would quietly turn the whole thing into a leap.
                 //
                 // Which is also why the slowing down has to happen here rather than in the
-                // walk's own braking. The two windows coincide exactly — the walk brakes inside
+                // walk's own braking. The two windows coincide exactly (the walk brakes inside
                 // `brakingDistance` of its mark, which is the last `plantAt` points, and those
-                // are precisely the points he never spends walking — so left to the walk he
+                // are precisely the points he never spends walking), so left to the walk he
                 // would hold a flat `walkSpeed` right up to the lip and then stop dead. A
                 // ceiling on his surface speed, easing to a creep over the last `edgeEase`
                 // points, is the whole "slows" beat of the tell. It caps the ordinary walk
@@ -1669,7 +1669,7 @@ public enum Cat {
                 //
                 // Scaled off the gait he would otherwise be travelling at, not off `walkSpeed`:
                 // a ceiling of `walkSpeed` holds a trotting cat at a walk while `hurrying` is
-                // still true, and `Sprites.clip` reads `hurrying` — so he plays the run frames
+                // still true, and `Sprites.clip` reads `hurrying`, so he plays the run frames
                 // at walking speed, which is the gait desync `strideLength` exists to prevent.
                 // Applied only inside the ease itself for the same reason: outside it he is
                 // covering ground, and how he covers ground is not this code's business.
@@ -1741,7 +1741,7 @@ public enum Cat {
                     s.support = .falling
                     s.activity = .slip
                     s.activityElapsed = 0
-                    // Clear of the lip so the fall does not scrape down it — but never past
+                    // Clear of the lip so the fall does not scrape down it, but never past
                     // the far side of what he is stepping ONTO. The menu bar and the desktop
                     // share a span exactly, so at the ends of the screen two points past the
                     // one is two points past the other, and the nudge and the kick together
@@ -1774,7 +1774,7 @@ public enum Cat {
             // hold above covers that, and the walk with it.)
             // The 100ms crouch, from scratch every time. Non-negotiable: it is the entire
             // difference between a cat and a teleporting rectangle. Requiring that he is
-            // ALREADY crouching is what makes it survive a jump planned mid-route — the clock
+            // ALREADY crouching is what makes it survive a jump planned mid-route: the clock
             // left over from the walk that got him here would otherwise count as the wind-up.
             guard s.activity == .crouch, s.activityElapsed >= Feel.Timing.anticipation else {
                 s.activity = .crouch
@@ -1801,8 +1801,8 @@ public enum Cat {
             // The intent survives the flight; he re-plans the instant he lands.
 
         case .stepAcross(let destID, let x):
-            // A stride, not a leap. The gap is narrower than one pace — he is standing on the
-            // lip and the far side is a couple of dozen points away — so he simply arrives on
+            // A stride, not a leap. The gap is narrower than one pace (he is standing on the
+            // lip and the far side is a couple of dozen points away), so he simply arrives on
             // it, and two tiled windows read as one shelf instead of an obstacle course.
             guard let far = world.surface(destID) else {
                 settle(&s)
@@ -1841,8 +1841,8 @@ public enum Cat {
             }
 
         case .climb(let destID, _):
-            // In position under the face. Same crouch as a jump — the wind-up is the whole
-            // difference between a cat and a teleporting rectangle — and the same reason for
+            // In position under the face. Same crouch as a jump (the wind-up is the whole
+            // difference between a cat and a teleporting rectangle) and the same reason for
             // requiring he is ALREADY crouching: the clock left over from the walk that got
             // him here would otherwise count as the anticipation.
             guard s.activity == .crouch, s.activityElapsed >= Feel.Timing.anticipation else {
@@ -1861,8 +1861,8 @@ public enum Cat {
                 break
             }
             // Straight up at the face; he is not aiming to land on anything. The grab in the
-            // falling branch catches him on the way past, and if it does not — the window went
-            // away mid-flight — he simply comes back down onto the ledge he left.
+            // falling branch catches him on the way past, and if it does not (the window went
+            // away mid-flight), he simply comes back down onto the ledge he left.
             s.velocity = v
             s.support = .falling
             s.activity = .airborne
@@ -1959,9 +1959,9 @@ public enum Cat {
         }
     }
 
-    /// What he asks of himself over a walk of `dx`. Long trips are covered at a trot — a cat
+    /// What he asks of himself over a walk of `dx`. Long trips are covered at a trot (a cat
     /// crossing a room does not stroll, and it is also the only thing that ever plays the run
-    /// frames — and a low battery makes whichever gait it is slower.
+    /// frames), and a low battery makes whichever gait it is slower.
     ///
     /// One function because two callers have to agree: the walk sets `hurrying`, the animation
     /// picks the run sheet from it, and the ease at a lip has to scale off the same number. A
@@ -1982,8 +1982,8 @@ public enum Cat {
 
     /// Chance he goes through with it. Short drops nearly always; long ones sometimes not.
     ///
-    /// **This is where the reluctance lives.** The physics deliberately has no maximum drop —
-    /// under a minimum-energy launch a deeper target is *more* reachable, not less — so the
+    /// **This is where the reluctance lives.** The physics deliberately has no maximum drop
+    /// (under a minimum-energy launch a deeper target is *more* reachable, not less), so the
     /// judgement has to be behavioural. A cat that cannot make the jump is a platformer
     /// character; a cat that can and declines is a cat.
     ///
@@ -2017,14 +2017,14 @@ public enum Cat {
 
     /// The single best next step toward a destination. Deliberately dumb: no A*, no navigation
     /// mesh, one hop of lookahead and a greedy choice. Called again on every landing and at the
-    /// end of every step, which is what turns a chain of these into a route — and what lets a
+    /// end of every step, which is what turns a chain of these into a route, and what lets a
     /// jump he fluffs become the new starting point rather than a dead end.
     ///
     /// **This is final.** The mind layer replaces only the code that chooses a destination.
     public static func nextMove(from s: CatState, on surface: Surface,
                                 toward destID: SurfaceID, x destX: CGFloat,
                                 world: Skyline, mayWalk: Bool = true) -> Move? {
-        // Already there: just walk — unless the cutout is in the way, in which case it is a
+        // Already there: just walk, unless the cutout is in the way, in which case it is a
         // tunnel rather than a wall and he goes through it.
         if destID == surface.id {
             return notchCrossing(from: s.position.x, to: destX, on: surface, world: world)
@@ -2040,7 +2040,7 @@ public enum Cat {
         //
         // `spans`, not `solid`: he is CHOOSING where to put himself down, and `solid` includes
         // the parts of the far window that are hidden behind something else. Striding onto one
-        // of those is a legal place to stand and an absurd place to be seen — which is the
+        // of those is a legal place to stand and an absurd place to be seen, which is the
         // distinction the two arrays exist to draw.
         if abs(dest.y - surface.y) <= Feel.World.coplanarTolerance,
            let far = nearestSpanX(to: here.x, in: dest.spans),
@@ -2055,7 +2055,7 @@ public enum Cat {
         // the bar (`supportBelow` tie-breaks to the frontmost z), so a jump at the window
         // can never arrive: he re-plans on every touchdown and leaps against the top of the
         // screen forever. Ground that is coplanar AND under his own solid is walked, and
-        // being there already is nil — "no route" — which is what lets `advance` settle him
+        // being there already is nil ("no route"), which is what lets `advance` settle him
         // rather than chase an identity he can never hold.
         if abs(dest.y - surface.y) <= Feel.World.coplanarTolerance,
            surface.solid.contains(where: { $0.contains(destX) }) {
@@ -2090,7 +2090,7 @@ public enum Cat {
             return .jump(hop.id, hop.x)
         }
 
-        // Nothing in the air and the destination is above him — but there may be a curtain.
+        // Nothing in the air and the destination is above him, but there may be a curtain.
         // A window's FACE is a route and not just an obstacle, and it is the only way off the
         // desktop: `jumpImpulse` buys 190pt of rise against windows that are routinely five
         // times that tall, so without it he is stranded down there for the session.
@@ -2192,7 +2192,7 @@ public enum Cat {
     /// - and getting up there is progress, the same bar the hop has to clear, without which
     ///   he would climb something that takes him further away and then climb back.
     ///
-    /// **Nothing in here depends on where he is standing** — only on the destination, his
+    /// **Nothing in here depends on where he is standing**, only on the destination, his
     /// surface, and the candidate rects. That is what makes "walk to it, then re-plan on
     /// arrival" terminate: he gets the same answer when he arrives as the one that sent him.
     /// Which is why progress is measured from the LAUNCH point rather than from his feet: the
@@ -2212,7 +2212,7 @@ public enum Cat {
                       let x = nearestSpanX(to: min(max(destX, rect.minX + Feel.World.cornerInset),
                                                    rect.maxX - Feel.World.cornerInset),
                                            in: surface.solid),
-                      // Half-open on the right, because `CGRect.contains` is — and the grab on
+                      // Half-open on the right, because `CGRect.contains` is, and the grab on
                       // the way up is exactly that test, so a launch this admitted at maxX
                       // would rise through a face that refused to hold him.
                       rect.minX <= x, x < rect.maxX,
@@ -2229,7 +2229,7 @@ public enum Cat {
     /// Does the arc to `to` get out from over the ledge he is launching from?
     ///
     /// Every jump starts upward, so a target BELOW his own surface means coming back down
-    /// through it — and `supportBelow` is inclusive at both ends and has no idea which surface
+    /// through it, and `supportBelow` is inclusive at both ends and has no idea which surface
     /// he left, so he re-grounds wherever the arc re-crosses his own y over his own solid.
     /// Testing the LANDING x instead misses that entirely: the minimum-energy launch is flat,
     /// and menu-bar-to-desktop at 500pt across re-crosses only 44pt out.
@@ -2241,11 +2241,11 @@ public enum Cat {
     static func clears(_ surface: Surface, from: CGPoint, to: CGPoint) -> Bool {
         guard to.y < surface.y else { return true }
         guard let v = launch(dx: to.x - from.x, dy: to.y - from.y, jitter: 0) else { return false }
-        // Range at launch height: 2·vx·vy/g — but he judges soberly and executes with a wobble,
+        // Range at launch height: 2·vx·vy/g, but he judges soberly and executes with a wobble,
         // so what he actually gets is that range scaled by (1 ± aimError)². Every crossing in
         // that band has to clear, not just the sober one: a jump whose sober crossing sits a
         // few points past his own lip comes back down ON it on a low draw. Testing the band
-        // rather than its two ends because his own solid can have a hole in the middle of it —
+        // rather than its two ends because his own solid can have a hole in the middle of it:
         // the notch is exactly that, and threading a jump through the doorway is the one
         // downward jump on a bare desktop that does work.
         let range = 2 * v.dx * v.dy / Feel.Physics.gravity
@@ -2269,7 +2269,7 @@ public enum Cat {
         // coin flip on falling past it, so some margin has to exist; a margin as wide as the
         // scatter itself (±2·aimError of the throw, since range goes as (1 ± aimError)²) makes
         // a whole class of jump one he cannot fluff. At 2·aimError he could not sail past a far
-        // lip AT ALL — worst overshoot reaches 0.9888 of it — and fell short of a near one on
+        // lip AT ALL (worst overshoot reaches 0.9888 of it) and fell short of a near one on
         // only 4% of draws. Half that leaves 1.0562 and 26%: off the lip, still fallible.
         // Preserve the failure cases: they are where the charm lives.
         //
@@ -2291,7 +2291,7 @@ public enum Cat {
     /// the same distribution.
     ///
     /// Candidates from every visible span plus the null candidate, scored, drawn with a
-    /// temperature, and checked against routing — drawn again from the remainder if
+    /// temperature, and checked against routing. Drawn again from the remainder if
     /// `nextMove` refuses. The lounge always routes, because it is not a move; that makes
     /// nil unreachable in practice, and the branch stays for the day the lounge is ever
     /// conditional.
@@ -2340,8 +2340,8 @@ public enum Cat {
     }
 
     /// What a place offers him right now. Spec §2: every urge lands in 0…1 before
-    /// weighting, and the weights are the personality. Pure — the memory and the world go
-    /// in, one number comes out — so each urge's arithmetic is testable on its own.
+    /// weighting, and the weights are the personality. Pure (the memory and the world go
+    /// in, one number comes out), so each urge's arithmetic is testable on its own.
     static func score(_ c: Candidate, from s: CatState, world: Skyline) -> Double {
         typealias T = Feel.Taste
         guard let id = c.id else { return T.loungeBase }
@@ -2447,7 +2447,7 @@ public enum Cat {
     }
 
     /// Home enough, for the standing order: on the menu bar itself, or on any surface
-    /// sharing the top line — which is what a fullscreen window's own top edge is.
+    /// sharing the top line, which is what a fullscreen window's own top edge is.
     static func upTop(_ s: CatState, on surface: Surface, world: Skyline) -> Bool {
         surface.id == .menuBar
             || surface.y >= (world.surface(.menuBar)?.y ?? .infinity)
@@ -2471,7 +2471,7 @@ public enum Cat {
     /// The box your cursor has to be inside for him to count as being in your way: the rect
     /// he was DRAWN in, padded by the same `hitPad` the click rect uses, so the two are one
     /// figure. `App.hitRect` decides whether his window swallows your clicks, and this must
-    /// be that rect — built from the nominal 52×34 instead, it missed every drawn point
+    /// be that rect. Built from the nominal 52×34 instead, it missed every drawn point
     /// outside it (the sprite is normalised on eye width and is usually larger), so a cursor
     /// parked on his ear ate clicks for ever and the yield never saw it.
     ///
@@ -2488,7 +2488,7 @@ public enum Cat {
     /// no standable spot on this surface that clears it.
     ///
     /// He settles on the side he is arriving from, so he does not walk past the thing he came
-    /// for and turn round. The clearance is half of `width` plus `cursorGap` — the caller
+    /// for and turn round. The clearance is half of `width` plus `cursorGap`: the caller
     /// passes his DRAWN width when there is one, because the sprite is usually larger than
     /// the nominal figure and a clearance measured against the smaller box can settle his
     /// drawn edge onto the cursor.
@@ -2649,8 +2649,8 @@ public enum Cat {
     /// hesitating at edges he walks straight over and stepping off ones he stops at.
     ///
     /// Nil covers two of the three cases. A hole with more of the SAME surface beyond it is a
-    /// gap, not a cliff, and a gap is a wall (`isGap`). The notch is the only one that exists —
-    /// windows produce a single solid run and the floor is uncarved — and it is a trap rather
+    /// gap, not a cliff, and a gap is a wall (`isGap`). The notch is the only one that exists
+    /// (windows produce a single solid run and the floor is uncarved) and it is a trap rather
     /// than a ledge: he cannot jump to the surface he is standing on (`nextMove` walks there
     /// instead), and his whole impulse buys 190pt of rise against the thousand points back up
     /// from the desktop, so stepping into it is one-way.
@@ -2663,16 +2663,16 @@ public enum Cat {
 
     /// Into the cutout, one of three ways.
     ///
-    /// `out` is the direction that faces away from the hole, which `denDoor` already worked out
-    /// — so it says which lip he is standing at, and therefore which wall is his to lean out of.
+    /// `out` is the direction that faces away from the hole, which `denDoor` already worked out,
+    /// so it says which lip he is standing at, and therefore which wall is his to lean out of.
     ///
     /// - **hang**: from the middle of the underside, paws on the lower lip, doing pull-ups.
     /// - **peer down**: from the middle of the underside, head and paws over the lower lip.
     /// - **peer sideways**: from his own lip's *vertical* edge, head out into the lit strip
     ///   beside the cutout. Two thirds of the way up it, which is `notchLift`'s only job.
     ///
-    /// The side one is drawn by turning the same sheet a quarter circle, so it costs no art —
-    /// see `Sprites.turn`. That is also why it is the one that most wants its own drawing later.
+    /// The side one is drawn by turning the same sheet a quarter circle, so it costs no art.
+    /// See `Sprites.turn`. That is also why it is the one that most wants its own drawing later.
     static func enterNotch(_ s: inout CatState, on surface: Surface,
                            notch: CGRect, out: CGFloat) {
         s.inNotch = true
@@ -2704,8 +2704,8 @@ public enum Cat {
 
     /// Back out of the cutout and onto a lip, wherever he was in there and whatever ended it.
     ///
-    /// One function because four things can end a stay in the notch — the hold expiring, the
-    /// freeze, the yield, waking up — and every one of them has to reposition him, not merely
+    /// One function because four things can end a stay in the notch (the hold expiring, the
+    /// freeze, the yield, waking up) and every one of them has to reposition him, not merely
     /// stop the behaviour. Standing inside the hole is legal only while `inNotch` says so, and
     /// clearing that without moving him is the trapdoor described on `CatState.inNotch`.
     ///
@@ -2751,7 +2751,7 @@ public enum Cat {
               surface.y < notch.maxY, surface.y + Feel.Shape.height > notch.minY,
               // Inclusive on both lips, because standing ON the near one is the normal way to
               // arrive here: the two-stage walk below aims at exactly `notch.minX`, and a
-              // strict test made the second stage unreachable — he walked to the doorway and
+              // strict test made the second stage unreachable: he walked to the doorway and
               // then re-planned a walk to a destination he could not get to.
               min(x, destX) <= notch.minX, notch.maxX <= max(x, destX) else { return nil }
         let goingRight = destX > x

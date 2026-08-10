@@ -81,7 +81,7 @@ public final class OgiApp: NSObject, NSApplicationDelegate {
         }
 
         // Waking is the one failure that would be fatal: a cat who never comes back is a
-        // hung app. So the 1Hz idle check is backed up by workspace events — any app
+        // hung app. So the 1Hz idle check is backed up by workspace events: any app
         // launch, activation or Space change revives him regardless.
         for name: NSNotification.Name in [NSWorkspace.didActivateApplicationNotification,
                                           NSWorkspace.didLaunchApplicationNotification,
@@ -191,7 +191,7 @@ public final class OgiApp: NSObject, NSApplicationDelegate {
 
     /// Puts him into one of the notch behaviours on demand, for OGI_DEBUG builds only.
     ///
-    /// Not a shortcut around the real triggers — they are tested — but the only way a person
+    /// Not a shortcut around the real triggers (they are tested) but the only way a person
     /// can *look* at these. Three of the four are invisible to `screencapture` by construction,
     /// since the cutout comes back as wallpaper in a PNG, so judging them means being sat in
     /// front of the machine when they run.
@@ -281,7 +281,7 @@ public final class OgiApp: NSObject, NSApplicationDelegate {
     /// A display was connected, disconnected, or changed resolution. Every cached piece of
     /// screen geometry is now a lie: the overlay window is sized for the old configuration
     /// and he is drawn outside it, `flipOrigin` belongs to a primary display that may not be
-    /// the primary any more, and `homeScreen` is a stale `NSScreen` — worse than out of date,
+    /// the primary any more, and `homeScreen` is a stale `NSScreen`, worse than out of date,
     /// because AppKit has already replaced the object and its frame feeds `World.build`,
     /// which builds a world with nothing to stand on out of degenerate geometry.
     private func screensChanged() {
@@ -317,7 +317,7 @@ public final class OgiApp: NSObject, NSApplicationDelegate {
     ///
     /// Both axes, in both directions. Below is not the harmless side: a built-in display
     /// arranged *under* an external one has a negative frame origin, so unplugging the
-    /// external leaves him at a y beneath the new desktop — and `Skyline.supportBelow` only
+    /// external leaves him at a y beneath the new desktop, and `Skyline.supportBelow` only
     /// ever searches downward, so the floor above him can never catch him.
     static func reseat(_ cat: CatState, into visible: CGRect) -> CatState {
         let margin = Feel.Shape.width / 2
@@ -361,8 +361,8 @@ public final class OgiApp: NSObject, NSApplicationDelegate {
     /// He steps out of the doorway, not out of the middle of it. The notch is a hardware
     /// cutout with no pixels behind it, which is precisely why it is a hole in the menu
     /// bar's `solid`: standing at its centre is standing on nothing, and he falls on the
-    /// first tick. So he starts on its lip, with the rest of him overhanging the cutout —
-    /// where `World.build`'s permanent notch occluder masks him away — creeps out, and walks
+    /// first tick. So he starts on its lip, with the rest of him overhanging the cutout
+    /// (where `World.build`'s permanent notch occluder masks him away), creeps out, and walks
     /// into the lit strip. Peeking out of the hole, achieved with the geometry rather than in
     /// spite of it.
     ///
@@ -385,7 +385,7 @@ public final class OgiApp: NSObject, NSApplicationDelegate {
         return c
     }
 
-    /// The notch doorway he came out of. Nil on a Mac with no notch — `effectiveHomeX` is
+    /// The notch doorway he came out of. Nil on a Mac with no notch. `effectiveHomeX` is
     /// what the retreats and the goodbye actually use.
     private var homeX: CGFloat?
     private var leaving = false
@@ -430,7 +430,7 @@ public final class OgiApp: NSObject, NSApplicationDelegate {
     }
 
     /// The edge of the cutout on *his* side of it, or `homeX` itself when no lip lies on the
-    /// way — which is every notchless Mac, where home is mid-run and the edge ahead is the
+    /// way, which is every notchless Mac, where home is mid-run and the edge ahead is the
     /// screen corner. `homeX` is fixed at launch to the doorway he came out of, and the two
     /// are only the same while he stays on that side.
     static func doorway(from x: CGFloat, toward homeX: CGFloat, on bar: Surface) -> CGFloat {
@@ -470,7 +470,7 @@ public final class OgiApp: NSObject, NSApplicationDelegate {
         cat.listening = false
         cat.repose = .awake
         let bar = skyline.surface(.menuBar)
-        // He steps onto the bar wherever he happens to be — unless that is under the notch,
+        // He steps onto the bar wherever he happens to be, unless that is under the notch,
         // which is a hole in it. From there there is nothing to step onto, so he is already
         // at the doorway as far as the walk home is concerned.
         let startX = bar?.solid.contains { $0.contains(cat.position.x) } == true ? cat.position.x : home
@@ -643,7 +643,7 @@ public final class OgiApp: NSObject, NSApplicationDelegate {
     ///
     /// **Its own timer rather than the tick**, which is the whole reason this is not four
     /// lines. The render ladder drops a settled cat to 4Hz and slumber stops the display link
-    /// outright, and a cat you reach over and pet is precisely a settled one — driven off
+    /// outright, and a cat you reach over and pet is precisely a settled one. Driven off
     /// `tick` the purr would be a handful of thuds, or nothing at all.
     ///
     /// On a Mac without a Force Touch trackpad this silently does nothing, which is correct:
@@ -962,7 +962,7 @@ public final class OgiApp: NSObject, NSApplicationDelegate {
     /// He rests ON his perch, so his body occupies the band above it, which geometrically
     /// belongs to whatever is behind. He is therefore just in front of his perch and behind
     /// everything in front of it. Windows *behind* his perch never occlude him, even where
-    /// they overlap his body — that is the case a naive "mask against every overlapping
+    /// they overlap his body. That is the case a naive "mask against every overlapping
     /// window" gets wrong.
     private func perchZ() -> Int {
         switch cat.support {

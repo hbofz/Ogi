@@ -37,14 +37,14 @@ public enum Feel {
         public static let edgeApproach: CGFloat = 26
         /// Where he stops to look: how far back from the lip he plants, and the number to move
         /// if he reads as standing too far back. The approach walks to a mark one
-        /// `brakingDistance` further in, which is what stops it from ever arriving — so this has
+        /// `brakingDistance` further in, which is what stops it from ever arriving, so this has
         /// to stay above `brakingDistance` or the mark lands past the lip.
         ///
         /// Off the art, not off his nominal size. `Shape.width` is 52 and means nothing here:
         /// every clip is normalised on eye width and cropped tight sideways, so what is actually
         /// drawn around `position.x` varies per clip and per frame. The held `lookDown` frame is
         /// 23pt wide, and reading its ground contacts gives his front paws 2.5pt ahead of his
-        /// midline and his lowered head reaching 11.5pt ahead — he is looking straight down past
+        /// midline and his lowered head reaching 11.5pt ahead: he is looking straight down past
         /// his own paws, so the head is the part that has to clear the lip.
         ///
         /// That brackets this number, and `hePlantsWithHisPawsOnTheLedgeAndHisHeadOverTheLip`
@@ -129,7 +129,7 @@ public enum Feel {
         /// where the target sits at a tangency and angular error is second-order: ±0.06 rad
         /// moves a 60pt hop by half a point, so he would never miss at all. Speed error puts
         /// range ∝ (1+ε)², which scatters a 60pt hop over [53, 67] and a 300pt jump over
-        /// [265, 337] — proportional to the distance, and signed both ways.
+        /// [265, 337], proportional to the distance, and signed both ways.
         public static let aimError: CGFloat = 0.06
         /// However hard you flick him, he does not become a projectile.
         public static let maxThrow: CGFloat = 1500
@@ -149,8 +149,8 @@ public enum Feel {
         /// How far INTO a face he has to be able to leap before he will try to climb it, and
         /// how much extra height he asks of that leap. One number doing both jobs, because
         /// they are the same job: it is the margin that stops a leap which merely GRAZES the
-        /// bottom edge — arriving at its apex with no upward speed left, so the grab never
-        /// fires and he drops back to try again — from being a thing that can happen.
+        /// bottom edge (arriving at its apex with no upward speed left, so the grab never
+        /// fires and he drops back to try again) from being a thing that can happen.
         ///
         /// The margin has to survive `aimError`, which scatters the push-off by ±6% of the
         /// speed and so the rise by (1±0.06)². Worst case is the deepest leap he will attempt
@@ -263,7 +263,7 @@ public enum Feel {
         ///
         /// The whole feature is one distinction, and these three numbers are it. His window
         /// swallows clicks while the pointer is inside his hit rect, so a cursor sitting on him
-        /// has to move him aside (`yieldPatience`, above) — and a cursor *stroking* him has to
+        /// has to move him aside (`yieldPatience`, above), and a cursor *stroking* him has to
         /// do the opposite. Whether your hand is moving is what tells those apart, and it is
         /// the same distinction that separates `cursorOnHimFor` from `cursorStill`.
         ///
@@ -390,7 +390,7 @@ public enum Feel {
         ///
         /// **The minimum has a floor under it: the `lookDown` sheet's own time to its held
         /// frame**, 3 frames at 6fps. Below that a shallow drop commits part-way through the
-        /// lean and the tell is a cat twitching his head down — and window-to-window drops are
+        /// lean and the tell is a cat twitching his head down, and window-to-window drops are
         /// the common case, so that would be most of them. `theLeanAlwaysFinishesBeforeHeCanCommit`
         /// derives the figure from the clip and fails if either number moves; it lives in the
         /// tests rather than here because `Cat.step` cannot see `Sprites`.
@@ -423,8 +423,8 @@ public enum Feel {
         /// Floored by the `peek` sheet's own length, 4 frames at 5fps, for the same reason
         /// `edgeHesitationMin` is floored by `lookDown`: the clip does not loop, so anything
         /// shorter cuts him off mid-crouch and he snaps upright into a walk. The remainder is
-        /// spent holding the last frame — front half out, head up, hindquarters still in the
-        /// dark — which is the pose the walk starts from. `thePeekFinishesBeforeHeWalksOut`
+        /// spent holding the last frame (front half out, head up, hindquarters still in the
+        /// dark), which is the pose the walk starts from. `thePeekFinishesBeforeHeWalksOut`
         /// derives the floor from the clip and fails if either number moves.
         public static let peekSeconds: TimeInterval = 1.1
 
@@ -509,7 +509,7 @@ public enum Feel {
         /// idle ladder. Half: asleep in **five** minutes rather than ten, sitting at fifteen
         /// seconds, curled at ninety.
         ///
-        /// Not a shortcut — it is the situation being different. With a film up there is
+        /// Not a shortcut: it is the situation being different. With a film up there is
         /// nowhere to go and nothing to look at, the taste election is gated off entirely, and
         /// ten minutes of a cat waiting in a doorway is ten minutes of nothing. Five is roughly
         /// how long it takes to stop fidgeting with the volume and actually watch.
@@ -537,7 +537,7 @@ public enum Feel {
         ///
         /// Polls and not seconds, because `WorldTracker` is pure and has no clock. `pollRate()`
         /// runs anywhere from 1 to 30Hz, so what this buys varies: ~400ms at the usual 10Hz,
-        /// ~130ms if you happen to be mid-drag, and up to 4s if he is asleep — harmless, since
+        /// ~130ms if you happen to be mid-drag, and up to 4s if he is asleep. Harmless, since
         /// a sleeping cat is not walking off anything.
         public static let spaceChangeHoldOffPolls = 4
         public static let minStandWidth: CGFloat = 24
@@ -598,8 +598,8 @@ public enum Feel {
         public static let peerHeight: CGFloat = 19
         /// The same yardstick for the two front-facing clips. See `Sprites.frontFacingHeight`.
         ///
-        /// `peerDown` is the same subject as `peer` — his head and his two front paws over a
-        /// lip — in a squarer band, so it starts near `peerHeight` scaled for the taller frame.
+        /// `peerDown` is the same subject as `peer` (his head and his two front paws over a
+        /// lip) in a squarer band, so it starts near `peerHeight` scaled for the taller frame.
         /// `hang` is a whole cat drawn head-on and stretched out by his own weight, so it is
         /// the tallest thing he ever renders as: longer than his standing height, because a
         /// hanging cat is longer than a standing one.
@@ -618,7 +618,7 @@ public enum Feel {
         public static let callTalkHeight: CGFloat = 34
         public static let callDeskHeight: CGFloat = 35
         /// ...and once more for the den, for a third reason: his eyes are *closed*, and the
-        /// lids measure 30x22 — wide rather than small in both directions, so eye-width
+        /// lids measure 30x22, wide rather than small in both directions, so eye-width
         /// normalisation renders the whole clip about 30% short: 17pt of tail hanging out of
         /// the notch, which reads as a stub rather than a tail.
         ///
@@ -654,7 +654,7 @@ public enum Feel {
         /// half-width.
         public static let clearance: CGFloat = width / 2
         /// How far past his drawn ink a click still counts as touching him. He is a small
-        /// target, so the hit rect is padded — and the yield box is built from the same
+        /// target, so the hit rect is padded, and the yield box is built from the same
         /// figure, because the box he moves aside for must be the box that swallows clicks.
         public static let hitPad: CGFloat = 6
         /// Squash depth is proportional to impact speed, capped here.

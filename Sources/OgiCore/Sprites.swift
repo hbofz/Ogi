@@ -131,7 +131,7 @@ public enum Sprites {
             // The three call clips loop: he is on the call until you are not, and each sheet's
             // last frame returns to the first's pose so the seam is invisible.
             // denSleep loops: it is the sleep clip with a tail, and it breathes.
-            // hang loops, but only its tail — see `index`, where frames 0 and 1 are him
+            // hang loops, but only its tail. See `index`, where frames 0 and 1 are him
             // lowering himself over the lip and play once.
             // peerDown loops: a nosy look is a spell, like peer's.
             case .walk, .run, .idle, .sleep, .held, .alert, .groom, .cling, .climbUp,
@@ -177,7 +177,7 @@ public enum Sprites {
         /// The flip pivots on the anchor, so the drawn content ends up on the opposite side of
         /// it and the box has to follow. Getting this wrong is not cosmetic: `Overlay` builds
         /// the occlusion mask in this rect's coordinates, so a box on the wrong side of him
-        /// clips the wrong half — and the hit rect for petting comes from here too.
+        /// clips the wrong half, and the hit rect for petting comes from here too.
         public func rect(at p: CGPoint) -> CGRect {
             CGRect(x: p.x - size.width / 2,
                    y: p.y - size.height * (flippedY ? 1 - anchor : anchor),
@@ -200,7 +200,7 @@ public enum Sprites {
     /// Where the drawings actually are, which is not where SwiftPM thinks it left them.
     ///
     /// **`Bundle.module` cannot be trusted inside an `.app`.** The accessor SwiftPM generates
-    /// looks in `Bundle.main.bundleURL` — the `.app` directory itself — and then falls back to
+    /// looks in `Bundle.main.bundleURL` (the `.app` directory itself) and then falls back to
     /// a hard-coded absolute build path. Inside an app bundle, resources belong under
     /// `Contents/Resources`, so the first candidate never matches and the second is a path on
     /// the machine that built it.
@@ -212,7 +212,7 @@ public enum Sprites {
     ///
     /// So: ask the app bundle first, and keep `.module` for `swift test` and `swift run`, where
     /// it is correct and where `Bundle.main` is the test runner. Evaluated once, and lazily,
-    /// which matters — merely *touching* `.module` when the resources are absent is the crash.
+    /// which matters: merely *touching* `.module` when the resources are absent is the crash.
     static let resources: Bundle = {
         if let url = Bundle.main.resourceURL?.appendingPathComponent("Ogi_OgiCore.bundle"),
            let bundle = Bundle(url: url) { return bundle }
@@ -345,15 +345,15 @@ public enum Sprites {
     /// paws over the lip at the top, head hanging below them, upside down, the way a cat
     /// actually looks over the front of a shelf.
     ///
-    /// The flip is about `footAnchor`, so that anchor has to be the part that stays put — his
+    /// The flip is about `footAnchor`, so that anchor has to be the part that stays put: his
     /// paws, at the very bottom of the ink as drawn.
     static func flipsVertically(_ clip: Clip) -> Bool { clip == .peerDown }
 
     /// How far to turn a drawing, in radians, for the edge of the cutout he is hanging off.
     ///
     /// **Takes the clip as well as the side, and that is the whole point.** `CatState.notchSide`
-    /// outlives the pose it belongs to, so a renderer that read it alone rotated *everything* —
-    /// he left the notch still lying on his side and sat turned on a window's title bar.
+    /// outlives the pose it belongs to, so a renderer that read it alone rotated *everything*.
+    /// He left the notch still lying on his side and sat turned on a window's title bar.
     /// Only the clip that can be hung off an edge may be turned by this.
     ///
     /// Positive is counter-clockwise, so the head going out to the LEFT is the negative turn.
@@ -396,7 +396,7 @@ public enum Sprites {
         switch clip {
         case .held: return 0.95     // gripped by the scruff, near the top
         // Same situation as `held`: nothing touches the ground, so the point held fixed at
-        // `cat.position` is his grip on the wall — his raised front paws, near the top. Every
+        // `cat.position` is his grip on the wall: his raised front paws, near the top. Every
         // automatic bottom-of-ink reading finds his HANGING TAIL instead and would dangle him
         // upside down off the window.
         //
@@ -423,7 +423,7 @@ public enum Sprites {
         case .hang: return 0.982
         // His two paws hook over the notch's bottom lip and his head hangs below them, upside
         // down. The sheet is drawn the other way up and flipped at render time
-        // (`flipsVertically`), and the flip pivots on this anchor — so it has to be the part
+        // (`flipsVertically`), and the flip pivots on this anchor, so it has to be the part
         // that must not move, which is his paws.
         //
         // They sit at the very bottom of the ink in every frame (row 411 of a 413px band, and
@@ -435,7 +435,7 @@ public enum Sprites {
         // anchor is therefore where the body stops and the tail starts, so that the bar line
         // falls exactly there.
         //
-        // Row 248 of a 500px band, and it is row 248 on all four frames — the sheet holds his
+        // Row 248 of a 500px band, and it is row 248 on all four frames: the sheet holds his
         // body still to the pixel while the tail swings, which is what it was asked for.
         case .denSleep: return 0.504
         default:    return 0
@@ -477,7 +477,7 @@ public enum Sprites {
         /// Near-black eyes, as the ginger tabby has. Dark *and neutral*: his outline is dark
         /// too, but warm (r≈128 against g≈48), so requiring the red channel down with the rest
         /// keeps the outline out. His cream belly and paws stop short of `isPale` for the same
-        /// kind of reason — their blue channel never reaches it.
+        /// kind of reason: their blue channel never reaches it.
         func isInky(_ i: Int) -> Bool {
             px[i * 4 + 3] > 128 && px[i * 4] < 80 && px[i * 4 + 1] < 80 && px[i * 4 + 2] < 90
         }
@@ -520,7 +520,7 @@ public enum Sprites {
             // Whiskers and highlights are thin; an eye is a chunky blob.
             guard count > 12, maxX - minX > 2, maxY - minY > 2 else { continue }
             // An eye is roughly as tall as it is wide. A *closed* eyelid is a long flat line,
-            // and being long it can win on area over the open eye beside it — on `curl` a
+            // and being long it can win on area over the open eye beside it: on `curl` a
             // 37x14 lid beat a 19x21 eye, and the clip rendered at nearly half the right size
             // because clipScale divides by that width. Rejecting flat blobs changes nothing on
             // ten of the twelve clips and fixes the two it should.
@@ -531,7 +531,7 @@ public enum Sprites {
             guard count * 6 < ink else { continue }
             // On the white-eyed sheets his paws and chest have white in them too, and they
             // were being drawn as extra eyes on his leg. Eyes live in the head, which is in
-            // the upper half of the frame — including when he is upside down mid-fall,
+            // the upper half of the frame, including when he is upside down mid-fall,
             // because the frames are drawn head-up.
             //
             // Scoped to that palette, because it is only ever approximately true and the dark
@@ -556,8 +556,8 @@ public enum Sprites {
 
     /// How much to scale a clip so he is the same size in all of them.
     ///
-    /// The source sheets were generated separately and drew him at quite different sizes —
-    /// the walk band is 158px tall and the sit band is 287px — so one global scale made him
+    /// The source sheets were generated separately and drew him at quite different sizes
+    /// (the walk band is 158px tall and the sit band is 287px), so one global scale made him
     /// visibly shrink the moment he started walking.
     ///
     /// Normalised on **eye width**, because it is the one feature present and consistent in
@@ -631,7 +631,7 @@ public enum Sprites {
         case .callTalk: Feel.Shape.callTalkHeight
         case .callWork, .callFull: Feel.Shape.callDeskHeight
         // *Eyes closed* (`denSleep`): the third way this measurement fails. A shut lid is a
-        // wide flat blob, so dividing the reference width by it renders the clip short — 17pt
+        // wide flat blob, so dividing the reference width by it renders the clip short: 17pt
         // of tail out of the notch on screen, which reads as a stub.
         case .denSleep: Feel.Shape.denSleepHeight
         // Eyes closed again, and this time by construction: the whole point of the pose is

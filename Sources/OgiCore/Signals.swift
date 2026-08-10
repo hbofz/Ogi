@@ -16,7 +16,7 @@ public struct Sensations: Sendable {
     public var typingRate: Double = 0        // keystrokes per minute
     public var micLive = false
     /// The camera is running. Permission-free, and it reports *that* a device is on and
-    /// nothing about what it sees — the same shape of read as `micLive`.
+    /// nothing about what it sees, the same shape of read as `micLive`.
     ///
     /// The camera lives in the notch, which is his house, so this is the one signal that can
     /// evict him from it.
@@ -118,7 +118,7 @@ public final class Signals {
 
         // New ears. The device LIST is watched rather than any stream: connecting AirPods
         // changes which devices exist, which is a count, and a count cannot carry a sound.
-        // Only additions count — devices leaving are not an arrival.
+        // Only additions count: devices leaving are not an arrival.
         var devicesAddr = AudioObjectPropertyAddress(
             mSelector: kAudioHardwarePropertyDevices,
             mScope: kAudioObjectPropertyScopeGlobal,
@@ -238,7 +238,7 @@ public final class Signals {
     ///
     /// Uses the macOS 14.4+ per-**process** API rather than the per-device property.
     /// `kAudioDevicePropertyDeviceIsRunningSomewhere` always reports false for Bluetooth
-    /// microphones — an unresolved Apple bug — which would silently break this for every
+    /// microphones (an unresolved Apple bug), which would silently break this for every
     /// AirPods user, and AirPods are how a large share of people take calls.
     /// Falls back to the device property if the process list is unavailable.
     static func micRunning() -> Bool {
@@ -265,7 +265,7 @@ public final class Signals {
     ///
     /// The same question the green privacy LED answers, asked of CoreMediaIO: enumerate the
     /// video devices and ask each whether it is running somewhere. **No permission**, and
-    /// structurally incapable of capturing an image — it returns a flag per device and there is
+    /// structurally incapable of capturing an image: it returns a flag per device and there is
     /// no path from here to a frame. It is one of the permission-free reads.
     ///
     /// Unlike the microphone there is no per-*process* CoreMediaIO property, so the device
@@ -306,14 +306,14 @@ public final class Signals {
     /// Daemons that hold the microphone open as a matter of course, and whose doing so does not
     /// mean anybody is listening to you.
     ///
-    /// **Measured, not guessed.** `com.apple.CoreSpeech` — the "Hey Siri" listener, on by
-    /// default — reports a running input *continuously*, while
+    /// **Measured, not guessed.** `com.apple.CoreSpeech` (the "Hey Siri" listener, on by
+    /// default) reports a running input *continuously*, while
     /// `kAudioDevicePropertyDeviceIsRunningSomewhere` reports the microphone idle at the same
     /// instant. Without this filter the per-process read is true forever on any Mac with Siri
     /// enabled, which is a cat wearing a headset all day.
     ///
     /// **The obvious alternative is worse.** The device property gets this case right, but it
-    /// always reports false for Bluetooth microphones — an Apple bug — which would silently
+    /// always reports false for Bluetooth microphones (an Apple bug), which would silently
     /// break the signal for everyone who takes calls on AirPods. That trades a false positive
     /// for a false negative on the commonest calling setup. So: keep the per-process read, name
     /// the daemon.
