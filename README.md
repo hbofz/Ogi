@@ -5,11 +5,12 @@
 </p>
 
 <p align="center">
-  <img src="docs/ogi-hero.gif" width="820" alt="Ogi walking along a window's title bar, stepping off the edge, and leaping across to another window">
+  <img src="docs/ogi-hero.gif" width="820" alt="Ogi stepping down onto a window's title bar, leaping the gaps between windows, climbing a window face, being petted, and sitting at a laptop during a call">
 </p>
 
 <p align="center">
-  <sub>Real screen recording. He walks the edge of one window, steps off, and jumps to the next.</sub>
+  <sub>Real screen recording, five shots: he steps down onto a window, leaps the gaps between
+  them, climbs a window face to get back up, gets petted, and joins a call.</sub>
 </p>
 
 <p align="center">
