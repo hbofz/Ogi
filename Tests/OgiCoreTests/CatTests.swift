@@ -262,10 +262,9 @@ private let notched = ScreenGeometry(frame: CGRect(x: 0, y: 0, width: 1920, heig
                                      notch: CGRect(x: 830, y: 1206, width: 200, height: 37))
 
 @Test func heIsNeverDrawnHalfOffThePanel() {
-    // He used to be able to plant at x=5 on a 1920pt screen. `edgePlant` stops him 6pt back
-    // from a lip, which is right at a window's edge and wrong at the display's, because there
-    // is nothing behind the display's. Hamzah's screenshot is a peek over the left edge with
-    // only his tail still on the panel.
+    // He could plant at x=5 on a 1920pt screen. `edgePlant` stops him 6pt back from a lip,
+    // which is right at a window's edge and wrong at the display's, because there is nothing
+    // behind the display's: a peek over the left edge with only his tail still on the panel.
     let world = World.build(windows: [], screen: notched, ownPID: 99)
     let margin = Feel.Shape.clearance
     for id in [SurfaceID.menuBar, .floor] {
@@ -290,12 +289,10 @@ private let notched = ScreenGeometry(frame: CGRect(x: 0, y: 0, width: 1920, heig
 }
 
 @Test func theNotchIsAHoleInEveryLedgeAtThatHeight() {
-    // It used to be cut out of the menu bar alone, because the bar was the only ledge up
-    // there. A fullscreen window's top edge is another one. Measured on Hamzah's Mac it sits
-    // exactly ON the bar line and runs the full width, and since the covered-screen retreat
-    // learned to put him there, it is where he lives. Standing under the cutout drew him into
-    // a region with no pixels behind it: Hamzah's screenshot has a whole cat down to a sliver
-    // of tail.
+    // The bar is not the only ledge up there: a fullscreen window's top edge sits exactly ON
+    // the bar line and runs the full width, and the covered-screen retreat puts him there, so
+    // it is where he lives. Standing under the cutout drew him into a region with no pixels
+    // behind it, taking a whole cat down to a sliver of tail.
     let notch = notched.notch!
     let fullscreen = RawWindow(id: 1, pid: 7, layer: 0,
                                rect: CGRect(x: 0, y: 0, width: notched.frame.width,
@@ -332,8 +329,8 @@ private let notched = ScreenGeometry(frame: CGRect(x: 0, y: 0, width: 1920, heig
 
     for _ in 0..<Int(10 / dt) {
         // Re-issued every time he gives up, so he spends the whole ten seconds shoving at the
-        // far side of the cutout instead of idling. Idling is no longer inert: a deep drop is
-        // easier to reach than a shallow one, so left alone he now deliberately leaps off the
+        // far side of the cutout instead of idling. Idling is not inert: a deep drop is
+        // easier to reach than a shallow one, so left alone he deliberately leaps off the
         // menu bar to the desktop, which is a feature and not what this test is about.
         // Straight across the cutout.
         if cat.intent == nil {
@@ -374,11 +371,10 @@ private let notched = ScreenGeometry(frame: CGRect(x: 0, y: 0, width: 1920, heig
 }
 
 @Test func fromTheMenuBarHeDropsOntoTheWindowBelow() {
-    // What Hamzah watched: from the bar, every descent walked to a screen corner, because a
-    // full-width surface's only lips ARE the corners — stepOff picks the lip nearest the
-    // destination, and from the bar that is a thousand-point walk followed by a
-    // thousand-point fall into a corner nowhere near where he was going. Windows were never
-    // stepping stones on the way down.
+    // From the bar, every descent walked to a screen corner, because a full-width surface's
+    // only lips ARE the corners: stepOff picks the lip nearest the destination, and from the
+    // bar that is a thousand-point walk followed by a thousand-point fall into a corner
+    // nowhere near where he was going. Windows were never stepping stones on the way down.
     let bar = surface(.menuBar, y: 1205, from: 0, to: 1920, z: -1)
     let win1 = surface(.window(1), y: 1110, from: 264, to: 1091)
     let floor = surface(.floor, y: 90, from: 0, to: 1920, z: .max)
@@ -396,7 +392,7 @@ private let notched = ScreenGeometry(frame: CGRect(x: 0, y: 0, width: 1920, heig
 
 @Test func aWindowLipStillGetsTheTellNotADrop() {
     // The drop must not eat the edge. From a window whose lip actually gains ground, the
-    // crafted approach-slow-look-hold beat stays exactly as v2a built it.
+    // approach-slow-look-hold beat stays intact.
     let ledge = surface(.window(1), y: 600, from: 400, to: 900)
     let floor = surface(.floor, y: 90, from: 0, to: 1920, z: .max)
     var cat = CatState(position: CGPoint(x: 650, y: 600))
@@ -479,8 +475,8 @@ private let notched = ScreenGeometry(frame: CGRect(x: 0, y: 0, width: 1920, heig
             "his own overlay counted as the world being covered")
 }
 
-/// The geometry a fullscreen Space actually has, dumped live off Hamzah's M2 (macOS 26.5.1,
-/// 1920x1243pt, notched) while sitting on one.
+/// The geometry a fullscreen Space actually has, measured on a notched 1920x1243pt display
+/// running macOS 26.5.1 while sitting on one.
 @MainActor
 @Test func aSettledFullscreenSpaceReadsAsCovered() {
     let g = ScreenGeometry(frame: CGRect(x: 0, y: 0, width: 1920, height: 1243),
@@ -498,8 +494,8 @@ private let notched = ScreenGeometry(frame: CGRect(x: 0, y: 0, width: 1920, heig
     #expect(OgiApp.somethingFullscreen(in: textEdit, screen: g, ownPID: 99),
             "a fullscreen Space he is standing in did not read as covered")
 
-    // And a fullscreen app is not one big window. Chrome's is four full-width bands, dumped
-    // from the same session; the tallest is 87% of the screen and no single one is close.
+    // And a fullscreen app is not one big window. Chrome's is four full-width bands, measured
+    // on the same display; the tallest is 87% of the screen and no single one is close.
     let chrome = [(0.0, 1083.0), (1083.0, 81.0), (1164.0, 41.0), (1047.0, 158.0)]
         .enumerated().map { i, b in
             RawWindow(id: CGWindowID(10 + i), pid: 8, layer: 0,
@@ -525,9 +521,9 @@ private let notched = ScreenGeometry(frame: CGRect(x: 0, y: 0, width: 1920, heig
 
 @Test func heWaitsInTheDoorwayFacingOut() {
     // The notch is a hardware hole with no pixels behind it, so a cat resting AT its lip
-    // half-overlaps the cutout and the mask eats half of him — "he disappears", Hamzah
-    // said, watching. At a den door his waiting pose is the peek instead: hindquarters in
-    // the dark, face out, watching the room from inside his den.
+    // half-overlaps the cutout and the mask eats half of him: he disappears. At a den door his
+    // waiting pose is the peek instead: hindquarters in the dark, face out, watching the room
+    // from inside his den.
     let world = World.build(windows: [], screen: notched, ownPID: 99)
     let bar = world.surface(.menuBar)!
     let notch = notched.notch!
@@ -554,10 +550,9 @@ private let notched = ScreenGeometry(frame: CGRect(x: 0, y: 0, width: 1920, heig
 @MainActor
 @Test func heWaitsBesideTheHoleAndNotInIt() {
     // The notch has no pixels behind it, so whatever is drawn inside it is gone. Parked
-    // centred on the lip, where both retreats used to send him and where he then stays for
-    // as long as the screen is covered, he loses everything past it. Hamzah watched
-    // about half of him disappear up there. Every waiting spot must leave his whole box on
-    // lit pixels.
+    // centred on the lip, where both retreats send him and where he then stays for as long as
+    // the screen is covered, about half of him disappears. Every waiting spot must leave his
+    // whole box on lit pixels.
     let notch = notched.notch!
     for lip in [notch.minX, notch.maxX] {
         let x = OgiApp.denX(lip, notch: notch)
@@ -764,9 +759,8 @@ private let notched = ScreenGeometry(frame: CGRect(x: 0, y: 0, width: 1920, heig
 @MainActor
 @Test func theNotchClipsTheHalfOfHimStillInsideIt() {
     // What makes the peek real. He stands on the lip, which is solid, and the half of him
-    // overhanging the cutout is masked away by the occlusion machinery that already exists —
-    // rather than by the old trick of a black cat against a black bezel, which died the day
-    // he became a ginger tabby.
+    // overhanging the cutout is masked away by the occlusion machinery that already exists,
+    // rather than by drawing a black cat against a black bezel.
     let world = World.build(windows: [], screen: notched, ownPID: 99)
     let bar = world.surface(.menuBar)!
     let notch = notched.notch!
@@ -837,7 +831,7 @@ private func landing(fromHeight h: CGFloat, routing: Bool = false) -> (Activity,
 }
 
 @Test func aHardLandingIsHeldLongerThanAGentleOne() {
-    // The other half of the same complaint. Both landings used to time out on one 0.35s clock,
+    // The other half of the same defect. Both landings used to time out on one 0.35s clock,
     // so even with a different sheet the shake would be cut off part-way through: it does not
     // loop, and a hard landing that ends on the same beat as a step down is not a hard landing.
     let (hardActivity, hardHeld) = landing(fromHeight: 600)
@@ -914,8 +908,8 @@ private func landing(fromHeight h: CGFloat, routing: Bool = false) -> (Activity,
 
 @Test func aLoungingCatIsStillZapped() {
     // The show interrupts the in-place performances rather than queueing behind them: owed
-    // consumption used to sit below the hold block, so a plug-in during a lounge played up
-    // to a whole spell late — Hamzah felt it as "kinda slow".
+    // consumption below the hold block makes a plug-in during a lounge play up to a whole
+    // spell late.
     let floor = surface(.floor, y: 90, from: 0, to: 1920, z: .max)
     var cat = CatState(position: CGPoint(x: 900, y: 90))
     cat.support = .grounded(Perch(id: .floor, dx: 900))
@@ -927,11 +921,11 @@ private func landing(fromHeight h: CGFloat, routing: Bool = false) -> (Activity,
 }
 
 @Test func aWindowOpeningDoesNotStompTheShow() {
-    // The zap died in under a second on screen through THREE rounds of lengthening its
-    // buzz, because plugging the charger makes macOS flash a transient charging window:
-    // the glance's perk overwrote .zap with .alert on the next poll, and a roused cat
-    // could abandon the show for an investigation trip. He still glances — eyes and
-    // arousal are the cheap half — but the pose belongs to the show until it ends.
+    // Plugging the charger makes macOS flash a transient charging window, and the glance's
+    // perk overwrote .zap with .alert on the next poll, so the zap died in under a second on
+    // screen however long its buzz was. A roused cat could also abandon the show for an
+    // investigation trip. He still glances (eyes and arousal are the cheap half) but the pose
+    // belongs to the show until it ends.
     let bar = surface(.menuBar, y: 1205, from: 0, to: 1920, z: -1)
     let win1 = surface(.window(1), y: 900, from: 300, to: 800)
     var cat = CatState(position: CGPoint(x: 900, y: 1205))
@@ -974,7 +968,7 @@ private func landing(fromHeight h: CGFloat, routing: Bool = false) -> (Activity,
     let oneCycle = 3.0 / fps
     // One full cycle in, the buzz is back on its first frame, not marching to the end.
     #expect(Sprites.index(.zap, activity: .zap, walkPhase: 0, elapsed: oneCycle + 0.001) == 0)
-    // The buzz has room for at least the two full passes Hamzah asked for.
+    // The buzz has room for at least two full passes.
     #expect(Feel.Timing.zapBuzzSeconds >= 2 * oneCycle)
     // After the buzz the recovery marches to the settled last frame and holds there.
     #expect(Sprites.index(.zap, activity: .zap, walkPhase: 0,
@@ -1089,7 +1083,7 @@ private func landing(fromHeight h: CGFloat, routing: Bool = false) -> (Activity,
 
 @MainActor
 @Test func heSometimesWashesInsteadOfGoingSomewhere() {
-    // Manifesto §7.1 wants an occasional in-place behaviour while awake. The failure this
+    // An occasional in-place behaviour while awake. The failure this
     // guards is a wash that never ends: `groom` has no intent, so it sits in the same branch as
     // resting and would loop forever if the timeout were dropped.
     let ground = surface(.window(1), y: 500, from: 0, to: 900)
@@ -1400,8 +1394,8 @@ private func desktop(with w: CGRect) -> Skyline {
 }
 
 @Test func heClimbsRatherThanSlidingSomewhereHeCannotBeSeen() {
-    // Complaint 1, from watching the real app: held over a fullscreen window and let go, he
-    // slid down its face and dropped to the desktop BEHIND it, where he cannot be seen.
+    // Held over a fullscreen window and let go, he slid down its face and dropped to the
+    // desktop BEHIND it, where he cannot be seen.
     //
     // The rule needs no fullscreen check. `spans` is exactly "where he is visible" — `solid`
     // minus everything in front — so the question is only ever whether the spot he would land
@@ -1570,13 +1564,12 @@ private func steppingOff() -> CatState {
     // A cat pacing to the same lip for ever is worse than one that jumps. Two things have to
     // hold: a refusal has to put a real gap before the next approach (he goes and does
     // something else), and he has to get down eventually.
-    // 400 seconds each, extended three times for the same reason: an approach is a slow one
-    // (see `edgeEase`), a refusal costs a retreat, a rest and a fresh idea — and since v2c
-    // that fresh idea is usually a 45-second lounge, which is the election working as
-    // designed: on a fixture this bare the lounge wins most draws, so a second look at the
-    // lip needs several election cycles to appear. At 180s zero second looks across forty
-    // trials was a 3% draw, and it came up. A trial where he only ever looked once measures
-    // nothing at all — hence the refusal count below, which cannot pass vacuously.
+    // 400 seconds each: an approach is a slow one (see `edgeEase`), a refusal costs a retreat,
+    // a rest and a fresh idea, and that fresh idea is usually a 45-second lounge, which is the
+    // election working as designed. On a fixture this bare the lounge wins most draws, so a
+    // second look at the lip needs several election cycles to appear. At 180s, zero second
+    // looks across forty trials is a 3% draw. A trial where he only ever looked once measures
+    // nothing at all, hence the refusal count below, which cannot pass vacuously.
     let world = ledgeWorld()
     var looks = 0, refusals = 0, left = 0
     var tightest = TimeInterval.infinity, closest: CGFloat = 0
@@ -1621,14 +1614,11 @@ private func steppingOff() -> CatState {
 
     cat.listening = true
     cat = Cat.step(cat, world: world, dt: dt)
-    // `.onCall` and not `.alert` since v3a: a live mic is a call and he joins it, wearing the
-    // boom mic. What this test is actually about is unchanged — the freeze still interrupts the
-    // edge tell, and the trip below still survives it.
+    // `.onCall` and not `.alert`: a live mic is a call and he joins it, wearing the boom mic.
+    // The freeze still interrupts the edge tell, and the trip below still survives it.
     #expect(cat.activity == .onCall)
-    // The trip SURVIVES the freeze now, and this line used to assert the opposite. That was the
-    // hot-mic bug written down as a requirement: clearing the intent here is exactly what
-    // destroyed the walk out of the notch when the app launched during a call. What this test is
-    // named for, that the mic beats the hold at the lip, is the assertion above and is untouched.
+    // The trip SURVIVES the freeze: clearing the intent here is exactly what destroyed the walk
+    // out of the notch when the app launched during a call.
     #expect(cat.intent != nil, "the freeze ate his trip again")
 
     var asleep = steppingOff()
@@ -1662,10 +1652,10 @@ private func steppingOff() -> CatState {
         // Until he leaves the bar, however he leaves it. Threading a jump down through the
         // doorway is legal and is not what this is about.
         guard case .grounded(let p) = cat.support, p.id == .menuBar else { break }
-        // v3a made the cutout a tunnel, so being inside it is no longer forbidden outright —
-        // but it is only ever legal as a CROSSING. Wandering in, hesitating at it, or coming
-        // to rest in it are all still the trap this test was written for, and `insideNotch` is
-        // exactly the difference. Sampled rather than asserted so the failure names the x.
+        // The cutout is a tunnel, so being inside it is not forbidden outright, but it is only
+        // ever legal as a CROSSING. Wandering in, hesitating at it, or coming to rest in it are
+        // all the trap this test guards, and `insideNotch` is exactly the difference. Sampled
+        // rather than asserted so the failure names the x.
         if !cat.insideNotch { westmost = min(westmost, cat.position.x) }
         if cat.activity == .edgeLook { lookedNear = min(lookedNear, cat.position.x) }
     }
@@ -1679,9 +1669,8 @@ private func steppingOff() -> CatState {
 @MainActor
 @Test func theLookPlaysTheWholeLookDownSheetAndThenHolds() {
     // Checked frame by frame because the alternative is watching it. A non-looping clip handed
-    // a stale clock renders its last frame immediately, which is how `sitdown` and `curl` both
-    // shipped having never once played: here that would mean he is already leaning over the
-    // edge on the tick he arrives at it, and the lean is the tell.
+    // a stale clock renders its last frame immediately: here that would mean he is already
+    // leaning over the edge on the tick he arrives at it, and the lean is the tell.
     let world = ledgeWorld()
     var cat = steppingOff()
     var indices: [Int] = []
@@ -1751,7 +1740,7 @@ private func steppingOff() -> CatState {
 /// The sheets are cropped tight sideways and drawn on a ground line, so whatever touches the
 /// bottom rows is what he is standing on: reading left to right that is his hind paw, his front
 /// paw, then his lowered chin and whiskers, which in this pose are also on the floor. Measured
-/// rather than written down because it is a property of the art and it moved once already.
+/// rather than written down because it is a property of the art and it can move.
 @MainActor
 private func lookDownReach() -> (toes: CGFloat, nose: CGFloat) {
     let clip = Sprites.Clip.lookDown, held = clip.count - 1

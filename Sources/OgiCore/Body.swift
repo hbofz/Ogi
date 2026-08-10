@@ -4,13 +4,8 @@ import CoreGraphics
 /// What the renderer needs to know about this instant, plus the one procedural drawing that
 /// survived the move to drawn frames: the contact shadow.
 ///
-/// Ogi was procedural first — a silhouette assembled from a torso, a skull, four legs and a
-/// simulated tail, drawn as one filled path. The drawn sheets replaced all of it, and the
-/// dead machinery (the path assembly, the Verlet tail, the procedural eyes, the pose fields
-/// only that machinery read) was deleted rather than left warm: it ran every frame feeding
-/// layers whose paths were never set. Git history has it if a character-pack fallback ever
-/// wants it back. `Gaze` survives separately, computed and tested, because the pupils are
-/// scheduled to return for flagged moments.
+/// `Gaze` lives separately, computed and tested, because the pupils are scheduled to return
+/// for flagged moments.
 public enum Body {
 
     /// The two pose inputs the sprite picker reads. Everything else about what is on screen

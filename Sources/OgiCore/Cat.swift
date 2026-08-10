@@ -40,7 +40,7 @@ public enum Support: Sendable, Equatable {
 /// What the ground ahead of him looks like. Recomputed every tick, never stored across one.
 ///
 /// This is what the hesitation reads. Without it he has no way to know he is standing next
-/// to a drop, which is why v1 could not have a tell: the information did not exist.
+/// to a drop, and the tell cannot exist.
 public struct Footing: Sendable, Equatable {
     /// Distance to the end of solid ground in his facing direction. `.infinity` if he is
     /// not on solid ground, or airborne.
@@ -48,10 +48,9 @@ public struct Footing: Sendable, Equatable {
     /// How far down to the next surface past that edge. Nil means there is nothing he could
     /// land on: a wall, or an interior gap, both of which he treats as a wall.
     ///
-    /// The two nils used to be told apart here by a `gapAhead` flag, alongside a `landingAhead`
-    /// and an `isAtEdge` that read the same way. Nothing outside the tests ever asked, and dead
-    /// state on a struct rebuilt every tick is worse than nothing: `isGap` and `landing` answer
-    /// both questions from the world directly, which is where the tests now ask them.
+    /// The two are not told apart here. Nothing outside the tests asks, and dead state on a
+    /// struct rebuilt every tick is worse than nothing: `isGap` and `landing` answer both
+    /// questions from the world directly.
     public var dropAhead: CGFloat?
 
     public var isCliff: Bool { dropAhead != nil }
@@ -97,8 +96,7 @@ public enum Move: Sendable, Equatable {
     case walk(CGFloat)
     /// Crouch, then launch at a point on another surface.
     case jump(SurfaceID, CGFloat)
-    /// Walk to the edge ahead and keep going. This is how he descends: gravity was always
-    /// there, and v1 simply had no way to ask for it.
+    /// Walk to the edge ahead and keep going. This is how he descends, on gravity alone.
     case stepOff
     /// A gap small enough to stride over. No crouch, no arc — a full ballistic leap over a
     /// six-point crack between two tiled windows reads as a comedy pratfall.
@@ -130,11 +128,11 @@ public enum Move: Sendable, Equatable {
 ///
 /// Storing the destination rather than a single hop is what gives multi-hop routing without a
 /// pathfinder: he re-picks `move` every time he lands, hill-climbing toward `destination`, and
-/// occasionally gets it wrong. The manifesto asks for exactly that — "pathfinding is
+/// occasionally gets it wrong. The intent is exactly that: "pathfinding is
 /// deliberately dumb ... preserve the failure cases; they are where the charm lives."
 ///
-/// **This is the seam the mind layer plugs into.** v2b replaces only the code that chooses a
-/// destination. `Cat.nextMove` is final.
+/// **This is the seam the mind layer plugs into.** The mind replaces only the code that
+/// chooses a destination. `Cat.nextMove` is final.
 public struct Intent: Sendable, Equatable {
     public var destination: SurfaceID
     public var destinationX: CGFloat
@@ -195,7 +193,7 @@ public struct Stimulus: Sendable, Equatable {
 public enum Repose: Sendable, Equatable {
     case awake, sitting, curled, asleep
 
-    /// Manifesto §7.1. Cats settle when the room goes quiet.
+    /// Cats settle when the room goes quiet.
     public static func from(idleSeconds: Double, scale: Double = Repose.timeScale) -> Repose {
         switch idleSeconds {
         case ..<(30 * scale): return .awake
@@ -222,8 +220,8 @@ public enum Repose: Sendable, Equatable {
     }
 
     /// How much longer he waits between ideas. A settled cat is calmer, not switched off:
-    /// v1 returned early here and he became a statue at 30 seconds of *your* inactivity,
-    /// which is what happens when you sit still and watch him.
+    /// returning early here makes him a statue at 30 seconds of *your* inactivity, which is
+    /// what happens when you sit still and watch him.
     public var restMultiplier: Double {
         switch self {
         case .awake: return 1
@@ -303,9 +301,8 @@ public struct CatState: Sendable {
     /// both when you are properly on a call. Derived rather than stored, so it can never
     /// disagree with the two signals it is made of.
     ///
-    /// This is also the fix for a v2 defect: the mic and fast typing shared the `alert`
-    /// drawing, so "ears up means your mic is hot" had quietly stopped being true. Typing keeps
-    /// `alert`; a live mic no longer looks like it.
+    /// It also keeps "ears up means your mic is hot" honest: typing keeps the `alert` drawing,
+    /// and a live mic does not share it.
     public enum Rig: Sendable, Equatable { case talk, work, full }
     public var rig: Rig? {
         switch (listening, onCamera) {
@@ -323,21 +320,19 @@ public struct CatState: Sendable {
     /// drawing and by how they end — a typing freeze relaxes the moment you pause, a call holds
     /// for the length of it.
     ///
-    /// **The camera counts, which is new in v3a and is not only about the drawing.** The call
-    /// sheets have a laptop drawn into them, so they are only honest on a stationary cat; and a
-    /// video call is precisely the moment you do not want something scampering across your
-    /// windows. Restraint (MANIFESTO §3.4) argues for it independently of the art.
+    /// **The camera counts, and not only because of the drawing.** The call sheets have a
+    /// laptop drawn into them, so they are only honest on a stationary cat; and a video call is
+    /// precisely the moment you do not want something scampering across your windows. Restraint
+    /// Restraint argues for it independently of the art.
     ///
-    /// **What "still" means moved slightly here.** v2's freeze meant a cat that does not move at
-    /// all. `callTalk` has him yapping, mouth and head. The invariant that matters is that he
-    /// stops *travelling*, and that is untouched: `perchSpeed` still goes to zero and he walks
-    /// nowhere. Only his head moves, in place.
+    /// **"Still" means he stops travelling, not that nothing moves.** `callTalk` has him
+    /// yapping, mouth and head. The invariant that matters is untouched: `perchSpeed` goes to
+    /// zero and he walks nowhere. Only his head moves, in place.
     public var holdingStill: Bool { listening || typingHard || onCamera }
 
-    /// Your cursor, screen-global. Set by `App` each tick, and in practice never nil today:
-    /// he is pinned to one screen and the global mouse location is always somewhere, so a
-    /// cursor on another display still reads as a live point. W5.2 owns making this honest
-    /// on multiple screens.
+    /// Your cursor, screen-global. Set by `App` each tick, and in practice never nil: he is
+    /// pinned to one screen and the global mouse location is always somewhere, so a cursor on
+    /// another display still reads as a live point. Multiple displays would need this honest.
     public var cursor: CGPoint?
     /// How long it has sat within a point or two of where it is now. Cats approach when you
     /// go still, and this is the "still" half of that.
@@ -448,8 +443,8 @@ public struct CatState: Sendable {
     /// Two invariants hold this honest, and both are tested:
     /// - it never reaches `Repose.from` or the slumber gate, so the sleep ladder stays driven
     ///   by YOUR idle time and the zero-wakeup guarantee cannot be touched from here
-    /// - at zero he behaves exactly as he did before the mind existed, so every test written
-    ///   for v2a is a regression test for v2b
+    /// - at zero he behaves exactly as he would with no mind at all, so every behaviour test
+    ///   that ignores arousal stays valid
     public var arousal: Double = 0
 
     /// Something the world just did. Written by `App` through `receive`, consumed and
@@ -473,7 +468,7 @@ public struct CatState: Sendable {
     /// `lookingAt ?? NSEvent.mouseLocation`, so nil means "back to watching you".
     ///
     /// Here rather than in `App` so that the glance is part of the simulation and can be
-    /// tested. It was the last decision about him still being made outside `Cat.step`.
+    /// tested.
     public var lookingAt: CGPoint?
     /// Seconds of glance left. Internal to the glance; public only because `Cat.step` is free.
     public var glanceLeft: TimeInterval = 0
@@ -483,9 +478,8 @@ public struct CatState: Sendable {
     public var hiddenFor: TimeInterval = 0
 
     /// How long your cursor has been ON him, which is not the same question as how long it has
-    /// been still. Reusing `cursorStill` for this looked free and was wrong: a pointer jiggling
-    /// in place resets it for ever, so he would sit under it swallowing clicks and never decide
-    /// he was in the way. Measured at fourteen seconds before this existed.
+    /// been still. `cursorStill` cannot stand in: a pointer jiggling in place resets it for
+    /// ever, so he sits under it swallowing clicks and never decides he is in the way.
     public var cursorOnHimFor: TimeInterval = 0
 
     /// Points of your hand's travel banked on him, bleeding away at `Feel.Mind.strokeDecay`.
@@ -528,7 +522,7 @@ public struct CatState: Sendable {
         // Being petted breathes, and at a settled cat's 4Hz a breath is a slideshow. Bounded by
         // your hand rather than by a clock: stop stroking and the pose ends within a grace.
         if activity == .stroked { return true }
-        // The intent SURVIVES a freeze by design, so that a hot mic at launch no longer destroys
+        // The intent SURVIVES a freeze by design, so that a hot mic at launch cannot destroy
         // the walk out of the notch. Without this clause that same design would pin the display
         // link at 60Hz for the length of every call, which is a far worse bug than the one it
         // fixes. Deliberately below the two airborne cases: a frozen cat in mid-air is still
@@ -559,10 +553,9 @@ public enum Cat {
     public static func step(_ state: CatState, world: Skyline, dt: TimeInterval) -> CatState {
         var s = step(inner: state, world: world, dt: dt)
         // A clip has to start at its first frame, and several places assign `activity` without
-        // thinking about the clock — the settled branch reassigns it every single tick. Left to
-        // itself, `sitdown` and `curl` are non-looping, so they were handed an elapsed time of
-        // however long he had been idle and snapped straight to their last frame. Neither
-        // animation had ever actually played.
+        // thinking about the clock (the settled branch reassigns it every single tick). Without
+        // this, a non-looping clip like `sitdown` or `curl` is handed however long he has been
+        // idle and snaps straight to its last frame, so it never plays at all.
         if s.activity != state.activity { s.activityElapsed = 0 }
         return s
     }
@@ -614,16 +607,14 @@ public enum Cat {
 
             // Perk up, visibly. Moving his eyes is the whole of a glance in code and almost
             // none of it on screen: at his rendered size the gaze is a couple of points of
-            // pupil, so "he noticed the window you opened" read as him doing nothing at all.
-            // Watching him is what found that, and no test would have.
+            // pupil, so "he noticed the window you opened" reads as him doing nothing at all.
             //
             // Only when he is standing around. A cat already walking somewhere just flicks his
             // eyes, and snapping the pose mid-walk would stop him dead for a beat. `holdingStill`
             // outranks this for the same reason it outranks everything else.
-            // ...and never mid-show. Plugging a charger flashes a transient charging
-            // window on macOS, so this perk assassinated the zap a beat after it began —
-            // through three rounds of Hamzah lengthening a buzz that was never the
-            // problem. The glance's cheap half (eyes, arousal) still happens above.
+            // ...and never mid-show. Plugging a charger flashes a transient charging window
+            // on macOS, so unguarded this perk kills the zap a beat after it begins. The
+            // glance's cheap half (eyes, arousal) still happens above.
             if stim.canTravel, s.intent == nil, !s.holdingStill, !isShow(s.activity),
                case .grounded = s.support {
                 s.activity = .alert
@@ -637,7 +628,7 @@ public enum Cat {
             // If he cannot reach it, no intent forms and he settles where he is. From the floor
             // the notch is 1115pt up against 190pt of rise and inventing a route would be
             // inventing physics, so the honest outcome is that he sprawls on the desktop, which
-            // is a behaviour in its own right and the one the manifesto asks for on a bare
+            // is a behaviour in its own right and the one wanted on a bare
             // screen anyway.
             if stim.kind == .goHome, case .grounded(let perch) = s.support,
                let here = world.surface(perch.id),
@@ -704,9 +695,9 @@ public enum Cat {
                 return s
             }
             // Sticky once he has committed to going up. Re-asserting `.cling` unconditionally
-            // flipped the activity back and forth every tick, and since a changed activity
-            // zeroes `activityElapsed`, the hold below restarted forever and he never left the
-            // spot he grabbed.
+            // flips the activity back and forth every tick, and since a changed activity
+            // zeroes `activityElapsed`, the hold below restarts forever and he never leaves
+            // the spot he grabbed.
             if s.activity != .climb { s.activity = .cling }
             s.velocity = .zero
             s.perchSpeed = 0
@@ -749,8 +740,8 @@ public enum Cat {
                         // screen, so a grip in the top corner mantles onto nothing. He gets
                         // pulled along the lip to the nearest place that is real — and if the
                         // whole edge is unstandable there is nothing to mantle onto, so he
-                        // lets go. Without this he grounded for exactly one tick and the
-                        // shrunken-window backstop below dropped him straight off again.
+                        // lets go. Without this he grounds for exactly one tick and the
+                        // shrunken-window backstop below drops him straight off again.
                         guard let x = nearestSpanX(to: rect.minX + grip.dx, in: surface.solid) else {
                             s.support = .falling
                             s.activity = .slip
@@ -967,11 +958,10 @@ public enum Cat {
                 if s.righting < 1 {
                     s.righting = min(1, s.righting + CGFloat(dt) / CGFloat(Feel.Timing.righting))
                 }
-                // `.slip` used to time out into `.airborne` after 0.12s, which meant a cat
-                // whose window closed played 120ms of the fall and then the jump sheet for the
-                // whole rest of the drop. The fall sheet does not loop: it runs its six frames
-                // and holds the last one, braced for impact, which is exactly what a long
-                // descent wants. So he stays in it until he lands.
+                // He stays in `.slip` until he lands. The fall sheet does not loop: it runs
+                // its six frames and holds the last one, braced for impact, which is exactly
+                // what a long descent wants. Timing out into `.airborne` would play the jump
+                // sheet for the whole rest of the drop.
             }
         }
 
@@ -1002,7 +992,7 @@ public enum Cat {
         return below.spans.contains { $0.contains(p.x) }
     }
 
-    /// A tap, not a grab. He responds — manifesto §7.7's first line, "he has to respond or
+    /// A tap, not a grab. He responds — the first rule of being touched, "he has to respond or
     /// he is scenery" — with the two things his body can already do: a small press-down
     /// through the same squash a landing uses, and the alert perk held for a glance's beat,
     /// eyes to your hand. He stays exactly where he is: a pet must never move him, or
@@ -1038,11 +1028,10 @@ public enum Cat {
     /// himself, and lands on his feet.
     ///
     /// **Where he is decides it, not how fast he was going.** A cat thrown at a curtain grabs
-    /// the curtain, which is the whole reason the cling exists. There used to be a speed guard
-    /// here, on the theory that a fast release was a throw rather than a placement, and it made
-    /// the feature unreachable: the release velocity comes from the last ~100ms of drag, so
-    /// 20pt of hand movement already reads as 200 px/s and every real drop sailed past the
-    /// face. Only a dead stop ever grabbed. A threshold was the worst of both anyway, since
+    /// the curtain, which is the whole reason the cling exists. A speed guard here would make
+    /// the feature unreachable: release velocity comes from the last ~100ms of drag, so 20pt
+    /// of hand movement already reads as 200 px/s and every real drop sails past the face,
+    /// leaving only a dead stop able to grab. A threshold is the worst of both anyway, since
     /// grabbing at 190 and throwing at 210 is less predictable than either rule applied
     /// consistently.
     ///
@@ -1125,12 +1114,10 @@ public enum Cat {
         // that the kind thing is to stay out of the way, and it doubles as a privacy indicator:
         // if he has gone rigid, your microphone is hot.
         //
-        // The intent is SUSPENDED, not cleared. Clearing it was a real bug with a real victim:
-        // `arrival()` sets the walk out of the notch at launch, and this branch ran moments
-        // later and destroyed it, so the app's single best first impression was silently
-        // conditional on whether you happened to be on a call. Nothing restored it afterwards
-        // either, so he simply picked somewhere new. `perchSpeed` still has to go to zero or he
-        // coasts through the freeze.
+        // The intent is SUSPENDED, not cleared. `arrival()` sets the walk out of the notch at
+        // launch, and clearing here destroys it moments later, which makes the app's best
+        // first impression silently conditional on whether you are on a call, with nothing to
+        // restore it. `perchSpeed` still has to go to zero or he coasts through the freeze.
         //
         // `isMoving` knows about this, and has to: an intent that survives would otherwise pin
         // the display link at 60Hz for the length of every call.
@@ -1170,19 +1157,17 @@ public enum Cat {
         // him by definition, and `standing` is only reachable while grounded, so the drag is
         // safe by structure rather than by a check.
         // Both axes, and only once your cursor has been ON him for a beat. Measured across x
-        // alone it fired for a cursor anywhere vertically, and firing on arrival meant that
-        // pointing at him made him scoot: coming over needs a full minute of stillness and the
-        // yield needed none, so "mouse near cat" always lost the race and always read as the cat
-        // avoiding you. He tolerates you pointing at him and moves only if you stay there.
+        // alone it fires for a cursor anywhere vertically, and firing on arrival means that
+        // pointing at him makes him scoot: coming over needs a full minute of stillness and the
+        // yield none, so "mouse near cat" always loses the race and reads as the cat avoiding
+        // you. He tolerates you pointing at him and moves only if you stay there.
         //
-        // `cursorOnHimFor` and not `cursorStill`, which is a different question and was the
-        // first thing I reached for: a pointer jiggling in place keeps resetting stillness, so
-        // he sat under it swallowing clicks for fourteen seconds and never decided he was in
-        // the way.
+        // `cursorOnHimFor` and not `cursorStill`, which is a different question: a pointer
+        // jiggling in place keeps resetting stillness, so he sits under it swallowing clicks
+        // for fourteen seconds and never decides he is in the way.
         // ...but a hand that is MOVING over him is a pet, not an obstruction, and the yield is
         // the one thing in the app that would read it backwards. Without this guard, stroking
-        // him for longer than `yieldPatience` walks him out from under your hand — which is
-        // the only way v3b could look broken.
+        // him for longer than `yieldPatience` walks him out from under your hand.
         if s.intent == nil, !s.beingStroked, let cursor = s.cursor,
            s.cursorOnHimFor >= Feel.Mind.yieldPatience,
            let x = beside(cursor: cursor, on: surface, from: s.position.x,
@@ -1196,18 +1181,16 @@ public enum Cat {
 
         // Only sleep is a hard stop, and only because the zero-wakeup guarantee lives there.
         // Sitting and curling *bias* him: longer waits, mostly in-place behaviours. A sitting
-        // cat still shifts, washes and looks around. Before this he froze into a pose, and
-        // `repose` comes from system HID idle, so sitting still and watching him was precisely
-        // what stopped him.
+        // cat still shifts, washes and looks around. `repose` comes from system HID idle, so
+        // freezing him into a pose means sitting still and watching him is what stops him.
         if s.repose == .asleep {
             s.intent = nil
             s.activity = .sleep
             // Asleep at the doorway, he goes all the way IN.
             //
             // Here, inside the hard stop, rather than down among the other resting behaviours,
-            // because this gate returns long before any of them run — which is exactly what the
-            // first version of this got wrong, and what `asleepAtTheDoorwayHeSleepsInsideTheCutout`
-            // now holds.
+            // because this gate returns long before any of them run.
+            // `asleepAtTheDoorwayHeSleepsInsideTheCutout` holds it.
             //
             // This is the one place his position is allowed inside the cutout, and the whole
             // reason `insideNotch` exists. His body sits above the bar line where the permanent
@@ -1313,10 +1296,9 @@ public enum Cat {
         guard let intent = s.intent else {
             // A show is owed: the wake-up stretch, or one of the machine-event pieces.
             // First in the region on purpose, so it interrupts every waiting pose and every
-            // in-place performance — a jolt of electricity through a lounging cat is the
-            // entire gag, and queued behind the lounge it played up to a spell late, which
-            // Hamzah felt as "kinda slow". Only the real interrupts outrank it: the freeze,
-            // the yield and sleep all returned long before this.
+            // in-place performance: a jolt of electricity through a lounging cat is the
+            // entire gag, and queued behind the lounge it lands up to a spell late. Only the
+            // real interrupts outrank it: the freeze, the yield and sleep all return above.
             if let show = s.owed, !isShow(s.activity) {
                 s.owed = nil
                 s.activity = show
@@ -1344,21 +1326,20 @@ public enum Cat {
             }
             // At a den door he waits IN the doorway, facing out, instead of sitting beside
             // it. The notch is a hardware hole with no pixels behind it, so a cat resting
-            // at its lip half-overlaps the cutout and the mask eats half of him — Hamzah
-            // watched him "disappear" next to it. Held as the peek pose (the same drawing
-            // the launch arrival uses: hindquarters in the dark, face out) it reads as him
-            // watching the room from inside his den. Boredom still drains underneath it,
-            // so in ordinary life the next idea gets him up; on a covered screen, where
-            // elections are gated, the den is how he watches the whole film.
+            // at its lip half-overlaps the cutout and the mask eats half of him. Held as the
+            // peek pose (the same drawing the launch arrival uses: hindquarters in the dark,
+            // face out) it reads as him watching the room from inside his den. Boredom still
+            // drains underneath it, so in ordinary life the next idea gets him up; on a
+            // covered screen, where elections are gated, the den is how he watches the whole
+            // film.
             if s.activity == s.repose.restingActivity, s.repose != .asleep,
                let den = denDoor(s, on: surface) {
                 // Out of the hole before he settles into it. Whatever is drawn inside the notch
-                // is simply gone, so a cat centred on the lip is missing his back half, which
-                // is what Hamzah watched happen up there. The retreats now aim at this spot
-                // already (`OgiApp.denX`), so on the common path this is a few points at most;
-                // it is here as well because the retreats are not the only way he ends up on a
-                // lip. A wall bump parks him on one, and so does a launch walk that never
-                // finished because the room went quiet.
+                // is simply gone, so a cat centred on the lip is missing his back half. The
+                // retreats aim at this spot already (`OgiApp.denX`), so on the common path this
+                // is a few points at most; it is here as well because the retreats are not the
+                // only way he ends up on a lip. A wall bump parks him on one, and so does a
+                // launch walk that never finished because the room went quiet.
                 s.position.x = den.standAt
                 s.support = .grounded(Perch(id: surface.id,
                                             dx: den.standAt - surface.extent.lowerBound))
@@ -1369,23 +1350,21 @@ public enum Cat {
 
 
             // While the screen is covered he belongs at the top, and that is a STANDING
-            // ORDER rather than an event. The edge-triggered retreat alone was losable:
-            // it fired on the first sighting of the fullscreen window, before that window
-            // had aged into furniture he may climb, and a one-shot stimulus consumed
-            // against an unroutable world is simply gone. Hamzah watched the result — a
-            // cat chilling at the bottom of a covered screen, no urgency anywhere. This
-            // asks again on every idle tick he is not up top, so the moment the covering
-            // window's face becomes climbable he is on his way up it.
-            // **At the DOOR, not merely up top.** `upTop` is satisfied by being anywhere on the
-            // menu bar, so a cat who was already up there when the film started never walked
-            // the rest of the way and simply fell asleep where he stood — ordinary `curl`, on
-            // some arbitrary x, with the den and its tail never reached. Hamzah watched exactly
-            // that happen on a fullscreen Chrome.
+            // ORDER rather than an event. The edge-triggered retreat alone is losable: it
+            // fires on the first sighting of the fullscreen window, before that window has
+            // aged into furniture he may climb, and a one-shot stimulus consumed against an
+            // unroutable world is simply gone, leaving a cat at the bottom of a covered
+            // screen with no urgency anywhere. This asks again on every idle tick he is not
+            // up top, so the moment the covering window's face becomes climbable he is on
+            // his way up it.
+            // **At the DOOR, not merely up top.** `upTop` is satisfied by being anywhere on
+            // the menu bar, so a cat already up there when the film starts never walks the
+            // rest of the way and falls asleep where he stands: ordinary `curl`, on some
+            // arbitrary x, with the den and its tail never reached.
             //
-            // The comment on the den has claimed "a covered screen is watched from the den"
-            // since v2; this is the line that makes it true. He walks home while the film runs,
-            // and is therefore standing at the doorway when the idle ladder reaches sleep,
-            // which is the only way into it.
+            // This is the line that makes "a covered screen is watched from the den" true. He
+            // walks home while the film runs, and is therefore standing at the doorway when
+            // the idle ladder reaches sleep, which is the only way into it.
             //
             // The arrival slop has to be wider than the walk's overshoot and narrower than
             // `denDoor`'s reach, or he either paces at the door forever or stops short of it.
@@ -1401,10 +1380,9 @@ public enum Cat {
             }
 
             // He wants to be seen, and it outranks the in-place holds below: a cat behind a
-            // window is a cat doing nothing, however good the thing he is doing — and the
-            // lounge made that real, because a 45-second spell held behind a window blind to
-            // being hidden measured out at 52 seconds of invisibility. A wash or a lounge is
-            // interrupted; being seen matters more.
+            // window is a cat doing nothing, however good the thing he is doing. A 45-second
+            // lounge held behind a window, blind to being hidden, measures out at 52 seconds
+            // of invisibility. A wash or a lounge is interrupted; being seen matters more.
             //
             // `spans` is exactly "where he is visible", so a window raised over his perch
             // makes this true with no new world model: the same array the renderer already
@@ -1423,7 +1401,7 @@ public enum Cat {
                 // its own, and surfacing there, head and paws over the lip of the thing
                 // that hid him, is better than fleeing. The climb up its back is unseen by
                 // construction: he is hidden, which is the premise. The visible event is a
-                // head appearing over the lip, which is Hamzah's pictures exactly.
+                // head appearing over the lip.
                 if surfaceOverTheLip(&s, world: world) { return s }
                 // Nothing to surface at. Somewhere else entirely, and the first that routes.
                 for other in world.surfaces.shuffled()
@@ -1463,17 +1441,13 @@ public enum Cat {
                 return s
             }
 
-            // Your hand is on him and moving. Eyes shut, head into it. MANIFESTO §7.7.
+            // Your hand is on him and moving. Eyes shut, head into it.
             //
-            // **Above the in-place holds and gated on `isShow` instead**, which is the same
-            // ordering lesson v3a learned twice, learned once more from the other side. Below
-            // them it could not cancel a jolt of electricity, which was the point — but it also
-            // could not interrupt a wash or a sprawl, and a lounge holds for forty-five
-            // seconds. Hamzah found it immediately: "he does not purr when he is already doing
-            // a movement, like if he is laying down or licking himself." A wash and a sprawl
-            // are what he does when nothing is happening, and a hand arriving is something
-            // happening. A performance is not, and `isShow` is exactly that distinction, so it
-            // is the guard rather than the position in the file.
+            // **Above the in-place holds and gated on `isShow` instead.** Below them it could
+            // not interrupt a wash or a sprawl, and a lounge holds for forty-five seconds. A
+            // wash and a sprawl are what he does when nothing is happening, and a hand
+            // arriving is something happening. A performance is not, and `isShow` is exactly
+            // that distinction, so it is the guard rather than the position in the file.
             //
             // The freeze, the yield and sleep all returned long before this, so a cat frozen by
             // your microphone stays frozen. That is deliberate: he is being quiet for you. The
@@ -1561,7 +1535,7 @@ public enum Cat {
                         // because that is how `leaveNotch` finds its way out again.
                         enterNotch(&s, on: surface, notch: notch, out: den.out)
                     } else {
-                        // Usually a wash, sometimes a stretch: manifesto §7.1 wants more than
+                        // Usually a wash, sometimes a stretch: more is wanted than
                         // one in-place behaviour, and until the stretch the wash was the only
                         // one that existed.
                         s.activity = Double.random(in: 0...1) < Feel.Timing.stretchChance
@@ -1720,8 +1694,8 @@ public enum Cat {
             // The weight, in four lines. One signed surface-local speed ramped toward what he
             // wants gives the wind-up; braking at a fixed distance rather than at the distance
             // he actually needs gives the overshoot, because the two do not match. He arrives
-            // a few points past his mark and stops there, which is also what retires the old
-            // `abs(dx) < arrivalSlop` arrival check: running out of speed IS arriving now.
+            // a few points past his mark and stops there, which is also why there is no
+            // `abs(dx) < arrivalSlop` arrival check: running out of speed IS arriving.
             let braking = abs(dx) <= Feel.Physics.brakingDistance
             let want: CGFloat = braking ? 0 : top * (dx > 0 ? 1 : -1)
             let rate = (braking ? Feel.Physics.decel : Feel.Physics.accel) * CGFloat(dt)
@@ -1796,8 +1770,8 @@ public enum Cat {
             s.activity = .walk
 
         case .jump(let destID, let destX):
-            // (A chained hop plays its landing before winding up for the next one. That used to
-            // be a guard here; it is the landing hold above now, which covers the walk too.)
+            // (A chained hop plays its landing before winding up for the next one. The landing
+            // hold above covers that, and the walk with it.)
             // The 100ms crouch, from scratch every time. Non-negotiable: it is the entire
             // difference between a cat and a teleporting rectangle. Requiring that he is
             // ALREADY crouching is what makes it survive a jump planned mid-route — the clock
@@ -2046,7 +2020,7 @@ public enum Cat {
     /// end of every step, which is what turns a chain of these into a route — and what lets a
     /// jump he fluffs become the new starting point rather than a dead end.
     ///
-    /// **This is final.** v2b's mind replaces only the code that chooses a destination.
+    /// **This is final.** The mind layer replaces only the code that chooses a destination.
     public static func nextMove(from s: CatState, on surface: Surface,
                                 toward destID: SurfaceID, x destX: CGFloat,
                                 world: Skyline, mayWalk: Bool = true) -> Move? {
@@ -2119,7 +2093,7 @@ public enum Cat {
         // Nothing in the air and the destination is above him — but there may be a curtain.
         // A window's FACE is a route and not just an obstacle, and it is the only way off the
         // desktop: `jumpImpulse` buys 190pt of rise against windows that are routinely five
-        // times that tall, which is why he used to look stranded down there for the session.
+        // times that tall, so without it he is stranded down there for the session.
         //
         // Below the hop deliberately. A climb is slower and more committing than a leap, so it
         // is what he does when leaping will not do.
@@ -2128,14 +2102,12 @@ public enum Cat {
             return .climb(climb.id, climb.x)
         }
 
-        // Nothing in the air, and the destination is below him. Gravity was always there;
-        // v1 simply had no way to ask for it — and v2c learned that a lip is only a route
-        // if stepping off it gains ground. From a window's end it almost always does. From
-        // the menu bar, whose only lips are the screen corners, the step-off walked the
-        // whole bar and dropped a thousand points into a corner nowhere near where he was
-        // going: Hamzah watched him do it. When the lip loses ground and the target sits
-        // under his own solid with nothing in between, he hops down the glass instead,
-        // with the same tell the edge gets.
+        // Nothing in the air, and the destination is below him. A lip is only a route if
+        // stepping off it gains ground. From a window's end it almost always does. From the
+        // menu bar, whose only lips are the screen corners, a step-off walks the whole bar
+        // and drops a thousand points into a corner nowhere near where he was going. When
+        // the lip loses ground and the target sits under his own solid with nothing in
+        // between, he hops down the glass instead, with the same tell the edge gets.
         // ponytail: lip-vs-drop is progress-based, not time-costed; revisit if corner
         // walks still read dumb on a real desktop
         if dest.y < surface.y {
@@ -2259,9 +2231,8 @@ public enum Cat {
     /// Every jump starts upward, so a target BELOW his own surface means coming back down
     /// through it — and `supportBelow` is inclusive at both ends and has no idea which surface
     /// he left, so he re-grounds wherever the arc re-crosses his own y over his own solid.
-    /// Testing the LANDING x instead (as `pickGoal` used to) misses that entirely: the
-    /// minimum-energy launch is flat, and menu-bar-to-desktop at 500pt across re-crosses 44pt
-    /// out, where the old fixed-speed solve crossed at 268.
+    /// Testing the LANDING x instead misses that entirely: the minimum-energy launch is flat,
+    /// and menu-bar-to-desktop at 500pt across re-crosses only 44pt out.
     ///
     /// This is also the whole discriminator between `.jump` and `.stepOff`. A deep drop is
     /// nearly free under minimum energy, so without it every downward destination is a jump and
@@ -2300,7 +2271,7 @@ public enum Cat {
         // a whole class of jump one he cannot fluff. At 2·aimError he could not sail past a far
         // lip AT ALL — worst overshoot reaches 0.9888 of it — and fell short of a near one on
         // only 4% of draws. Half that leaves 1.0562 and 26%: off the lip, still fallible.
-        // Manifesto §6: "preserve the failure cases; they are where the charm lives."
+        // Preserve the failure cases: they are where the charm lives.
         //
         // The refusal below is the part that keeps him sensible, and it is deliberately twice
         // the margin. A run too narrow to hold it is not a target at all: he would be clipping
@@ -2315,9 +2286,9 @@ public enum Cat {
     /// One thing to do about being bored: go somewhere, or stay and lounge.
     public enum Idea: Sendable, Equatable { case go(Intent), lounge }
 
-    /// The election. This is where his taste lives, and it replaced a coin flip that chose
-    /// destinations exactly as often as randomness predicts — measured, choice and dwell
-    /// were the same distribution.
+    /// The election. This is where his taste lives. A coin flip in its place chooses
+    /// destinations exactly as often as randomness predicts: choice and dwell measure out as
+    /// the same distribution.
     ///
     /// Candidates from every visible span plus the null candidate, scored, drawn with a
     /// temperature, and checked against routing — drawn again from the remainder if
@@ -2325,9 +2296,8 @@ public enum Cat {
     /// nil unreachable in practice, and the branch stays for the day the lounge is ever
     /// conditional.
     ///
-    /// **This replaced `pickIntent` and nothing else.** `nextMove` is final; the scorer
-    /// never assumes reachability, which is the false premise the v2b handoff warns about.
-    /// Unroutable dreams simply lose the draw.
+    /// **This chooses a destination and nothing else.** `nextMove` is final, and the scorer
+    /// never assumes reachability: unroutable dreams simply lose the draw.
     static func idea(from s: CatState, on surface: Surface, world: Skyline) -> Idea? {
         var pool = [Candidate(id: nil, x: s.position.x, y: s.position.y)]
         for other in world.surfaces where other.targetable {
@@ -2412,18 +2382,17 @@ public enum Cat {
         return scores.count - 1
     }
 
-    /// Is he standing at the lip of an interior hole — a den door — and if so, which way
-    /// faces OUT of it. Nil everywhere else, which is all of a notchless Mac and all of
-    /// the bar except the two lips of the cutout. `isGap` alone is not enough: it answers
-    /// "does solid resume somewhere ahead", which is true anywhere left of the notch, so
-    /// the lip itself has to be underfoot.
-    /// Returns which way faces OUT of the hole, and where he has to stand so that none of him
-    /// is drawn inside it.
+    /// Is he standing at the lip of an interior hole (a den door), and if so, which way faces
+    /// OUT of it and where he has to stand so that none of him is drawn inside it.
+    ///
+    /// Nil everywhere else, which is all of a notchless Mac and all of the bar except the two
+    /// lips of the cutout. `isGap` alone is not enough: it answers "does solid resume somewhere
+    /// ahead", which is true anywhere left of the notch, so the lip itself has to be underfoot.
     static func denDoor(_ s: CatState, on surface: Surface) -> (out: CGFloat, standAt: CGFloat)? {
-        // A body-width of reach, not a footstep. He no longer *waits* on the lip, because everything
+        // A body-width of reach, not a footstep. He does not *wait* on the lip, because everything
         // past it is a hardware hole with no pixels behind it and half a cat reads as a broken
         // sprite. So standing clear of it has to still count as standing at the door, or the
-        // pose he waits in would never play again.
+        // pose he waits in would never play at all.
         let reach = Feel.Shape.clearance + Feel.Physics.arrivalSlop * 3
         for dir: CGFloat in [1, -1] {
             if let edge = edgeAhead(from: s.position.x, facing: dir, on: surface),
@@ -2526,7 +2495,7 @@ public enum Cat {
     ///
     /// **He must never come to rest ON the cursor.** `Overlay.setInteractive` toggles
     /// `ignoresMouseEvents` from exactly "is the cursor inside his hit rect", so a cat parked on
-    /// your cursor is a cat swallowing every click you make until he moves. `MANIFESTO.md` §7.3
+    /// your cursor is a cat swallowing every click you make until he moves. The rule
     /// asks for him to curl up on it; that is a defect by construction and this refuses it. A
     /// cat does not sit on your hand, it sits against your hand.
     public static func beside(cursor: CGPoint, on surface: Surface, from x0: CGFloat,
@@ -2560,19 +2529,6 @@ public enum Cat {
             .flatMap { abs($0.y - p.y) <= Feel.World.coplanarTolerance ? $0 : nil }
     }
 
-    /// The point on these spans closest to `x`, kept back from their outer ends so he does not
-    /// arrive standing on a lip.
-    ///
-    /// Every deliberate destination in the mind layer goes through here, and `nearestSpanX`
-    /// clamps to the boundary exactly. v2a knew the menu bar's outer ends were cliffs and judged
-    /// them unreachable, correctly: destinations were uniform points inside a span, so hitting
-    /// the end had essentially zero probability. Clamping made it routine, and Hamzah's log
-    /// caught the result, a walk to x=5 followed by a step off the left end of the menu bar and
-    /// a drop to the desktop he cannot climb back from.
-    ///
-    /// Inset by `edgeApproach`, which is the distance a step-off aims past a lip and so the
-    /// distance at which `isAtEdge` stops being true. Spans shorter than twice that get their
-    /// midpoint, since there is nowhere in them that is not near an end.
     /// A uniformly random point across a set of spans, weighted by their length so a 30pt
     /// sliver is not as likely as the rest of the screen. Falls back to the first span's start
     /// when the run has no length at all.
@@ -2587,6 +2543,17 @@ public enum Cat {
         return spans[spans.count - 1].upperBound
     }
 
+    /// The point on these spans closest to `x`, kept back from their outer ends so he does not
+    /// arrive standing on a lip.
+    ///
+    /// Every deliberate destination in the mind layer goes through here, and `nearestSpanX`
+    /// clamps to the boundary exactly. A uniform point inside a span lands on its end with
+    /// essentially zero probability; a clamped one lands there routinely, and the menu bar's
+    /// outer ends are cliffs: a walk to x=5, a step off the left end of the bar, and a drop to
+    /// the desktop he cannot climb back from.
+    ///
+    /// Inset by `edgeApproach`, the distance a step-off aims past a lip. Spans shorter than
+    /// twice that get their midpoint, since there is nowhere in them that is not near an end.
     static func standingRoom(near x: CGFloat, in spans: [ClosedRange<CGFloat>]) -> CGFloat? {
         let inset = Feel.Physics.edgeApproach
         return spans.map { span -> CGFloat in
@@ -2609,15 +2576,14 @@ public enum Cat {
     /// Of the infinitely many arcs through a point, the minimum-energy one is
     ///     v_min² = g·(dy + r),  θ = atan2(dy + r, |dx|),  r = √(dx² + dy²)
     /// so speed, apex and hang time all rise with distance and a long jump visibly costs more
-    /// than a short one. Solving instead for the angle at a *fixed* speed inverted that: it
-    /// sent a 60pt hop off at 85°, 189pt into the air for 0.87s, against 98pt and 0.63s for a
-    /// 380pt leap — a hop that outclimbed and outhung the leap, which is the same defect as
-    /// v1's constant arc height with the sign flipped.
+    /// than a short one. Solving instead for the angle at a *fixed* speed inverts that: it
+    /// sends a 60pt hop off at 85°, 189pt into the air for 0.87s, against 98pt and 0.63s for a
+    /// 380pt leap, a hop that outclimbs and outhangs the leap.
     ///
-    /// `v_min ≤ jumpImpulse` is algebraically the old discriminant: solving
+    /// `v_min ≤ jumpImpulse` is algebraically the discriminant: solving
     /// `v⁴ − 2g·dy·v² − g²dx² ≥ 0` for v² gives exactly `v² ≥ g(dy + r)`. So the set of
-    /// reachable targets, `reachX` and `canReach` are all unchanged by the switch — only the
-    /// `(speed, angle)` pair chosen inside it is.
+    /// reachable targets, `reachX` and `canReach` all agree with this solve; only the
+    /// `(speed, angle)` pair chosen inside it is particular to it.
     ///
     /// The error is on the **speed**, not the angle. At the minimum-energy solution the target
     /// sits at a tangency, so angular error is second-order and he would never miss; and
@@ -2665,8 +2631,8 @@ public enum Cat {
     /// Where solid ground runs out in the direction he is facing, in world x.
     /// Nil means he is not standing on solid ground at all.
     ///
-    /// This replaces `clampToSurface`, which pinned him inside `extent` and thereby made the
-    /// fall-off guard in `step` unreachable. He could not walk off anything.
+    /// Nothing may clamp him inside `extent`: that makes the fall-off guard in `step`
+    /// unreachable and he can never walk off anything.
     public static func edgeAhead(from worldX: CGFloat, facing: CGFloat,
                                  on surface: Surface) -> CGFloat? {
         guard let range = surface.solid.first(where: { $0.contains(worldX) }) else { return nil }
@@ -2695,7 +2661,6 @@ public enum Cat {
                                   to: -.greatestFiniteMagnitude)
     }
 
-    /// Does the surface resume past that edge? Then it is a hole, not the end of it.
     /// Into the cutout, one of three ways.
     ///
     /// `out` is the direction that faces away from the hole, which `denDoor` already worked out
@@ -2768,10 +2733,10 @@ public enum Cat {
 
     /// Going through the cutout rather than stopping at it.
     ///
-    /// Until v3a the notch made the menu bar two ledges that could not reach each other. `isGap`
-    /// reads the hole as a wall, correctly — walking *into* it is walking into a region with no
-    /// pixels — but there was nothing that read it as a doorway either, so the far half of the
-    /// bar was only ever reachable by going down onto a window and back up.
+    /// Without this the notch makes the menu bar two ledges that cannot reach each other.
+    /// `isGap` reads the hole as a wall, correctly (walking *into* it is walking into a region
+    /// with no pixels), but nothing else reads it as a doorway, so the far half of the bar is
+    /// only reachable by going down onto a window and back up.
     ///
     /// Returns nil unless the cutout lies strictly between him and where he is going, so on a
     /// notchless Mac and on every surface that does not reach the cutout this costs one optional
@@ -2802,6 +2767,7 @@ public enum Cat {
             ? .crossNotch(farLip) : .walk(nearLip)
     }
 
+    /// Does the surface resume past that edge? Then it is a hole, not the end of it.
     static func isGap(at x: CGFloat, facing: CGFloat, on surface: Surface) -> Bool {
         surface.solid.contains { facing > 0 ? $0.lowerBound > x : $0.upperBound < x }
     }

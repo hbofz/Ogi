@@ -1,11 +1,11 @@
-// The behavioural harness for v2b. It asserts nothing on its own: it runs the real `Cat.step`
-// loop over real desktop layouts and reports where he actually goes, which is the only way to
-// see a mind that is subtly boring rather than broken.
+// The behavioural harness. It asserts nothing on its own: it runs the real `Cat.step` loop over
+// real desktop layouts and reports where he actually goes, which is the only way to see a mind
+// that is subtly boring rather than broken.
 //
-// The v2a lesson, from its own handoff: eight of fifteen tasks failed first review because a
-// test asserted the mechanism EXISTED rather than that it FIRED. A wrong scoring weight will
-// not freeze him or skip a clip; it will just make him dull, and nothing anywhere will fail.
-// So every v2b behaviour gets an assertion here, over a simulated run, on top of its unit test.
+// A test that asserts a mechanism EXISTS rather than that it FIRES catches nothing here. A wrong
+// scoring weight will not freeze him or skip a clip; it will just make him dull, and nothing
+// anywhere will fail. So every behaviour gets an assertion here, over a simulated run, on top of
+// its unit test.
 //
 // OGI_PROBE=1 swift test --filter PROBE     (it takes ~30s, so it is off by default)
 import Testing
@@ -18,7 +18,7 @@ private let probeScreen = ScreenGeometry(
     visibleFrame: CGRect(x: 0, y: 90, width: 1920, height: 1115),
     notch: CGRect(x: 856, y: 1206, width: 208, height: 37))
 
-/// Captured live on 2026-08-04 from his actual screen.
+/// A real desktop, captured live from a running screen.
 private func realDesktop() -> Skyline {
     World.build(windows: [
         RawWindow(id: 1, pid: 100, layer: 0,
@@ -198,15 +198,12 @@ private func report(_ title: String, _ world: Skyline, runs: Int, seconds: Doubl
     }
 }
 
-/// v3a, N5. **The menu bar is one ledge again.**
+/// **The menu bar is one ledge.**
 ///
-/// Until the tunnel, the cutout made the bar two runs that could not reach each other: `isGap`
-/// reads the hole as a wall, correctly, and nothing read it as a doorway. The far half was only
-/// ever reachable by climbing down onto a window and back up, which on a bare desktop is not
-/// reachable at all — `jumpImpulse` buys 190pt of rise against a thousand-point drop.
-///
-/// So this probe cannot pass before N5 and must pass after it. It is the clearest single
-/// statement of what the branch bought.
+/// Without the tunnel the cutout makes the bar two runs that cannot reach each other: `isGap`
+/// reads the hole as a wall, correctly, and nothing reads it as a doorway. The far half is then
+/// only reachable by climbing down onto a window and back up, which on a bare desktop is not
+/// reachable at all (`jumpImpulse` buys 190pt of rise against a thousand-point drop).
 @Test(.enabled(if: ProcessInfo.processInfo.environment["OGI_PROBE"] != nil))
 func PROBE_theBarIsOneLedgeAgain() {
     let world = bareDesktop()
@@ -235,7 +232,7 @@ func PROBE_theBarIsOneLedgeAgain() {
         if everFar { crossed += 1 }
     }
 
-    print("\n=== v3a N5: the tunnel, \(runs) runs x \(Int(seconds))s ===")
+    print("\n=== the tunnel, \(runs) runs x \(Int(seconds))s ===")
     print(String(format: "  runs that reached the far side of the notch: %d/%d",
                  crossed, runs))
     print(String(format: "  time on the far half, as a share of time on the bar: %.1f%%",
@@ -250,10 +247,9 @@ func PROBE_currentBehaviour() {
     report("a bare desktop", bareDesktop(), runs: 40, seconds: 600)
 }
 
-/// Task 1's acceptance. Baseline before the fix, measured 2026-08-04 over 40 x 600s:
-/// `floor -> menuBar` was 49.1% of every decision, and 47.4% of intents reached the surface
-/// they named. Both are properties of a whole simulated run and cannot be asserted from a
-/// single call to `nextMove`.
+/// Baseline before the fix, over 40 x 600s: `floor -> menuBar` was 49.1% of every decision, and
+/// 47.4% of intents reached the surface they named. Both are properties of a whole simulated
+/// run and cannot be asserted from a single call to `nextMove`.
 @Test(.enabled(if: ProcessInfo.processInfo.environment["OGI_PROBE"] != nil))
 func PROBE_heDoesNotPaceTowardTheUnreachable() {
     var impossible = 0, total = 0, arrived = 0
@@ -278,9 +274,9 @@ func PROBE_heDoesNotPaceTowardTheUnreachable() {
     #expect(arrivalRate >= 0.80, "under 80% of his intents reach the surface they named")
 }
 
-/// B1's acceptance, calm half. A unit test can only show that a stimulus produces a glance;
-/// this shows that a window opening on a running cat actually reaches him, over and over,
-/// while he is busy doing other things.
+/// The calm half. A unit test can only show that a stimulus produces a glance; this shows that
+/// a window opening on a running cat actually reaches him, over and over, while he is busy
+/// doing other things.
 @Test(.enabled(if: ProcessInfo.processInfo.environment["OGI_PROBE"] != nil))
 func PROBE_heLooksAtWindowsThatOpen() {
     let dt = Feel.Timing.fixedDT
@@ -306,14 +302,14 @@ func PROBE_heLooksAtWindowsThatOpen() {
     #expect(rate >= 0.90, "he ignored more than one window in ten")
 }
 
-/// B1's acceptance, roused half.
+/// The roused half.
 ///
 /// Measured against the windows that opened **while he was free to act**, not against every
 /// window. Most openings land while he is already on a trip, and the rule that a stimulus never
 /// re-targets a trip already underway is deliberate, so counting those as misses would be
 /// measuring how busy he happens to be rather than whether the gate works. The absolute rate is
-/// printed for information: it came out at 27.8% roused against 0% calm, which is the honest
-/// on-screen figure for how often a window opening actually moves him.
+/// printed for information: 27.8% roused against 0% calm, which is the honest on-screen figure
+/// for how often a window opening actually moves him.
 @Test(.enabled(if: ProcessInfo.processInfo.environment["OGI_PROBE"] != nil))
 func PROBE_aRousedCatGoesToLook() {
     let dt = Feel.Timing.fixedDT
@@ -327,11 +323,11 @@ func PROBE_aRousedCatGoesToLook() {
                 cat.arousal = arousal            // held, so the measurement is about the gate
                 if tick % (120 * 60) == 0, tick > 0 {
                     let wasFree = cat.intent == nil
-                    // Free is not enough since v2c: the taste layer moves him around more
-                    // than the coin flip did, and from window(2) there is no route to
-                    // window(1) at all — nextMove refuses to lose height, deliberately. The
-                    // arousal gate cannot be measured through a wall, so the denominator is
-                    // free AND routable; the walled share is printed rather than judged.
+                    // Free is not enough: the taste layer moves him around a great deal,
+                    // and from window(2) there is no route to window(1) at all, since
+                    // nextMove refuses to lose height, deliberately. The arousal gate
+                    // cannot be measured through a wall, so the denominator is free AND
+                    // routable; the walled share is printed rather than judged.
                     let promoted = Cat.nearestSpanX(to: 650, in: world.surface(.window(1))?.spans ?? [])
                     var routable = false
                     if case .grounded(let p) = cat.support, let here = world.surface(p.id) {
@@ -339,11 +335,11 @@ func PROBE_aRousedCatGoesToLook() {
                                                 x: promoted ?? 650, world: world) != nil
                     }
                     // ...and he cannot approach what he is standing on. The taste layer
-                    // CAMPS him at the promoted spot — novelty took him there, staleness and
-                    // the lounge kept him there — so at the next opening he is often already
-                    // at x≈650 on window(1). The promotion still fires, forms a three-point
-                    // walk, and completes-and-settles inside the same step, which read as a
-                    // miss. Being there already is the behaviour succeeding, not failing.
+                    // CAMPS him at the promoted spot, so at the next opening he is often
+                    // already at x≈650 on window(1). The promotion still fires, forms a
+                    // three-point walk, and completes-and-settles inside the same step,
+                    // which reads as a miss. Being there already is the behaviour
+                    // succeeding, not failing.
                     let alreadyThere: Bool = {
                         guard case .grounded(let p) = cat.support else { return false }
                         return p.id == .window(1)
@@ -356,7 +352,7 @@ func PROBE_aRousedCatGoesToLook() {
                     cat = Cat.step(cat, world: world, dt: dt)
                     // Matched on the exact destination the promotion computes, not merely on the
                     // surface. Boredom picks a uniform x on that same window often enough to
-                    // register as a chase otherwise, which showed up as a calm cat "chasing" one
+                    // register as a chase otherwise, which reads as a calm cat "chasing" one
                     // window in 360 and is a coincidence rather than a behaviour.
                     if wasFree, routable, !alreadyThere, cat.intent?.destination == .window(1),
                        cat.intent?.destinationX == promoted { approached += 1 }
@@ -379,14 +375,12 @@ func PROBE_aRousedCatGoesToLook() {
     #expect(roused.all > 0.20, "a roused cat almost never actually moves; the dial is decorative")
 }
 
-/// B4's acceptance, in two independent halves.
-///
-/// This probe took three attempts and the failures were all in the measurement, so the reasons
-/// are worth keeping. Sampling one moment ("the first tick his intent goes nil near the cursor")
-/// caught him in the single-tick gap before the yield rule acts. Matching the exact destination
-/// on the menu bar missed him coming to the equivalent spot on whichever surface he was actually
-/// standing on, which is the same behaviour. And a cursor inside the notch has no spot beside it
-/// at all, which is a property of the cutout rather than of him.
+/// In two independent halves, and the three measurements that do not work are worth writing
+/// down. Sampling one moment ("the first tick his intent goes nil near the cursor") catches him
+/// in the single-tick gap before the yield rule acts. Matching the exact destination on the menu
+/// bar misses him coming to the equivalent spot on whichever surface he is actually standing on,
+/// which is the same behaviour. And a cursor inside the notch has no spot beside it at all,
+/// which is a property of the cutout rather than of him.
 ///
 /// What the feature actually claims is simpler than any of those, so that is what is measured:
 /// **he spends more of his time near your cursor when it has gone still than when it has not.**
@@ -439,11 +433,11 @@ func PROBE_heComesToYourCursorAndYourClicksStillWork() {
             "a cursor going still barely changes where he spends his time; the behaviour is not firing")
 
     // He gets off within a beat rather than instantly, and the budget is derived rather than
-    // picked so it cannot go stale the way the first version did: `yieldPatience` before he
-    // decides you meant it, then the walk itself. That step is Shape.width/2 + cursorGap less
-    // his overshoot, about 31pt, which at walkSpeed 46 through accel 220 is a shade under a
-    // second. A second and a half of walking budget covers it with room, and anything past that
-    // means he settled under the pointer rather than passing through.
+    // picked so that it cannot go stale: `yieldPatience` before he decides you meant it, then
+    // the walk itself. That step is Shape.width/2 + cursorGap less his overshoot, about 31pt,
+    // which at walkSpeed 46 through accel 220 is a shade under a second. A second and a half of
+    // walking budget covers it with room, and anything past that means he settled under the
+    // pointer rather than passing through.
     let budget = Feel.Mind.yieldPatience + 1.5
     #expect(still.worstSit < budget,
             "he sat under the pointer for \(still.worstSit)s against a budget of \(budget)")
@@ -453,7 +447,7 @@ func PROBE_heComesToYourCursorAndYourClicksStillWork() {
 
 /// What actually happens when you open two windows next to each other, the way a person does.
 ///
-/// The existing roused-half probe HELD arousal at 1 to isolate the gate. That measures the gate
+/// The roused-half probe above HOLDS arousal at 1 to isolate the gate. That measures the gate
 /// and not the mechanic: in real use arousal has to be earned by the openings themselves, and
 /// whether it reaches the threshold depends on the gap between them, on how much it decayed,
 /// and on whether he happened to be free at that moment. This measures the whole path.
@@ -494,9 +488,9 @@ func PROBE_openingTwoWindowsTheWayAPersonDoes() {
     }
 }
 
-/// The whole point of v2c, as a number: where he CHOOSES to go must stop being the same
-/// distribution as where he happens to be. v2b measured the two as identical (L1 ≈ 0.04),
-/// which is what "he has no preference" looks like.
+/// The taste layer as a number: where he CHOOSES to go must stop being the same distribution as
+/// where he happens to be. Without it the two measure identical (L1 ≈ 0.04), which is what "he
+/// has no preference" looks like.
 @Test(.enabled(if: ProcessInfo.processInfo.environment["OGI_PROBE"] != nil))
 func PROBE_hisChoicesAreNoLongerDice() {
     var toCount: [String: Int] = [:], dwell: [String: Double] = [:]
@@ -520,15 +514,13 @@ func PROBE_hisChoicesAreNoLongerDice() {
                      choice * 100, share * 100))
         l1 += abs(choice - share)
     }
-    print(String(format: "choice-vs-dwell L1 distance: %.3f (v2b baseline ~0.04)", l1))
-    // Informational, deliberately unasserted. It was pinned at 0.10 and measured 0.088,
-    // 0.125, 0.145 and 0.225 across runs with no election change in between: the metric is
-    // self-compressing — dwell CHASES choice once he acts on preference, and the better his
-    // trips complete (the drop shortened every descent) the smaller it reads — so any pin
-    // is either flaky or vacuous. A metric that punishes the success it measures lies, and
-    // the house rule is to stop believing it rather than keep appeasing it. The taste's
-    // real referees are the two stable probes beside this one: a bare desk is for lounging,
-    // and a new window stays interesting.
+    print(String(format: "choice-vs-dwell L1 distance: %.3f (baseline ~0.04)", l1))
+    // Informational, deliberately unasserted. Pinned at 0.10 it measured 0.088, 0.125,
+    // 0.145 and 0.225 across runs with no election change in between: the metric is
+    // self-compressing (dwell CHASES choice once he acts on preference, and the better his
+    // trips complete the smaller it reads), so any pin is either flaky or vacuous. The
+    // taste's real referees are the two stable probes beside this one: a bare desk is for
+    // lounging, and a new window stays interesting.
 }
 
 /// Spec §8: a bare desk is for lounging, not pacing.
@@ -557,8 +549,8 @@ func PROBE_aBareDeskIsForLounging() {
     #expect(strollShare < 0.50, "the bare desk is still a pacing pen")
 }
 
-/// Spec §8: a new window stays interesting for minutes, through ordinary boredom, at
-/// arousal 0 the whole way — this is taste, not the v2b stimulus promotion.
+/// Spec §8: a new window stays interesting for minutes, through ordinary boredom, at arousal 0
+/// the whole way. This is taste, not the stimulus promotion.
 @Test(.enabled(if: ProcessInfo.processInfo.environment["OGI_PROBE"] != nil))
 func PROBE_aNewWindowStaysInteresting() {
     let dt = Feel.Timing.fixedDT
@@ -604,9 +596,9 @@ func PROBE_aNewWindowStaysInteresting() {
 /// him ever be hidden. The other fixtures happen not to occlude anything.
 private func overlappingDesktop() -> Skyline {
     // The list is FRONT to back, so index 0 is the window in front. To hide a top edge the front
-    // window has to straddle it vertically, which is why the first entry is the tall one: a
-    // first attempt at this fixture had the front windows shorter than the back ones, occluded
-    // nothing at all, and passed the probe at a very convincing 0.0%.
+    // window has to straddle it vertically, which is why the first entry is the tall one: front
+    // windows shorter than the back ones occlude nothing at all and pass the probe at a very
+    // convincing 0.0%.
     World.build(windows: [
         RawWindow(id: 1, pid: 100, layer: 0, rect: CGRect(x: 600, y: 100, width: 800, height: 1100),
                   alpha: 1, owner: "Front"),
@@ -650,8 +642,8 @@ func PROBE_heDoesNotSpendHisLifeBehindWindows() {
             "he was stuck out of sight for \(worstSpell)s")
 }
 
-/// Guards the fixture above against silently occluding nothing, which is how the first version
-/// of it passed at 0.0%.
+/// Guards the fixture above against silently occluding nothing, which passes the probe at 0.0%
+/// while proving nothing.
 @Test(.enabled(if: ProcessInfo.processInfo.environment["OGI_PROBE"] != nil))
 func PROBE_theOverlappingFixtureActuallyOverlaps() {
     let world = overlappingDesktop()
@@ -666,9 +658,9 @@ func PROBE_theOverlappingFixtureActuallyOverlaps() {
     #expect(occluded.count >= 2, "the fixture hides nothing, so the probe proves nothing")
 }
 
-/// Diagnostic for Hamzah's report that he shrinks while looking over an edge. Per-frame eye
-/// width and ink box for the clips involved. `clipScale` applies ONE scale per clip, taken from
-/// the median eye width, so anything that varies frame to frame varies on screen too.
+/// Diagnostic for a report that he shrinks while looking over an edge. Per-frame eye width and
+/// ink box for the clips involved. `clipScale` applies ONE scale per clip, taken from the median
+/// eye width, so anything that varies frame to frame varies on screen too.
 @MainActor
 @Test(.enabled(if: ProcessInfo.processInfo.environment["OGI_DIAG"] != nil))
 func DIAG_perFrameSize() {

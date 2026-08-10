@@ -41,8 +41,8 @@ public final class OgiApp: NSObject, NSApplicationDelegate {
     private var ownPID = getpid()
 
     /// The screen the overlay was built for. `NSScreen.main` means "screen with the key
-    /// window" and changes when you click an app on another display, which silently
-    /// rebuilt the entire skyline against different geometry every poll.
+    /// window" and changes when you click an app on another display, which would silently
+    /// rebuild the entire skyline against different geometry every poll.
     private var homeScreen: NSScreen!
     /// ...and the same screen by display ID, because AppKit rebuilds the `NSScreen` array on
     /// every reconfiguration. The pinned object survives as a stale husk whose `frame` no
@@ -59,9 +59,9 @@ public final class OgiApp: NSObject, NSApplicationDelegate {
     public func applicationDidFinishLaunching(_ note: Notification) {
         NSApp.setActivationPolicy(.accessory)
         // Line-buffered, or redirecting the narration to a file gets you the first 4KB and
-        // nothing else until the process exits cleanly — and a GUI app being watched is one
-        // you kill. "Watch it on the machine" is the only instrument that has ever found the
-        // real bugs here, so the instrument has to survive being switched off.
+        // nothing else until the process exits cleanly, and a GUI app being watched is one you
+        // kill. Watching it on the machine is what finds the real bugs, so the instrument has
+        // to survive being switched off.
         if debug { setvbuf(stdout, nil, _IOLBF, 0) }
 
         guard let screen = NSScreen.main else { return }
@@ -75,8 +75,8 @@ public final class OgiApp: NSObject, NSApplicationDelegate {
         overlay.onTick = { [weak self] t in self?.tick(t) }
         overlay.onDrag = { [weak self] phase, point in self?.handleDrag(phase, point) }
         overlay.onClick = { [weak self] p, onCat in
-            // With the cursor poll driving ignoresMouseEvents, every click that reaches us
-            // should be on him. onCat=false means the hit rect and the poll disagree.
+            // With the cursor poll driving ignoresMouseEvents, every click that arrives should
+            // be on him. onCat=false means the hit rect and the poll disagree.
             self?.log("click at \(Int(p.x)),\(Int(p.y)) onCat=\(onCat)")
         }
 
@@ -153,9 +153,8 @@ public final class OgiApp: NSObject, NSApplicationDelegate {
                 forName: .init("com.ogi.debug.quit"), object: nil, queue: .main) { [weak self] _ in
                 MainActor.assumeIsolated { self?.goHomeAndQuit() }
             }
-            // Lets the harness fire the zap without touching the power cable, because the
-            // cable cannot be scripted and five rounds of "plug it in and tell me" was four
-            // too many.
+            // Lets the harness fire the zap without touching the power cable, which cannot be
+            // scripted.
             DistributedNotificationCenter.default().addObserver(
                 forName: .init("com.ogi.debug.zap"), object: nil, queue: .main) { [weak self] _ in
                 MainActor.assumeIsolated {
@@ -163,7 +162,7 @@ public final class OgiApp: NSObject, NSApplicationDelegate {
                     self?.log("debug zap owed")
                 }
             }
-            // ...and the same for v3a's notch behaviours, for a sharper reason than
+            // ...and the same for the notch behaviours, for a sharper reason than
             // convenience. **A screenshot cannot show what the notch hides**: `screencapture`
             // fills the cutout with the wallpaper, so a cat drawn inside it looks correct in
             // the PNG and is invisible on the real panel. Every one of these has to be judged
@@ -190,7 +189,7 @@ public final class OgiApp: NSObject, NSApplicationDelegate {
         log("screen=\(g.frame) visible=\(g.visibleFrame) notch=\(g.notch.map { "\($0)" } ?? "none")")
     }
 
-    /// Puts him into one of v3a's notch behaviours on demand, for OGI_DEBUG builds only.
+    /// Puts him into one of the notch behaviours on demand, for OGI_DEBUG builds only.
     ///
     /// Not a shortcut around the real triggers — they are tested — but the only way a person
     /// can *look* at these. Three of the four are invisible to `screencapture` by construction,
@@ -365,8 +364,7 @@ public final class OgiApp: NSObject, NSApplicationDelegate {
     /// first tick. So he starts on its lip, with the rest of him overhanging the cutout —
     /// where `World.build`'s permanent notch occluder masks him away — creeps out, and walks
     /// into the lit strip. Peeking out of the hole, achieved with the geometry rather than in
-    /// spite of it. (The version of this that placed him at `notch.midX` worked only while the
-    /// walk consulted `extent`; against `solid` it is a cat standing on nothing.)
+    /// spite of it.
     ///
     /// Pure and static so the launch placement is testable without an NSApplication.
     static func arrival(notch: CGRect, bar: Surface, screenMaxX: CGFloat) -> CatState {
@@ -400,7 +398,7 @@ public final class OgiApp: NSObject, NSApplicationDelegate {
     /// Where he goes to be gone. The notch doorway when he came out of one; under his own
     /// menu bar item otherwise, because that is the one piece of him always in the bar and
     /// it is where you click to quit. Nil only when there is no bar at all, in which case
-    /// retreats do nothing and quitting is instant, same as before.
+    /// retreats do nothing and quitting is instant.
     private var effectiveHomeX: CGFloat? {
         if let homeX { return homeX }
         guard let bar = skyline.surface(.menuBar) else { return nil }
@@ -412,11 +410,10 @@ public final class OgiApp: NSObject, NSApplicationDelegate {
     /// Where he WAITS when he goes home: beside the doorway rather than in it.
     ///
     /// The notch is a hardware hole with no pixels behind it, so a cat centred on its lip has
-    /// everything past that lip simply not drawn. Both retreats used to park him exactly there
-    /// and leave him for as long as it lasted, which on a covered screen is the whole film.
-    /// Hamzah watched about half of him vanish up there. He stops a body-width short now, with
-    /// all of him on lit pixels, and `Cat.denDoor` reaches that far so he still holds the den
-    /// pose when he gets there.
+    /// everything past that lip simply not drawn, and a retreat parked there leaves half of him
+    /// missing for as long as it lasts, which on a covered screen is the whole film. He stops a
+    /// body-width short, with all of him on lit pixels, and `Cat.denDoor` reaches that far so he
+    /// still holds the den pose when he gets there.
     ///
     /// `goHomeAndQuit` deliberately does NOT use this. Leaving means going *into* the hole, and
     /// so does the launch emergence: both are motion, which reads as a doorway. Only stopping
@@ -451,7 +448,7 @@ public final class OgiApp: NSObject, NSApplicationDelegate {
     private func setupStatusItem() {
         // LSUIElement means no Dock icon, which is the point, but it also means no obvious
         // way to quit. The most common complaint about desktop pets in the wild is literally
-        // "how do i remove it", so the way out exists before anyone else ever runs this.
+        // "how do i remove it", so the way out exists from the start.
         statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
         statusItem.button?.title = "🐈‍⬛"
         let menu = NSMenu()
@@ -519,11 +516,10 @@ public final class OgiApp: NSObject, NSApplicationDelegate {
         }
         // Restless mode keeps him awake as well as impatient, or he simply sits down after
         // 30s of you not touching the machine and there is nothing to watch.
-        // `debugRepose` is set only by the notch harness, and only in OGI_DEBUG builds. Without
-        // it the forced den lasted exactly zero ticks: this line rewrites `repose` every frame
-        // from your HID idle time, so "put him to sleep in the notch so I can look at it" was
-        // overwritten before `Cat.step` ever saw it. Under OGI_RESTLESS it is overwritten with
-        // `.awake` unconditionally, which is worse.
+        // `debugRepose` is set only by the notch harness, and only in OGI_DEBUG builds. This
+        // line rewrites `repose` every frame from your HID idle time, and under OGI_RESTLESS
+        // with `.awake` unconditionally, so a forced state has to override both or it never
+        // survives a tick.
         // A covered screen settles him faster: five minutes to sleep rather than ten. See
         // `Feel.Notch.coveredSlumberScale` for why that is the situation and not a shortcut.
         let slumber = Repose.timeScale * (cat.screenCovered ? Feel.Notch.coveredSlumberScale : 1)
@@ -540,9 +536,9 @@ public final class OgiApp: NSObject, NSApplicationDelegate {
             ? sense.typingRate > Feel.Mind.typingCalm
             : sense.typingRate > Feel.Mind.typingAlert
         cat.languor = sense.languor
-        // The performances. Power arriving is the zap — Hamzah's electrocution — an audio
-        // device is the groove, something on the cable is curiosity, and the battery going
-        // properly low is the power-down. All edges only App can see; each first sample
+        // The performances. Power arriving is the zap, an audio device is the groove, something
+        // on the cable is curiosity, and the battery going properly low is the power-down.
+        // All edges only App can see; each first sample
         // records rather than fires, so a Mac that launches plugged in does not open with
         // a jolt.
         if let was = wasCharging, sense.charging != was {
@@ -571,28 +567,24 @@ public final class OgiApp: NSObject, NSApplicationDelegate {
         cat.cursor = pointer
 
         // You locked the screen, so he goes home and everything suspends. This is the
-        // manifesto's "all polling suspends", and it costs one early return.
+        // "all polling suspends" rule, and it costs one early return.
         if sense.asleep {
             overlay.suspend()   // resumed by Signals.onWake, never from in here
             return
         }
 
         // Deep sleep. `preferredFrameRateRange` is honoured on ProMotion and IGNORED on a
-        // fixed-refresh display, where the link keeps firing 60 times a second and we
-        // merely do less per fire. Since the battery cost of a desktop pet is wakeups
-        // rather than pixels, "less work per wakeup" is not the fix — stopping is.
+        // fixed-refresh display, where the link keeps firing 60 times a second and each fire
+        // merely does less. Since the battery cost of a desktop pet is wakeups rather than
+        // pixels, "less work per wakeup" is not the fix, stopping is.
         if cat.repose == .asleep, !cat.isMoving, cat.intent == nil {
             // One last frame, and then the clock stops.
             //
-            // This branch used to return without stepping or drawing, which meant **the sleep
-            // pose was never rendered at all**: the last thing on screen was whatever the tick
-            // before had drawn. v2 got away with it because `curl` ends on the sleep pose by
-            // design, so the frozen final frame of the curl looked exactly like a sleeping cat.
-            //
-            // v3a does not get away with it. Falling asleep at the doorway is supposed to move
-            // him *into* the cutout and swap the sheet for `denSleep`, and both of those happen
-            // inside `Cat.step` — which was never called. The den was unreachable, and the
-            // reason was an ordering rather than anything about the den.
+            // Returning here without stepping and drawing would mean **the sleep pose is never
+            // rendered at all**: the last thing on screen stays whatever the previous tick drew.
+            // Falling asleep at the doorway has to move him *into* the cutout and swap the sheet
+            // for `denSleep`, and both of those happen inside `Cat.step`, so skipping it makes
+            // the den unreachable.
             //
             // Costs one step and one draw, once, on the tick he settles. The zero-wakeup
             // guarantee is untouched: `enterSlumber` still stops the display link outright and
@@ -613,7 +605,7 @@ public final class OgiApp: NSObject, NSApplicationDelegate {
         // The render-rate ladder. The real battery cost of a desktop pet is processor
         // wakeups, not pixels: RunCat draws complaints at 4 wakeups/second, and a naive
         // 60Hz display link is fifteen times worse. So when he is settled and nothing is
-        // moving, we stop doing work entirely rather than redrawing an unchanged cat.
+        // moving, the work stops entirely rather than redrawing an unchanged cat.
         let interval = 1.0 / renderRate()
         guard cat.isMoving || now - lastRender >= interval else { return }
         lastRender = now
@@ -743,12 +735,12 @@ public final class OgiApp: NSObject, NSApplicationDelegate {
         var pose = Body.Pose()
         if cat.activity == .walk {
             // Gait speed follows the speed he is actually moving at, so the feet do not skate.
-            // Against the constant it used to read, the wind-up and the coast to a halt would
-            // both be moonwalks, and a trot would have been one all along.
+            // Against a constant the wind-up and the coast to a halt are both moonwalks, and a
+            // trot is one throughout.
             //
             // Per gait, because a trot's stride is more than twice a stroll's: one shared length
             // makes the distance-driven phase correct in ground covered and wrong in frame rate,
-            // and the run sheet was over-cranked 2.25x by exactly that.
+            // which over-cranks the run sheet 2.25x.
             let stride = cat.hurrying ? Feel.Shape.runStrideLength : Feel.Shape.strideLength
             walkPhase += dt * abs(cat.perchSpeed) / stride
             walkPhase = walkPhase.truncatingRemainder(dividingBy: 1)
@@ -801,8 +793,8 @@ public final class OgiApp: NSObject, NSApplicationDelegate {
     }
 
     /// Where a click counts as touching him. Padded, because he is a small target. This is
-    /// `Cat.hisBox` exactly — same rect, same pad — so the box he yields to and the box that
-    /// swallows clicks cannot drift apart again.
+    /// `Cat.hisBox` exactly (same rect, same pad), so the box he yields to and the box that
+    /// swallows clicks cannot drift apart.
     private func hitRect() -> CGRect {
         (drawnRect == .zero ? CGRect(x: cat.position.x - Feel.Shape.width / 2,
                                      y: cat.position.y,
@@ -834,14 +826,13 @@ public final class OgiApp: NSObject, NSApplicationDelegate {
         slumberTimer?.cancel()
         slumberTimer = nil
         lastTick = 0            // do not integrate the whole nap in one step
-        // He was asleep too: one stretch before life resumes — unless he spent the nap in the
+        // He was asleep too: one stretch before life resumes, unless he spent the nap in the
         // notch, in which case he swings out of it and does a couple of pull-ups instead.
         //
-        // Hamzah's idea, and it is the better trigger: the hang was reachable only through a
-        // boredom roll that also required him to be standing within 35pt of a doorway, which
-        // almost never coincided. Waking up in the den is the one moment both are true by
-        // construction, and it turns a rare accident into the thing you see every time you come
-        // back to a film.
+        // Waking in the den is the better trigger for the hang. Through a boredom roll it also
+        // needs him standing within 35pt of a doorway, which almost never coincides; waking up
+        // there is the one moment both are true by construction, which turns a rare accident
+        // into the thing you see every time you come back to a film.
         cat.owed = cat.inNotch ? .hang : .stretch
         overlay.resume()
         log("awake")
@@ -912,10 +903,9 @@ public final class OgiApp: NSObject, NSApplicationDelegate {
     }
 
     /// Send him home, if there is a home. The stimulus point is the doorway on the menu bar
-    /// LINE: the x routes him and the y is what his eyes flick to. It used to be y=0, the
-    /// bottom of the screen — invisible while the pupils are switched off, and a retreating
-    /// cat glancing at the floor the day they return. One helper because the two retreats
-    /// (fullscreen, machine sleep) are the same act with a different prompt.
+    /// LINE: the x routes him and the y is what his eyes flick to, so it must not be y=0, the
+    /// bottom of the screen, which is a retreating cat glancing at the floor. One helper because
+    /// the two retreats (fullscreen, machine sleep) are the same act with a different prompt.
     private func headHome(because reason: String) {
         guard let home = waitingSpot else { return }
         cat.receive(Stimulus(kind: .goHome,
@@ -931,15 +921,15 @@ public final class OgiApp: NSObject, NSApplicationDelegate {
 
     /// Is his screen given over to one app?
     ///
-    /// **Not** "is there one window covering ~all of the frame", which is what this used to
-    /// ask and which is false of every real fullscreen Space. Dumped live off this machine
-    /// (M2, notched, macOS 26.5.1, 1920x1243pt) while sitting on one:
+    /// **Not** "is there one window covering ~all of the frame", which is false of every real
+    /// fullscreen Space. Measured live (M2, notched, macOS 26.5.1, 1920x1243pt) while sitting
+    /// on one:
     ///
     /// - a settled fullscreen window is 1920x**1205**. It stops at the menu bar line and
     ///   leaves the 38pt notch strip bare, so it covers 96.9% of the frame and fails a 98%
-    ///   test. The only window that ever passed was the 1920x1243 one macOS shows for ~0.7s
-    ///   during the zoom animation, which is precisely why *entering* fullscreen worked and
-    ///   swiping to a Space that was already fullscreen did nothing.
+    ///   test. The only window that passes is the 1920x1243 one macOS shows for ~0.7s during
+    ///   the zoom animation, which is why a coverage test catches *entering* fullscreen and
+    ///   misses swiping to a Space that is already fullscreen.
     /// - a fullscreen app is not even one window. Chrome's is four full-width bands (1083,
     ///   158, 81 and 41 tall); the tallest is 87% of the screen on its own.
     ///
@@ -950,7 +940,7 @@ public final class OgiApp: NSObject, NSApplicationDelegate {
     /// which fullscreen deliberately leaves bare.
     ///
     /// Full width is not an approximation either: every window in every fullscreen Space
-    /// dumped was exactly screen-wide. It is also what keeps the GLOBAL window list honest,
+    /// measured was exactly screen-wide. It is also what keeps the GLOBAL window list honest,
     /// since a fullscreen window on another display spans none of this screen's x.
     ///
     /// Pure and static so the multi-display cases are testable without an NSApplication.
@@ -1001,7 +991,7 @@ public final class OgiApp: NSObject, NSApplicationDelegate {
         return max(0, cat.position.y - below.y)
     }
 
-    // MARK: - M0 probe
+    // MARK: - Probe
 
     private func logSupportChange(from before: Support) {
         switch (before, cat.support) {

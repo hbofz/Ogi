@@ -89,7 +89,7 @@ private let screen = ScreenGeometry(
 
 @Test func revealedDockRaisesTheFloor() {
     // With the Dock auto-hidden, visibleFrame runs to the screen bottom. When it slides
-    // up, its window is the only thing that tells us where the floor actually is.
+    // up, its window is the only thing that says where the floor actually is.
     // Without this he'd stand behind the revealed Dock and it would look like a crash.
     let autoHide = ScreenGeometry(frame: screen.frame,
                                   visibleFrame: CGRect(x: 0, y: 0, width: 1920, height: 1205),
@@ -100,9 +100,9 @@ private let screen = ScreenGeometry(
 }
 
 @Test func dockFullScreenBackingWindowDoesNotBecomeTheFloor() {
-    // Regression, found by M0 against the real system: the Dock process owns a full-screen
-    // layer-20 window as well as the visible Dock. Matching on owner+layer alone put the
-    // floor at y=1243, the TOP of the screen, and he fell forever.
+    // Regression: the Dock process owns a full-screen layer-20 window as well as the visible
+    // Dock. Matching on owner+layer alone puts the floor at y=1243, the TOP of the screen,
+    // and he falls forever.
     let autoHide = ScreenGeometry(frame: screen.frame,
                                   visibleFrame: CGRect(x: 0, y: 0, width: 1920, height: 1205),
                                   notch: screen.notch)
@@ -135,8 +135,8 @@ private let screen = ScreenGeometry(
 // MARK: - Walkable is not the same as visible
 
 @Test func maximizedWindowHidesTheFloorButDoesNotDeleteIt() {
-    // A maximized window's rect starts at visibleFrame.minY, which IS floorY, so the old
-    // carve subtracted the entire screen width and the floor stopped existing.
+    // A maximized window's rect starts at visibleFrame.minY, which IS floorY, so a carve of
+    // its whole width takes the entire screen width and the floor stops existing.
     let big = win(1, screen.visibleFrame)
     let sky = World.build(windows: [big], screen: screen, ownPID: 99)
     let floor = try! #require(sky.surface(.floor))
@@ -214,9 +214,9 @@ private let screen = ScreenGeometry(
 }
 
 @Test func theDockFullScreenBackingWindowDoesNotCarveAwayWalkableSpans() {
-    // Regression, found by M3: the same phantom window that broke the floor and the mask
-    // also straddles every surface, so counting it as geometry carved every walkable span
-    // down to nothing and he stood frozen forever with no reachable destination.
+    // Regression: the same phantom window that breaks the floor and the mask also straddles
+    // every surface, so counting it as geometry carves every walkable span down to nothing
+    // and he stands frozen forever with no reachable destination.
     let dockBacking = win(9, CGRect(x: 0, y: 0, width: 1920, height: 1243), layer: 20, owner: "Dock")
     let ledge = win(2, CGRect(x: 200, y: 300, width: 450, height: 332))
     let sky = World.build(windows: [dockBacking, ledge], screen: screen, ownPID: 99)
@@ -234,7 +234,7 @@ private let screen = ScreenGeometry(
 }
 
 @Test func menusAndPopoversDoNotOcclude() {
-    // They are above our window level, so they occlude him for real. Masking as well would
+    // They are above his own window level, so they occlude him for real. Masking as well would
     // double-count, and their shapes are not rectangles anyway.
     let menu = win(1, CGRect(x: 150, y: 150, width: 200, height: 300), layer: 101)
     let perch = win(2, CGRect(x: 100, y: 100, width: 400, height: 400))

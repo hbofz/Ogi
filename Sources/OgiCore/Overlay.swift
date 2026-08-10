@@ -9,7 +9,7 @@ public enum DragPhase: Sendable { case began, moved, ended }
 public final class Overlay {
 
     public var onTick: ((CFTimeInterval) -> Void)?
-    /// Set by M0's click-through probe. See `OgiView.mouseDown`.
+    /// Set by the click-through probe. See `OgiView.mouseDown`.
     public var onClick: ((NSPoint, Bool) -> Void)?
     public var onDrag: ((DragPhase, CGPoint) -> Void)?
 
@@ -54,17 +54,17 @@ public final class Overlay {
 
     public func start() { view.startLink() }
 
-    /// You left. Stop the clock entirely rather than ticking at a low rate: a paused
-    /// display link is zero wakeups, and "you lock the screen and all polling suspends" is
-    /// a stated behaviour, not an optimisation.
+    /// Stop the clock entirely rather than ticking at a low rate: a paused display link is
+    /// zero wakeups, and "the screen locks and all polling suspends" is a stated behaviour,
+    /// not an optimisation.
     public func suspend() { view.setPaused(true) }
     public func resume() { view.setPaused(false) }
 
-    /// Asks the system to call us less often when he is settled.
+    /// Asks the system for fewer callbacks when he is settled.
     ///
-    /// Honest caveat: this genuinely lowers the callback rate on ProMotion, and is ignored
-    /// on a fixed-refresh display, where the link still fires at 60Hz and we simply do less
-    /// per fire. Real zero comes from `suspend()`.
+    /// Lowers the callback rate on ProMotion, and is ignored on a fixed-refresh display,
+    /// where the link still fires at 60Hz and each fire simply does less. Real zero comes
+    /// from `suspend()`.
     public func setPreferredRate(_ hz: Double) { view.setPreferredRate(hz) }
 
     private var interactive = false
@@ -72,15 +72,15 @@ public final class Overlay {
     /// The whole click-through mechanism: swallow mouse events only while the cursor is
     /// actually over him, and pass everything else straight through.
     ///
-    /// AppKit is supposed to make this free — non-opaque windows get per-pixel alpha hit
+    /// AppKit is supposed to make this free: non-opaque windows get per-pixel alpha hit
     /// testing, so clicks land on opaque pixels and fall through transparent ones with no
-    /// code at all. Apple broke that in macOS 26.3 RC, shipped a fix, and it regressed
-    /// again. **Measured broken on 26.5.1**: clicks on empty space were reaching this
-    /// window, which would make Ogi swallow every click on the screen.
+    /// code at all. It is unreliable, having broken, been fixed and regressed again across
+    /// point releases. **Measured broken on macOS 26.5.1**: clicks on empty space reach
+    /// this window, which would make Ogi swallow every click on the screen.
     ///
     /// ponytail: this poll is the ONLY mechanism, not a fallback behind a version check.
     /// It is correct on every macOS, costs one property read per frame from a cursor
-    /// position we already sample, and deletes an entire branch plus the version-sniffing
+    /// position already sampled, and deletes an entire branch plus the version-sniffing
     /// heuristic that would decide between them. The known cost is a race: flipping on the
     /// frame the cursor arrives means a click inside ~16ms of touching him can be missed.
     /// Fine for petting a cat. Revisit only if petting feels unresponsive.
@@ -155,7 +155,7 @@ final class OgiView: NSView {
         maskContainer.addSublayer(pupilLayer)
         // Drawn rather than lettered: a Z is a three-segment polyline, and a stroked path scales
         // with him and stays crisp where a font would not at this size. It also has to be code
-        // rather than art — the cutter flood-fills connected ink, so a Z drawn into a sheet would
+        // rather than art: the cutter flood-fills connected ink, so a Z drawn into a sheet would
         // come back as its own blob and either be discarded or split the frame.
         zzzLayer.fillColor = nil
         zzzLayer.lineJoin = .round
@@ -213,12 +213,12 @@ final class OgiView: NSView {
     func apply(_ cat: CatState, pose: Body.Pose, gaze: Gaze, frame: Sprites.Frame,
                heightAboveGround h: CGFloat, occluders: [CGRect]) {
         // Where the drawing goes, which is his world position except for the notch poses that
-        // grip the cutout's wall above the bar line. His position cannot go up there — the
-        // grounded branch rewrites it from the surface every tick — so the lift lives here, on
+        // grip the cutout's wall above the bar line. His position cannot go up there (the
+        // grounded branch rewrites it from the surface every tick), so the lift lives here, on
         // the drawing, and the physics is left alone. See `CatState.notchLift`.
         let drawAt = CGPoint(x: cat.position.x, y: cat.position.y + cat.notchLift)
         // The REAL drawn rect, not a nominal 52x34. Building the mask box from the nominal
-        // size cropped the top of his head whenever an occluder existed.
+        // size crops the top of his head whenever an occluder exists.
         let bodyRect = frame.rect(at: drawAt)
         let size = frame.size
         // The shadow separates from him as he rises, so the box has to follow it down.
@@ -226,7 +226,7 @@ final class OgiView: NSView {
                                 y: cat.position.y - h - 12,
                                 width: size.width + 24, height: 24)
         // The z's rise well above his head, and `applyOcclusion` masks everything to this rect,
-        // so leaving them out of it means they vanish the moment any window overlaps him —
+        // so leaving them out of it means they vanish the moment any window overlaps him,
         // which is most of the time, since he sleeps on a window edge.
         let sleepRect = cat.activity == .sleep && !cat.inDen
             ? CGRect(x: cat.position.x - size.width, y: cat.position.y,
@@ -237,12 +237,12 @@ final class OgiView: NSView {
         // anchor, like the flip, so the paws stay where they were put.
         //
         // **Read off the FRAME, not off `cat.notchSide` alone.** That flag outlives the pose it
-        // belongs to, and taken on its own it turned every drawing he has: he walked away from
-        // the notch still lying on his side and sat rotated on a Finder title bar. The rotation
-        // is a property of this one pose, so only the clip that has it may be turned.
+        // belongs to, and taken on its own it turns every drawing he has: walking away from the
+        // notch still lying on his side, sitting rotated on a Finder title bar. The rotation is
+        // a property of this one pose, so only the clip that has it may be turned.
         let turn = Sprites.turn(frame.clip, side: cat.notchSide)
 
-        // Turned, the drawn content no longer lives inside `bodyRect` — it swings out sideways
+        // Turned, the drawn content no longer lives inside `bodyRect`, it swings out sideways
         // from the anchor. The occlusion mask is built in this box's coordinates, so a box that
         // misses him clips the wrong thing or hides him outright. A square about his position
         // covers every rotation without needing the exact geometry.
@@ -260,12 +260,9 @@ final class OgiView: NSView {
 
         // Anchor at the feet so squash keeps them planted.
         bodyLayer.position = CGPoint(x: drawAt.x - origin.x, y: drawAt.y - origin.y)
-        // Squash, plus a lean into the motion of whatever he is standing on. Rotating
-        // about the feet (the anchor point) is what makes it read as bracing rather than
-        // sliding: his paws stay put and his body tips.
-        // Squash, a lean into whatever is carrying him, and a mirror for facing.
-        // Rotating about the feet is what makes the lean read as bracing rather than
-        // sliding: his paws stay put and his body tips.
+        // Squash, a lean into whatever is carrying him, and a mirror for facing. Rotating
+        // about the feet (the anchor point) is what makes the lean read as bracing rather
+        // than sliding: his paws stay put and his body tips.
         let s = cat.scale
         // The flip only. `turn` is drawn as the transition right -> left, so its mirror is
         // inverted from every other clip. See `Sprites.mirror`.
@@ -278,10 +275,10 @@ final class OgiView: NSView {
         // is pointing, and nothing about how his sheet happens to be drawn.
         let lean = -cat.lean * Feel.Physics.maxLean * cat.facing
         // The electrocution tremble. At his size the zap sheet's bolts are a few pixels,
-        // so the buzz read as a static cat with specks — five rounds of lengthening it
-        // changed nothing because the problem was legibility, not duration. A violent
-        // two-point shake is the cartoon language for current, and it reads at any size.
-        // Driven off his own clock, deterministic, and zero outside the buzz.
+        // so the buzz alone reads as a static cat with specks, and lengthening it does not
+        // help because the problem is legibility, not duration. A violent two-point shake
+        // is the cartoon language for current, and it reads at any size. Driven off his
+        // own clock, deterministic, and zero outside the buzz.
         var shake = CATransform3DIdentity
         if cat.activity == .zap, cat.activityElapsed < Feel.Timing.zapBuzzSeconds {
             let t = cat.activityElapsed
@@ -308,10 +305,8 @@ final class OgiView: NSView {
 
         // The contact shadow. Tightens and darkens on the ground, softens and separates in
         // the air; it sells "he is standing on that window" more than anything else in the
-        // app — and it died silently in the switch to drawn frames: nothing set this layer's
-        // path, so `heightAboveGround` was computed every frame to position an empty box.
-        // Procedural for the same reason the z's are: it tracks his height continuously, and
-        // an ellipse needs no sheet. It sits inside the mask container, so the occlusion
+        // app. Procedural for the same reason the z's are: it tracks his height continuously,
+        // and an ellipse needs no sheet. It sits inside the mask container, so the occlusion
         // clips it exactly as it clips him.
         shadowLayer.path = Body.shadow(width: size.width, height: h)
         shadowLayer.position = CGPoint(x: cat.position.x - origin.x,
@@ -330,8 +325,8 @@ final class OgiView: NSView {
 
     /// The drifting "z"s while he is asleep.
     ///
-    /// Procedural for the same reason the tail and the shadow are: they need to drift and fade
-    /// on their own clock rather than repeat in lockstep with a 3-frame breathing loop, and a
+    /// Procedural for the same reason the shadow is: they need to drift and fade on their own
+    /// clock rather than repeat in lockstep with a 3-frame breathing loop, and a
     /// z drawn into a sheet would be flood-filled by the cutter as a separate blob anyway.
     ///
     /// Three of them, evenly staggered across one rise, so there is always one faint near the
@@ -348,7 +343,7 @@ final class OgiView: NSView {
         typealias f = Feel.Sleepiness
         let h = size.height
         // Start just above his head. He sleeps curled with his head at the *back* of the
-        // sprite, so this is against his facing rather than with it — the sheet mirrors with
+        // sprite, so this is against his facing rather than with it: the sheet mirrors with
         // `facing`, and his nose ends up on whichever side his tail is not.
         let origin = CGPoint(x: cat.position.x - padded.minX - h * 0.30 * cat.facing,
                              y: cat.position.y - padded.minY + h * 0.52)
@@ -396,7 +391,7 @@ final class OgiView: NSView {
             let o = r.offsetBy(dx: -padded.minX, dy: -padded.minY)
             // Real boolean subtraction, NOT an even-odd compound path. Even-odd looks
             // right until two occluders overlap, at which point the intersection has an
-            // odd crossing count and renders *filled* — he'd show through the overlap.
+            // odd crossing count and renders *filled*, so he shows through the overlap.
             // Overlapping windows are the normal case.
             region = region.subtracting(
                 CGPath(roundedRect: o,

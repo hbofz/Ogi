@@ -1,12 +1,11 @@
-// v3a: the notch, and the call.
-// Spec: docs/superpowers/specs/2026-08-05-ogi-v3a-notch-and-call-design.md
+// The notch, and the call.
 import Testing
 import Foundation
 import CoreGraphics
 @testable import OgiCore
 
 // The real geometry of a notched Mac, and the relationship the whole branch rests on:
-// `notch.minY` IS the menu bar line. Measured on Hamzah's M2 at 1920x1243 with a 38pt strip.
+// `notch.minY` IS the menu bar line. Measured on a 1920x1243 display with a 38pt strip.
 private let barY: CGFloat = 1205
 private let notch = CGRect(x: 860, y: barY, width: 200, height: 38)
 private let screen = ScreenGeometry(
@@ -33,7 +32,7 @@ private func onBar(at x: CGFloat, world: Skyline) -> CatState {
 // MARK: - The premise
 
 @Test func theNotchsLowerLipIsTheMenuBarLine() {
-    // Everything in v3a follows from this one fact, so it is pinned rather than assumed. If it
+    // Everything here follows from this one fact, so it is pinned rather than assumed. If it
     // ever stops being true, "hang from the notch" means hanging from somewhere else.
     let world = notchedWorld()
     let bar = world.surface(.menuBar)!
@@ -50,7 +49,7 @@ private func onBar(at x: CGFloat, world: Skyline) -> CatState {
     #expect(bar.solid.contains { $0.contains(notch.maxX) }, "the right lip is not standable")
 }
 
-// MARK: - N5, the tunnel
+// MARK: - The tunnel
 
 @Test func theCrossingWalksToTheDoorwayFirst() {
     let world = notchedWorld()
@@ -122,7 +121,7 @@ private func onBar(at x: CGFloat, world: Skyline) -> CatState {
     #expect(covered > Feel.Physics.walkSpeed * 0.3, "he barely moved: \(covered)pt in a second")
 }
 
-// MARK: - N1, the camera
+// MARK: - The camera
 
 @Test func aLiveCameraTurnsHimOutOfTheDoorway() {
     // The camera lives in the cutout. He does not get to wait in it while it runs, because the
@@ -139,7 +138,7 @@ private func onBar(at x: CGFloat, world: Skyline) -> CatState {
 @Test func aLiveCameraNeverSummonsHim() {
     // A place is barred; he is never fetched. If your call starts while he is at the far end of
     // the screen he simply puts the headphones on where he is — anything else would be a
-    // scripted trip, and would fight the v2c election that decides where he goes.
+    // scripted trip, and would fight the election that decides where he goes.
     let world = notchedWorld()
     var cat = onBar(at: 200, world: world)
     cat.onCamera = true
@@ -167,7 +166,7 @@ private func onBar(at x: CGFloat, world: Skyline) -> CatState {
 }
 
 @Test func typingStillLooksLikeTyping() {
-    // The v2 defect this branch closes: a hot mic and a burst of typing shared the `alert`
+    // The defect this branch closes: a hot mic and a burst of typing shared the `alert`
     // drawing, so "ears up means your mic is hot" had stopped being true. They must not
     // converge again.
     let world = notchedWorld()
@@ -183,7 +182,7 @@ private func onBar(at x: CGFloat, world: Skyline) -> CatState {
 }
 
 @Test func theFreezeStillStopsHimTravelling() {
-    // What v2's freeze actually guaranteed. `callTalk` has him yapping, so "completely still"
+    // What the freeze actually guarantees. `callTalk` has him yapping, so "completely still"
     // moved to "goes nowhere", and this is the half that must not move.
     let world = notchedWorld()
     var cat = onBar(at: 400, world: world)
@@ -196,9 +195,9 @@ private func onBar(at x: CGFloat, world: Skyline) -> CatState {
 }
 
 @Test func aBurstOfSiriIsNotACall() {
-    // Found on the hardware, not in a test: `corespeechd` takes the microphone in bursts well
-    // under a second, so the raw read is true several times an hour with nobody on a call.
-    // v2 wore that as a flicker between two nearly identical poses; v3a draws a headset for it.
+    // `corespeechd` takes the microphone in bursts well under a second, so the raw read is true
+    // several times an hour with nobody on a call. Unfiltered, that is a flicker in and out of
+    // the call pose.
     var gate = Settling()
     let settle = Feel.Mind.deviceSettleSeconds
     var t = 100.0
@@ -228,7 +227,7 @@ private func onBar(at x: CGFloat, world: Skyline) -> CatState {
     #expect(!hungUp)
 }
 
-// MARK: - N3, the den
+// MARK: - The den
 
 @Test func asleepAtTheDoorwayHeSleepsInsideTheCutout() {
     let world = notchedWorld()
@@ -241,9 +240,9 @@ private func onBar(at x: CGFloat, world: Skyline) -> CatState {
 }
 
 @Test func aCoveredScreenPutsHimToBedInTheNotch() {
-    // Hamzah's scenario, and the one the den was really for: a film in fullscreen, nothing to
-    // do, nowhere to be. The covered-screen standing order already walks him to the doorway
-    // while he is awake; the question is whether the 10-minute idle timer then finds him there.
+    // The scenario the den was really for: a film in fullscreen, nothing to do, nowhere to be.
+    // The covered-screen standing order already walks him to the doorway while he is awake; the
+    // question is whether the 10-minute idle timer then finds him there.
     //
     // The ordering is what makes it work, and it is not obvious: the sleep gate returns long
     // before the standing order runs, so he can only ever go to bed in the den by ARRIVING
@@ -301,11 +300,11 @@ private func onBar(at x: CGFloat, world: Skyline) -> CatState {
     }
     #expect(sawHang, "he woke up and did not swing out; he is \(cat.activity)")
 
-    // ...and it still ends properly. Not "back on a lip and staying there", which is what this
-    // asserted at first and why it failed one run in four: once he is awake at a doorway,
-    // boredom can start another notch pose, and being at `notch.midX` is then correct rather
-    // than broken. The invariant that actually holds is the one the ground test enforces —
-    // **he is always either on standable ground or legitimately inside the cutout.**
+    // ...and it still ends properly. Not "back on a lip and staying there", which is flaky one
+    // run in four: once he is awake at a doorway, boredom can start another notch pose, and
+    // being at `notch.midX` is then correct rather than broken. The invariant that actually
+    // holds is the one the ground test enforces: he is always either on standable ground or
+    // legitimately inside the cutout.
     for _ in 0..<(120 * 10) {
         cat = Cat.step(cat, world: world, dt: dt)
         let standable = world.surface(.menuBar)!.solid.contains { $0.contains(cat.position.x) }
@@ -317,8 +316,8 @@ private func onBar(at x: CGFloat, world: Skyline) -> CatState {
 
 @MainActor
 @Test func aFilmWalksHimToTheDoorEvenIfHeIsAlreadyUpTop() {
-    // Hamzah's report, reproduced: fullscreen Chrome, and he fell asleep in the ordinary curl
-    // on some arbitrary spot instead of going into the notch.
+    // Fullscreen Chrome, and he fell asleep in the ordinary curl on some arbitrary spot
+    // instead of going into the notch.
     //
     // The cause was that the standing order asked only that he be "up top", which being
     // anywhere on the menu bar satisfies. No goHome stimulus is sent here on purpose — that is
@@ -415,7 +414,7 @@ private func onBar(at x: CGFloat, world: Skyline) -> CatState {
     #expect(Sprites.clip(for: .sleep, dangling: false, inDen: true) == .denSleep)
 }
 
-// MARK: - N4 and N6, hanging and looking down
+// MARK: - Hanging and looking down
 
 @Test func theNotchIdeasEndOnSolidGround() {
     // Both put his position inside the cutout, which is only legal while `insideNotch` says so.
@@ -499,9 +498,9 @@ private func onBar(at x: CGFloat, world: Skyline) -> CatState {
 
 @MainActor
 @Test func onlyTheNotchPoseIsEverTurned() {
-    // Hamzah found this one on his own screen: the quarter turn was read off `notchSide` alone,
-    // which outlives the pose, so he walked away from the cutout still lying on his side and
-    // sat rotated on a Finder title bar. Every other drawing must be immune to that flag.
+    // The quarter turn was read off `notchSide` alone, which outlives the pose, so he walked
+    // away from the cutout still lying on his side and sat rotated on a Finder title bar.
+    // Every other drawing must be immune to that flag.
     for clip in Sprites.Clip.allCases where clip != .peerDown {
         for side in [CatState.NotchSide.left, .right, .below] {
             #expect(Sprites.turn(clip, side: side) == 0,
@@ -515,8 +514,8 @@ private func onBar(at x: CGFloat, world: Skyline) -> CatState {
 
 @Test func boredomAtALipReachesAllThreeNotchPoses() {
     // The hang, the look down, and the sideways lean out of his own wall. All three come from
-    // one branch, so this is really asking that none of them is unreachable — the failure mode
-    // v2a named: a structure that is right and a number that makes part of it dead.
+    // one branch, so this is really asking that none of them is unreachable: a structure that
+    // is right with a number that makes part of it dead.
     let world = notchedWorld()
     let bar = world.surface(.menuBar)!
     var seen: Set<String> = []
@@ -553,8 +552,8 @@ private func onBar(at x: CGFloat, world: Skyline) -> CatState {
 }
 
 @Test func aCoveredScreenPutsHimToSleepInFiveMinutesRatherThanTen() {
-    // Hamzah's number. With a film up there is nowhere to go, the election is gated off
-    // entirely, and ten minutes of a cat waiting in a doorway is ten minutes of nothing.
+    // With a film up there is nowhere to go, the election is gated off entirely, and ten
+    // minutes of a cat waiting in a doorway is ten minutes of nothing.
     let covered = Repose.timeScale * Feel.Notch.coveredSlumberScale
     #expect(Repose.from(idleSeconds: 299, scale: covered) != .asleep)
     #expect(Repose.from(idleSeconds: 301, scale: covered) == .asleep)
@@ -583,7 +582,7 @@ private func onBar(at x: CGFloat, world: Skyline) -> CatState {
 @Test func theHangGripsAtTheTopOfItsBand() {
     // He hangs by his front paws, so the point pinned to his world position is the top of the
     // drawing and not the bottom. Anchored at the floor he would dangle by his back legs from
-    // the menu bar — the same mistake that once shipped on `fall`.
+    // the menu bar.
     #expect(Sprites.footAnchor(.hang) > 0.9,
             "hang anchors at \(Sprites.footAnchor(.hang)), which is not his grip")
     // And the sheet has to agree: his paws must really be the top of the ink.

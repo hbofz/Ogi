@@ -27,7 +27,7 @@ private func standing(at x: CGFloat, on s: Surface) -> CatState {
     return cat
 }
 
-/// A single hop on the surface he is already standing on: what `Goal.walkTo` used to mean.
+/// A single hop on the surface he is already standing on.
 private func strolling(to x: CGFloat, on s: Surface) -> Intent {
     Intent(destination: s.id, destinationX: x, move: .walk(x))
 }
@@ -41,7 +41,7 @@ private func strolling(to x: CGFloat, on s: Surface) -> Intent {
         cat = Cat.step(cat, world: sky([ledge]), dt: dt)
         if cat.intent == nil { break }
     }
-    // He no longer stops dead on the mark: he brakes late and coasts a few points past it, so
+    // He does not stop dead on the mark: he brakes late and coasts a few points past it, so
     // this bound is `brakingDistance` plus the slop rather than the slop alone. It and its twin
     // in `heStridesOverACrackRatherThanLeapingIt` are the real ceiling on how big the overshoot
     // is allowed to get, tighter than anything in the overshoot tests themselves.
@@ -59,11 +59,10 @@ private func ledgeWorld() -> Skyline {
 
 @Test func heCoastsPastHisMarkInsteadOfStoppingDeadOnIt() {
     // What this checks is that he PASSES his mark and stops near it, which is not the same
-    // claim as the manifesto's "settles back". He does not walk back, deliberately, and this
+    // claim as "settles back". He does not walk back, deliberately, and this
     // test cannot tell the difference: at a 3pt overshoot the third expectation below passes
     // identically whether a settle-back exists or not. Naming it after one would be how a
-    // behaviour gets marked done on a green run without ever having been built, which is
-    // precisely what happened to overshoot itself on the old roadmap.
+    // behaviour gets marked done on a green run without ever having been built.
     //
     // Why it is unbuilt: a walk back only happens if the overshoot exceeds `advance`'s
     // arrival tolerance, and the window where that is stable is
@@ -93,9 +92,9 @@ private func ledgeWorld() -> Skyline {
     let world = ledgeWorld()
     var cat = CatState(position: CGPoint(x: 450, y: 600))
     cat.support = .grounded(Perch(id: .window(1), dx: 50))
-    // 210pt, so he is inside `hurryDistance` and strolling. Aimed at 850 this passed on the
-    // RUN speed, which is 2.5x the bound below and would have stayed green with no ramp on
-    // the walk at all.
+    // 210pt, so he is inside `hurryDistance` and strolling. Aimed at 850 instead it measures
+    // the RUN speed, which is 2.5x the bound below and stays green with no ramp on the walk
+    // at all.
     cat.intent = Intent(destination: .window(1), destinationX: 660, move: .walk(660))
 
     cat = Cat.step(cat, world: world, dt: 1.0 / 120)
@@ -138,15 +137,14 @@ private func ledgeWorld() -> Skyline {
     cat = Cat.step(cat, world: sky([ledge]), dt: dt)
     #expect(cat.facing == -1)
 
-    // Reversing him no longer happens on the tick it is asked for: he pivots, which takes the
+    // Reversing him does not happen on the tick it is asked for: he pivots, which takes the
     // length of the `turn` sheet, and `facing` leads the pivot rather than following it. So the
     // second half of this is a few hundred milliseconds later than the first, and the
-    // interesting claim moved to `heTurnsRatherThanFlipping`.
+    // interesting claim lives in `heTurnsRatherThanFlipping`.
     //
     // Run to the resumed walk rather than for a fixed count. He is ALREADY pivoting when this
-    // starts (the step above reversed him too), so a fixed budget here has to cover two of
-    // them back to back, and one written to cover only one passed for a while by landing on a
-    // zero-length second pivot.
+    // starts (the step above reversed him too), so a fixed budget has to cover two pivots back
+    // to back, and one that covers only one passes by landing on a zero-length second pivot.
     cat.intent = strolling(to: 700, on: ledge)
     for _ in 0..<Int(5 / dt) {
         cat = Cat.step(cat, world: sky([ledge]), dt: dt)
@@ -287,7 +285,7 @@ private func mustReverse() -> (Skyline, CatState) {
 }
 
 @Test func everyJumpSpendsTheFullAnticipationInCrouch() {
-    // Non-negotiable, per the manifesto. This is the difference between a cat and a
+    // Non-negotiable. This is the difference between a cat and a
     // teleporting rectangle, and it is exactly the sort of thing an optimisation deletes.
     let here = surface(.window(1), y: 500, from: 0, to: 400)
     let there = surface(.window(2), y: 560, from: 500, to: 900, z: 1)
@@ -461,8 +459,8 @@ private func bareDesktop() -> Skyline {
 }
 
 @Test func heGetsFromTheMenuBarToTheFloorBySteppingOff() {
-    // The headline acceptance, and the reason the below-surface guard had to move out of the
-    // destination chooser and into the router: on a bare desktop the menu bar runs the full
+    // The headline case, and the reason the below-surface guard lives in the router rather
+    // than in the destination chooser: on a bare desktop the menu bar runs the full
     // width of the screen above the floor, so every arc he can throw re-crosses the bar he
     // launched from and drops him back onto it. The only route down is to walk to the end and
     // step off.
@@ -499,8 +497,8 @@ private func bareDesktop() -> Skyline {
 @Test func heDoesNotPlanAJumpThatLandsHimBackWhereHeStarted() {
     // `supportBelow` is inclusive at both ends and does not know which surface he left, so a
     // downward arc re-grounds him wherever it re-crosses his own y over his own solid. The
-    // minimum-energy launch made this worse rather than better: menu-bar-to-desktop at 500pt
-    // across re-crosses 44pt out, where the old fixed-speed solve crossed at 268.
+    // minimum-energy launch makes it tighter rather than looser: menu-bar-to-desktop at 500pt
+    // across re-crosses 44pt out, against 268 for a fixed-speed solve.
     let world = bareDesktop()
     let bar = world.surface(.menuBar)!
     var forced = standing(at: 960, on: bar)
@@ -528,7 +526,7 @@ private func bareDesktop() -> Skyline {
     // in four. (The overshoot side is starker still — at 2·aimError the worst overshoot reaches
     // 0.9888 of a far lip, so sailing past one was arithmetically impossible.)
     //
-    // Manifesto §6: a cat that occasionally misjudges a jump and has to recover reads as a cat.
+    // A cat that occasionally misjudges a jump and has to recover reads as a cat.
     let there = surface(.window(2), y: 500, from: 500, to: 900, z: 1)
     let from = CGPoint(x: 300, y: 500)
     // Aimed at the NEAR lip, which is where the clamp actually bites.
@@ -575,9 +573,8 @@ private func bareDesktop() -> Skyline {
 
 @Test func steppingOffTheEndOfTheScreenStillLandsOnTheFloor() {
     // The menu bar and the desktop share a span exactly, so the two-point nudge that starts
-    // the fall clear of the lip took him two points past the floor as well — and the slip kick
-    // carried him further out with every tick. He fell out of the world and never came back.
-    // Unreachable before `stepOff` existed, because nothing ever walked him to the screen edge.
+    // the fall clear of the lip takes him two points past the floor as well, and the slip kick
+    // carries him further out with every tick. He falls out of the world and never comes back.
     let world = bareDesktop()
     let bar = world.surface(.menuBar)!
     var cat = standing(at: 30, on: bar)
@@ -662,8 +659,8 @@ private func bareDesktop() -> Skyline {
 }
 
 @Test func heAlwaysLandsOnHisFeet() {
-    // The righting reflex, by construction rather than by luck. Try it from every angle
-    // and every throw speed we allow.
+    // The righting reflex, by construction rather than by luck. Tried from every angle and
+    // every throw speed the physics allows.
     let ground = surface(.floor, y: 100, from: 0, to: 1920)
     for vx in stride(from: -1400.0, through: 1400.0, by: 350) {
         for vy in stride(from: -1400.0, through: 1400.0, by: 700) {
@@ -739,13 +736,13 @@ private func draggedLedge(_ origin: CGFloat) -> Skyline {
 @Test func heCannotBeAimedOutOfTheWorldAltogether() {
     // `aimX` deliberately leaves him able to sail past the far lip of the run he is aiming at:
     // the margin is one `aimError` and the scatter is roughly two, and that failability is the
-    // point — a cat who always sticks the landing reads as a machine (Manifesto §6).
+    // point — a cat who always sticks the landing reads as a machine.
     //
     // At an interior lip whatever is below catches him. At the OUTERMOST one there is nothing:
     // every surface's `solid` is clipped to the visible frame, so a cat one point outside it
     // has nothing under him at any height, `supportBelow` returns nil for ever, `isMoving`
     // pins the display link at 60Hz and the 0.0% idle claim dies with him. He is gone for the
-    // session. `clampToSurface` used to make this unreachable; deleting it exposed it.
+    // session.
     let ledge = surface(.window(1), y: 1160, from: 1400, to: 1600)
     let world = sky([surface(.menuBar, y: 1205, from: 0, to: 1920, z: -1), ledge,
                      surface(.floor, y: 90, from: 0, to: 1920, z: .max)])
@@ -782,10 +779,10 @@ private func draggedLedge(_ origin: CGFloat) -> Skyline {
 // MARK: - The brace respects the holds
 
 @Test func aHardLandingOnADraggedWindowStillPlaysItsShake() {
-    // The brace used to sit OUTSIDE every hold in `standing` and overwrite whatever they had
-    // just set. Landing on a window someone is actually dragging therefore deleted the shake:
-    // once activity is `.brace`, `landingHold` returns nil, so the hold that exists to keep it
-    // on screen stops existing.
+    // A brace that sits OUTSIDE the holds in `standing` overwrites whatever they have just
+    // set. Landing on a window someone is actually dragging then deletes the shake: once
+    // activity is `.brace`, `landingHold` returns nil, so the hold that exists to keep it on
+    // screen stops existing.
     var origin: CGFloat = 0
     var tick = 0
     var cat = CatState(position: CGPoint(x: 400, y: 900))     // 400pt up: past hardLanding's 250
@@ -812,7 +809,7 @@ private func draggedLedge(_ origin: CGFloat) -> Skyline {
 
 @Test func aPivotOnADraggedWindowStillPivots() {
     // Same root cause, and this one costs the property `turnSeconds` exists to guarantee: the
-    // brace overwrote `.turn` on the tick it was set, so he flipped like a sprite.
+    // brace overwrites `.turn` on the tick it is set, so he flips like a sprite.
     let ledge = surface(.window(1), y: 500, from: 0, to: 800)
     var cat = standing(at: 40, on: ledge)
     // Already pointing the way he is going, so the only pivot in the whole run is the one at
@@ -844,8 +841,8 @@ private func draggedLedge(_ origin: CGFloat) -> Skyline {
 }
 
 @Test func aSleepingCatRidesTheDragOutAsleep() {
-    // `.brace` draws the alert sheet, so a sleeping cat on a dragged window sat bolt upright in
-    // it — and then slumbered there, since `isResting` does not care what he is drawing.
+    // `.brace` draws the alert sheet, so a sleeping cat on a dragged window sits bolt upright
+    // in it, and then slumbers there, since `isResting` does not care what he is drawing.
     var cat = standing(at: 400, on: surface(.window(1), y: 500, from: 0, to: 800))
     cat.repose = .asleep
     var origin: CGFloat = 0
@@ -858,8 +855,8 @@ private func draggedLedge(_ origin: CGFloat) -> Skyline {
 }
 
 @Test func aCurledCatGoesBackToBeingCurledWhenTheDragStops() {
-    // The brace also restored to `.idle` rather than to the pose he was actually resting in, so
-    // a curled cat popped upright for a tick and then played the whole curl-down again.
+    // A brace that restores to `.idle` rather than to the pose he was actually resting in pops
+    // a curled cat upright for a tick and then plays the whole curl-down again.
     var cat = standing(at: 400, on: surface(.window(1), y: 500, from: 0, to: 800))
     cat.repose = .curled
     var origin: CGFloat = 0
@@ -886,9 +883,8 @@ private func draggedLedge(_ origin: CGFloat) -> Skyline {
 ///
 /// Its top edge is 810 points above the floor, against the 190 of rise `jumpImpulse` buys, so
 /// no jump reaches it from down there at any angle. Its bottom edge is 110 up, which IS within
-/// one leap. The face is the only way, which is exactly the world Hamzah watched him get stuck
-/// in: "once he falls all the way at the desktop he does not move to other windows as they are
-/// higher".
+/// one leap. The face is the only way, and it is the world he gets stuck in without one: once
+/// he falls all the way to the desktop, every window is higher than he can reach.
 private func curtainWorld(bottom: CGFloat = 200) -> Skyline {
     World.build(windows: [RawWindow(id: 1, pid: 2, layer: 0,
                                     rect: CGRect(x: 700, y: bottom,
@@ -922,8 +918,8 @@ private func curtainWorld(bottom: CGFloat = 200) -> Skyline {
 }
 
 @Test func heGetsOffTheDesktopByClimbing() {
-    // Complaint 2, driven all the way through `Cat.step`. A router that returns `.climb` into
-    // an engine with no way to execute one would pass the unit test above green.
+    // Driven all the way through `Cat.step`. A router that returns `.climb` into an engine
+    // with no way to execute one would pass the unit test above green.
     let world = curtainWorld()
     var cat = standing(at: 300, on: world.surface(.floor)!)
     cat.intent = Intent(destination: .window(1), destinationX: 950, move: .walk(300))
@@ -976,7 +972,7 @@ private func curtainWorld(bottom: CGFloat = 200) -> Skyline {
 }
 
 @Test func climbingAlwaysEndsSomewhereRatherThanCycling() {
-    // The real risk in Part B: a route that oscillates between leaping at a face and dropping
+    // The real risk in a climb: a route that oscillates between leaping at a face and dropping
     // back off it would be worse than the stuckness it replaces, because `intent != nil` pins
     // `isMoving` and with it the render rate, and `enterSlumber` never runs again.
     //

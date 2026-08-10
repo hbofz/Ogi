@@ -5,9 +5,9 @@ import CoreGraphics
 
 @MainActor
 @Test func beingPettedDoesNotChangeHisSize() {
-    // v3b's sheet has his eyes squeezed shut in all five frames, so it is sized by
+    // The stroke sheet has his eyes squeezed shut in all five frames, so it is sized by
     // `Feel.Shape.strokedHeight` rather than by an eye it cannot measure. A hand-tuned
-    // constant with nothing holding it is how `denSleep` shipped 30% short, so it is pinned
+    // constant with nothing holding it is how `denSleep` came out 30% short, so it is pinned
     // here against the clip it hands off to and from.
     //
     // `idle` is the reference because it is the same animal in the same posture: a cat sitting

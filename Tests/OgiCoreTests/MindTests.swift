@@ -20,12 +20,12 @@ private func surface(_ id: SurfaceID, y: CGFloat, from: CGFloat, to: CGFloat, z:
 
 private let dt = Feel.Timing.fixedDT
 
-// MARK: - Task 1: routing refuses the impossible
+// MARK: - Routing refuses the impossible
 
 @Test func heWillNotSetOutForSomewhereHeCanNeverReach() {
     // A bare desktop: the menu bar is 1115pt above the floor and jumpImpulse buys 190pt.
-    // Before this fix nextMove answered ".walk to the x underneath it", so he paced the
-    // desktop for ever, re-planning the same impossible trip on every arrival.
+    // Answering ".walk to the x underneath it" paced him across the desktop for ever,
+    // re-planning the same impossible trip on every arrival.
     let bar = surface(.menuBar, y: 1205, from: 0, to: 1920, z: -1)
     let floor = surface(.floor, y: 90, from: 0, to: 1920, z: .max)
     let world = sky([bar, floor])
@@ -77,7 +77,7 @@ private let dt = Feel.Timing.fixedDT
     #expect(move == nil)
 }
 
-// MARK: - Task 2: the scalar
+// MARK: - The scalar
 
 @Test func excitementFadesOnItsOwnSchedule() {
     let ground = surface(.floor, y: 90, from: 0, to: 1920, z: .max)
@@ -104,10 +104,10 @@ private let dt = Feel.Timing.fixedDT
 @Test func aRousedCatHasIdeasSooner() {
     // The first of arousal's two everywhere-effects. Measured as elapsed time to the first
     // bout of boredom, over many trials, because restLeft is randomised per settle. An idea
-    // is any of the timer's outcomes — an intent, a wash, or (since v2c) a won lounge —
-    // and it must be all three: on a bare floor the election mostly elects the lounge, so
-    // counting intents alone adds whole lounge spells to the clock and measures the
-    // election's taste rather than the timer this test is about.
+    // is any of the timer's outcomes (an intent, a wash, or a won lounge) and it must be all
+    // three: on a bare floor the election mostly elects the lounge, so counting intents alone
+    // adds whole lounge spells to the clock and measures the election's taste rather than the
+    // timer this test is about.
     func timeToFirstIdea(arousal: Double) -> Double {
         let ground = surface(.floor, y: 90, from: 0, to: 1920, z: .max)
         var total = 0.0
@@ -155,10 +155,10 @@ private let dt = Feel.Timing.fixedDT
             "arousal does not tip boredom toward travelling")
 }
 
-// MARK: - Invariant I1
+// MARK: - Nothing on screen can keep him awake
 
 @Test func nothingHappeningOnScreenCanKeepHimAwake() {
-    // I1. repose is driven by YOUR idle time and nothing else, so arousal must not be able to
+    // repose is driven by YOUR idle time and nothing else, so arousal must not be able to
     // reach the sleep ladder. This is what protects the 0.0% idle headline.
     let ground = surface(.floor, y: 90, from: 0, to: 1920, z: .max)
     var cat = CatState(position: CGPoint(x: 300, y: 90))
@@ -175,7 +175,7 @@ private let dt = Feel.Timing.fixedDT
     #expect(cat.isMoving == false, "enterSlumber is unreachable while isMoving is true")
 }
 
-// MARK: - Task 3: the glance
+// MARK: - The glance
 
 @Test func somethingHappeningMakesHimLookAtIt() {
     let ground = surface(.floor, y: 90, from: 0, to: 1920, z: .max)
@@ -215,7 +215,7 @@ private let dt = Feel.Timing.fixedDT
             "two windows ten seconds apart no longer earn a trip; the dial does nothing")
 }
 
-// MARK: - Task 4: a window opening
+// MARK: - A window opening
 
 private func win(_ id: CGWindowID, y: CGFloat, from: CGFloat, to: CGFloat) -> Surface {
     surface(.window(id), y: y, from: from, to: to,
@@ -258,7 +258,7 @@ private func win(_ id: CGWindowID, y: CGFloat, from: CGFloat, to: CGFloat) -> Su
     #expect(tracker.justAppeared == [.window(7)])
 }
 
-// MARK: - Task 5: promotion
+// MARK: - Promotion
 
 /// A world where the stimulus is somewhere he can actually get to, so a refusal to travel is
 /// about arousal rather than about routing.
@@ -309,7 +309,7 @@ private func twoLedges() -> Skyline {
 }
 
 @Test func heDoesNotSetOffForSomewhereHeCannotReach() {
-    // Task 1's fix, seen from the mind rather than from the router: a stimulus on an
+    // Reachability seen from the mind rather than from the router: a stimulus on an
     // unreachable surface earns a look and nothing more.
     let bar = surface(.menuBar, y: 1205, from: 0, to: 1920, z: -1)
     let floor = surface(.floor, y: 90, from: 0, to: 1920, z: .max)
@@ -323,7 +323,7 @@ private func twoLedges() -> Skyline {
     #expect(cat.intent == nil, "he set off for the menu bar from the floor again")
 }
 
-// MARK: - Task 6: switching apps
+// MARK: - Switching apps
 
 @Test func switchingAppsStirsHimLessThanNewFurniture() {
     // Both are glances, but they are not equally interesting, and the ordering is what stops a
@@ -380,7 +380,7 @@ private func twoLedges() -> Skyline {
     #expect(went(afterSwitches: 2), "a window opening after you had been busy should be worth a trip")
 }
 
-// MARK: - Task 7: holding still
+// MARK: - Holding still
 
 @Test func typingFastFreezesHim() {
     let ground = surface(.floor, y: 90, from: 0, to: 1920, z: .max)
@@ -454,7 +454,7 @@ private func twoLedges() -> Skyline {
             "without hysteresis he flickers in and out of the pose at every pause for breath")
 }
 
-// MARK: - Task 8: coming to your cursor
+// MARK: - Coming to your cursor
 
 @Test func heComesOverWhenYourCursorHasSatStillNearHim() {
     let bar = surface(.menuBar, y: 1205, from: 0, to: 1920, z: -1)
@@ -515,7 +515,7 @@ private func twoLedges() -> Skyline {
     #expect(fromRight != nil && fromRight! > cursor.x, "coming from the right he overshot past it")
 }
 
-// MARK: - Task 9: he gets out of the way
+// MARK: - He gets out of the way
 
 @Test func heMovesAsideIfYouPutTheCursorOnHim() {
     let bar = surface(.menuBar, y: 1205, from: 0, to: 1920, z: -1)
@@ -570,7 +570,7 @@ private func twoLedges() -> Skyline {
     #expect(cat.activity == .onCall)
 }
 
-// MARK: - Task 10: going home
+// MARK: - Going home
 
 @Test func whenTheWorldGoesFullscreenHeHeadsHome() {
     let bar = surface(.menuBar, y: 1205, from: 0, to: 1920, z: -1)
@@ -597,10 +597,10 @@ private func twoLedges() -> Skyline {
 }
 
 @Test func buriedHeSurfacesAtTheLipOfWhatBuriedHim() {
-    // Hamzah's pictures: a window covers his whole ledge, and instead of fleeing somewhere
-    // else he surfaces at the covering window's own top edge, head and paws over the lip of
-    // the thing that hid him. The climb up its back is unseen by construction — he was
-    // hidden, which is the premise — so the visible event is a head appearing over the lip.
+    // A window covers his whole ledge, and instead of fleeing somewhere else he surfaces at
+    // the covering window's own top edge, head and paws over the lip of the thing that hid
+    // him. The climb up its back is unseen by construction (he was hidden, which is the
+    // premise) so the visible event is a head appearing over the lip.
     let front = Surface(id: .window(1), z: 0, y: 900, extent: 100...900,
                         solid: [110...890], spans: [110...890],
                         targetable: true, rect: CGRect(x: 100, y: 200, width: 800, height: 700))
@@ -633,7 +633,7 @@ private func twoLedges() -> Skyline {
 }
 
 @Test func wakingOwesHimAStretch() {
-    // The manifesto's three tier-1 stretch moments — first unlock of the morning, the Mac
+    // The three stretch moments that matter: first unlock of the morning, the Mac
     // waking, power plugged in — are one flag: the first unlock of the morning IS a wake,
     // so no wall clock exists anywhere in the simulation.
     let bar = surface(.menuBar, y: 1205, from: 0, to: 1920, z: -1)
@@ -668,9 +668,9 @@ private func twoLedges() -> Skyline {
 }
 
 @Test func boredomSometimesStretchesInsteadOfWashing() {
-    // Manifesto §7.1 wants more in-place behaviours than the wash, and until now the wash
-    // was the only one that existed. Statistical: over many bouts both must appear, and the
-    // wash must stay the commoner.
+    // More in-place behaviours are wanted than the wash, which was the only one
+    // that existed. Statistical: over many bouts both must appear, and the wash must stay
+    // the commoner.
     let bar = surface(.menuBar, y: 1205, from: 0, to: 1920, z: -1)
     var stretches = 0, washes = 0
     for _ in 0..<200 {
@@ -689,7 +689,7 @@ private func twoLedges() -> Skyline {
 }
 
 @Test func aTapIsAPetNotAScruffing() {
-    // Manifesto §7.7's first line: click him and he responds. mouseDown used to go straight
+    // Click him and he responds. mouseDown used to go straight
     // to the grab, so the most basic interaction there is read as rough handling. A pet
     // presses him down through the same squash a landing uses, perks him for a glance's
     // beat, and never moves him.
@@ -708,13 +708,13 @@ private func twoLedges() -> Skyline {
     #expect(Cat.pet(cat, at: .zero).squash == 0)
 }
 
-// MARK: - v3b: the stroke
+// MARK: - The stroke
 
 /// Sweeps your hand back and forth across him for `seconds`, `perTick` points at a time,
 /// staying inside his box. `perTick: 0` is a hand resting on him without moving.
 ///
-/// Real motion rather than a "moving" flag on purpose: the flag is what the first version of
-/// this feature keyed off, and a jiggling pointer sets it every single tick.
+/// Real motion rather than a "moving" flag on purpose: a jiggling pointer sets such a flag
+/// every single tick.
 @discardableResult
 private func stroke(_ cat: CatState, around: CGPoint, perTick: CGFloat, seconds: TimeInterval,
                     world: Skyline) -> CatState {
@@ -738,8 +738,8 @@ private func stroke(_ cat: CatState, around: CGPoint, perTick: CGFloat, seconds:
 private let strokePace: CGFloat = 4
 
 @Test func movingYourHandOverHimIsAStroke() {
-    // v3b. Not a click and not a drag: the cursor crossing his body with no button down is
-    // how you pet a real cat, and it is the one gesture that costs nothing on a desktop.
+    // Not a click and not a drag: the cursor crossing his body with no button down is how you
+    // pet a real cat, and it is the one gesture that costs nothing on a desktop.
     let bar = surface(.menuBar, y: 1205, from: 0, to: 1920, z: -1)
     var cat = CatState(position: CGPoint(x: 900, y: 1205))
     cat.support = .grounded(Perch(id: .menuBar, dx: 900))
@@ -762,22 +762,18 @@ private let strokePace: CGFloat = 4
     cat.support = .grounded(Perch(id: .menuBar, dx: 900))
     cat.restLeft = .infinity
 
-    // 0.7pt a tick at 120Hz: 84pt/s, a slow drag back and forth across a 50pt cat. Hamzah's
-    // second run: "I kinda need to move the cursor a bit aggressively to make him purr".
+    // 0.7pt a tick at 120Hz: 84pt/s, a slow drag back and forth across a 50pt cat.
     cat = stroke(cat, around: CGPoint(x: 900, y: 1215), perTick: 0.7,
                  seconds: 2, world: sky([bar]))
     #expect(cat.activity == .stroked, "a gentle hand did not read as petting him")
 }
 
 @Test func youCanPetHimWhileHeIsWashingOrSprawled() {
-    // Hamzah, watching it: "he does not purr when he is already doing a movement, like if he
-    // is laying down or licking himself."
-    //
     // A wash and a sprawl are not performances, they are what he does when nothing is
     // happening, and a hand arriving IS something happening. The stroke sat below every
-    // in-place hold so that a jolt of electricity could not be cancelled by a passing cursor —
-    // correct for the zap, badly wrong for these two, because a lounge holds for 45 seconds
-    // and he was simply unpettable for all of it.
+    // in-place hold so that a jolt of electricity could not be cancelled by a passing cursor,
+    // correct for the zap and badly wrong for these two, because a lounge holds for 45 seconds
+    // and he was unpettable for all of it.
     let bar = surface(.menuBar, y: 1205, from: 0, to: 1920, z: -1)
     for busy in [Activity.groom, .lounge] {
         var cat = CatState(position: CGPoint(x: 900, y: 1205))
@@ -966,9 +962,8 @@ private let strokePace: CGFloat = 4
 }
 
 @Test func heSprawlsRatherThanPacingWhenHomeIsOutOfReach() {
-    // From the floor the notch is 1115pt up against 190pt of rise. Task 1 makes that
-    // unroutable, so no intent forms and he settles instead of walking back and forth
-    // underneath it for ever, which is what he used to do.
+    // From the floor the notch is 1115pt up against 190pt of rise. That is unroutable, so no
+    // intent forms and he settles instead of walking back and forth underneath it for ever.
     let bar = surface(.menuBar, y: 1205, from: 0, to: 1920, z: -1)
     let floor = surface(.floor, y: 90, from: 0, to: 1920, z: .max)
     var cat = CatState(position: CGPoint(x: 300, y: 90))
@@ -979,13 +974,13 @@ private let strokePace: CGFloat = 4
     #expect(cat.intent?.destination != .menuBar, "he set out for a menu bar he cannot reach")
 }
 
-// MARK: - Task 11: the stale pose
+// MARK: - The stale pose
 
 @Test func aCurledCatDoesNotStandUpForOneFrameAfterALanding() {
-    // Deferred from v2a Task 8: the landing timeout hard-codes .idle instead of the pose that
-    // matches how settled he is, so a curled cat renders exactly one frame standing before the
-    // next tick corrects him. Watched frame by frame rather than at the end, because a
-    // one-frame defect is invisible to an assertion about where he finishes.
+    // The landing timeout hard-codes .idle instead of the pose that matches how settled he is,
+    // so a curled cat renders exactly one frame standing before the next tick corrects him.
+    // Watched frame by frame rather than at the end, because a one-frame defect is invisible
+    // to an assertion about where he finishes.
     let ground = surface(.floor, y: 90, from: 0, to: 1920, z: .max)
     var cat = CatState(position: CGPoint(x: 300, y: 400))
     cat.repose = .curled
@@ -1064,9 +1059,9 @@ private let strokePace: CGFloat = 4
 }
 
 @Test func aStaleAlertAfterTheMicGoesQuietStillGetsCleared() {
-    // The exclusion that lets a glance play must not also resurrect the 12s freeze v2a fixed:
-    // the hold-still branch returns early, so an alert left behind when the mic goes off has to
-    // be cleared here. glanceLeft is what tells the two apart.
+    // The exclusion that lets a glance play must not also resurrect the 12s freeze: the
+    // hold-still branch returns early, so an alert left behind when the mic goes off has to be
+    // cleared here. glanceLeft is what tells the two apart.
     let bar = surface(.menuBar, y: 1205, from: 0, to: 1920, z: -1)
     var cat = CatState(position: CGPoint(x: 300, y: 1205))
     cat.support = .grounded(Perch(id: .menuBar, dx: 300))
@@ -1076,8 +1071,8 @@ private let strokePace: CGFloat = 4
 
     cat.listening = false
     cat = Cat.step(cat, world: sky([bar]), dt: dt)
-    // Since v3a the stale pose is `.onCall` rather than `.alert`, and it has to be cleared for
-    // the same reason: the hold-still branch returns early, so nothing else would.
+    // The stale pose is `.onCall` rather than `.alert`, and it has to be cleared for the same
+    // reason: the hold-still branch returns early, so nothing else would.
     #expect(cat.activity != .onCall && cat.activity != .alert,
             "he stayed in the call pose after the mic went quiet")
 }
@@ -1096,9 +1091,8 @@ private let strokePace: CGFloat = 4
 }
 
 @Test func pointingAtHimDoesNotMakeHimScoot() {
-    // What Hamzah saw: put the mouse next to him and he left immediately. Coming over needs a
-    // full minute of stillness and the yield needed none, so "mouse near cat" always lost that
-    // race and always read as avoidance.
+    // Coming over needs a full minute of cursor stillness and the yield needed none, so a
+    // cursor arriving near him always lost that race and read as avoidance.
     let bar = surface(.menuBar, y: 1205, from: 0, to: 1920, z: -1)
     var cat = CatState(position: CGPoint(x: 900, y: 1205))
     cat.support = .grounded(Perch(id: .menuBar, dx: 900))
@@ -1135,9 +1129,9 @@ private let strokePace: CGFloat = 4
 @Test func hisBoxAgreesWithTheRectThatSwallowsClicks() {
     // App.hitRect is what actually decides whether his window eats your clicks: the DRAWN
     // rect, padded by hitPad. If these two drift he either moves aside for a cursor that was
-    // never on him, or sits on one that is — which is what shipped: this box used to be built
-    // from the nominal 52×34 while the sprite is normalised on eye width and usually larger,
-    // so a cursor parked on his ear swallowed clicks for ever and the yield never saw it.
+    // never on him, or sits on one that is. Built from the nominal 52×34 while the sprite is
+    // normalised on eye width and usually larger, a cursor parked on his ear swallowed clicks
+    // for ever and the yield never saw it.
     var cat = CatState(position: CGPoint(x: 900, y: 1205))
     cat.support = .grounded(Perch(id: .menuBar, dx: 900))
 
@@ -1167,8 +1161,7 @@ private let strokePace: CGFloat = 4
         cat.cursorStill += dt
         cat = Cat.step(cat, world: sky([bar]), dt: dt)
         // Moving aside is the whole claim. Running the clock on after he has done it lets a
-        // later random stroll be mid-walk at the cutoff — the hidden test failed one run in
-        // eight on exactly this shape.
+        // later random stroll be mid-walk at the cutoff, which fails one run in eight.
         if abs(cat.position.x - 940) >= 45 + Feel.Mind.cursorGap - Feel.Physics.arrivalSlop * 3,
            cat.intent == nil { break }
     }
@@ -1214,8 +1207,8 @@ private func partlyCoveredLedge() -> Surface {
     for _ in 0..<Int((Feel.Mind.hiddenPatience + 20) / dt) {
         cat = Cat.step(cat, world: world, dt: dt)
         // Stepping out is the whole claim. Running the clock on after he has done it lets a
-        // later random wander be mid-crossing of the covered middle at the cutoff, and the
-        // test failed on that draw about one run in eight.
+        // later random wander be mid-crossing of the covered middle at the cutoff, which fails
+        // about one run in eight.
         if !Cat.isHidden(cat, world: world), cat.intent == nil { break }
     }
     #expect(!Cat.isHidden(cat, world: world),
@@ -1278,10 +1271,10 @@ private func partlyCoveredLedge() -> Surface {
 // MARK: - Deliberate destinations stay off the lip
 
 @Test func aDeliberateDestinationIsNeverOnTheVeryEndOfALedge() {
-    // v2a judged the menu bar's outer ends unreachable because destinations were uniform points
-    // inside a span. Every destination the mind layer picks goes through nearestSpanX, which
-    // CLAMPS to the boundary, so the ends went from never to routine. Hamzah's log caught it:
-    // a walk to x=5 followed by a step off the left end and a drop to the desktop.
+    // The menu bar's outer ends were unreachable while destinations were uniform points inside
+    // a span. Every destination the mind layer picks goes through nearestSpanX, which CLAMPS to
+    // the boundary, so the ends went from never to routine: a walk to x=5 followed by a step
+    // off the left end and a drop to the desktop.
     let spans = [CGFloat(0)...CGFloat(1920)]
     for want in [CGFloat(-500), -1, 0, 5, 960, 1919, 1921, 5000] {
         guard let x = Cat.standingRoom(near: want, in: spans) else {
@@ -1303,7 +1296,7 @@ private func partlyCoveredLedge() -> Surface {
 }
 
 @Test func comingToYourCursorDoesNotParkHimOnALip() {
-    // The specific path Hamzah's log caught: cursor near the far left of the menu bar.
+    // The specific path that caught it: cursor near the far left of the menu bar.
     let bar = surface(.menuBar, y: 1205, from: 0, to: 1920, z: -1)
     guard let x = Cat.beside(cursor: CGPoint(x: 12, y: 1205), on: bar, from: 800) else {
         Issue.record("no spot beside a cursor at the left end"); return
@@ -1313,7 +1306,7 @@ private func partlyCoveredLedge() -> Surface {
 
 @Test func stepOffTargetsAreUnaffected() {
     // nearestSpanX still exists and the router still uses it. Insetting THAT would move where he
-    // steps off a ledge, which is v2a's business and not this layer's.
+    // steps off a ledge, which is the router's business and not this layer's.
     let spans = [CGFloat(0)...CGFloat(1920)]
     #expect(Cat.nearestSpanX(to: -50, in: spans) == 0, "the router's clamp must stay exact")
     #expect(Cat.nearestSpanX(to: 5000, in: spans) == 1920)

@@ -3,17 +3,11 @@ import AppKit
 
 /// The drawn cat: 154 frames across thirty-two animations, generated and hand-cut.
 ///
-/// The count in this line has been wrong twice, having been written when there were 121 frames
-/// across twenty-five and left alone through two branches that added seven sheets between them.
-/// `Clip.allCases.count` is the truth; this is a signpost.
+/// The count in that line is a signpost and drifts as sheets are added.
+/// `Clip.allCases.count` is the truth.
 ///
-/// Ogi was procedural first — one filled path assembled from a torso, a skull, four legs and
-/// a simulated tail. It worked, it animated, and it did not look good enough. The silhouette
-/// read as *a* cat rather than as *this* cat, and charm is the entire product.
-///
-/// Physics, terrain, occlusion, squash and facing are untouched. They were never coupled to
-/// how he was drawn, which is why swapping the renderer was a small change rather than a
-/// rewrite.
+/// Physics, terrain, occlusion, squash and facing are not coupled to how he is drawn, which is
+/// what lets the renderer change without touching any of them.
 ///
 /// **Every frame in an animation shares one vertical band**, aligned on the source sheet's own
 /// ground line, rather than being cropped tight to its own ink. That is what preserves the air
@@ -30,10 +24,10 @@ public enum Sprites {
         case lounge, stretch
         case peer
         case zap, vibe, droop, curious
-        // v3a, the notch and the call.
+        // The notch and the call.
         case callTalk, callWork, callFull
         case denSleep, hang, peerDown
-        // v3b: your hand on him.
+        // Your hand on him.
         case stroked
 
         var count: Int {
@@ -59,9 +53,9 @@ public enum Sprites {
             case .lounge: 4
             case .stretch: 5
             case .peer: 4
-            // zap is 5: its sheet's first frame was a neutral STANDING pose, so a sitting
-            // cat popped upright for a tenth of a second before the jolt. The clip opens
-            // on the jolt now, which is what a surprise looks like.
+            // zap is 5, not the sheet's 6: its first frame is a neutral STANDING pose, so
+            // a sitting cat would pop upright before the jolt. The clip opens on the jolt,
+            // which is what a surprise looks like.
             case .zap: 5
             case .vibe, .droop, .curious: 6
             case .callTalk: 6
@@ -93,10 +87,9 @@ public enum Sprites {
             // per second he is actually climbing, times six. At clingClimbSpeed 110 and a 55pt
             // stride that is 12fps.
             //
-            // The run gait is why this is derived. It shared one stride constant with the walk
-            // and played its 8-frame sheet at 31.5fps against the 14 it was drawn for, a blur of
-            // legs, and nothing failed. Tying the two numbers together is the only fix that
-            // stays fixed.
+            // A rate picked by hand drifts silently: a sheet played against a speed it was not
+            // drawn for is a blur of legs, and nothing fails. Tying the two numbers together is
+            // the only fix that stays fixed.
             case .climbUp:
                 Double(Feel.Physics.clingClimbSpeed / Feel.Shape.climbStride) * 6
             case .lookDown: 6   // head over the side in half a second, then he holds
@@ -166,10 +159,10 @@ public enum Sprites {
     /// Everything about what is on screen this instant: which drawing, at what size, and
     /// where it attaches to his world position.
     ///
-    /// This exists because `App` and `Overlay` both used to derive it and disagreed. The
-    /// hit rect was a fixed 52x34 while the sprite is normalised on eye width and is often
-    /// larger, so petting missed him; and the occlusion mask was built from that same
-    /// 52x34 box, which silently cropped the top of his head whenever a mask existed.
+    /// One source of truth, because `App` and `Overlay` both need it and a fixed box does not
+    /// fit: the sprite is normalised on eye width and is often larger, so a stale hit rect
+    /// makes petting miss him, and the occlusion mask is built in these same coordinates, so
+    /// the same box silently crops the top of his head.
     public struct Frame: Sendable {
         public let clip: Clip
         public let index: Int
@@ -206,17 +199,16 @@ public enum Sprites {
 
     /// Where the drawings actually are, which is not where SwiftPM thinks it left them.
     ///
-    /// **`Bundle.module` cannot be trusted inside an `.app` and shipping proved it.** The
-    /// accessor SwiftPM generates looks in `Bundle.main.bundleURL` — the `.app` directory
-    /// itself — and then falls back to a hard-coded absolute build path. Inside an app bundle,
-    /// resources belong under `Contents/Resources`, so the first candidate never matches and
-    /// the second is a path on the machine that built it.
+    /// **`Bundle.module` cannot be trusted inside an `.app`.** The accessor SwiftPM generates
+    /// looks in `Bundle.main.bundleURL` — the `.app` directory itself — and then falls back to
+    /// a hard-coded absolute build path. Inside an app bundle, resources belong under
+    /// `Contents/Resources`, so the first candidate never matches and the second is a path on
+    /// the machine that built it.
     ///
-    /// v1.0.0 shipped that way. On Hamzah's Mac the build path existed and was under
-    /// `~/Desktop`, so macOS asked a cat that requests no permissions for permission to read
-    /// his Desktop — which is how this was found. On any other Mac neither path exists and the
-    /// accessor calls `fatalError`, so the release crashed for everyone who was not the person
-    /// who built it.
+    /// It fails two ways, and both of them ship. On the machine that built it the fallback path
+    /// exists, so macOS asks a cat that requests no permissions for access to whatever folder
+    /// it sits in. On every other Mac neither path exists and the accessor calls `fatalError`,
+    /// so the app crashes for everyone who did not build it.
     ///
     /// So: ask the app bundle first, and keep `.module` for `swift test` and `swift run`, where
     /// it is correct and where `Bundle.main` is the test runner. Evaluated once, and lazily,
@@ -274,8 +266,8 @@ public enum Sprites {
         case .cling:                return .cling
         case .climb:                return .climbUp
         case .scruffed:             return .held
-        // A drop that rattles him and a step down off a window edge used to be the same
-        // picture, which made the squash the only thing telling them apart.
+        // A drop that rattles him gets its own picture, so the squash is not the only thing
+        // telling it apart from a step down off a window edge.
         case .landHard:             return .shake
         case .land:                 return .land
         case .sit:                  return .sitdown
@@ -314,10 +306,9 @@ public enum Sprites {
             let n = clip.count - 2
             return 2 + min(n - 1, Int(elapsed * clip.fps))
         case .zap:
-            // The buzz loops before the recovery plays: one straight pass read as a
-            // flicker, and Hamzah asked to actually see him cook. The three jolt frames
-            // cycle for zapBuzzSeconds, then the shake and the pleased finish run once
-            // and the last frame holds.
+            // The buzz loops before the recovery plays: one straight pass reads as a
+            // flicker rather than a shock. The three jolt frames cycle for zapBuzzSeconds,
+            // then the shake and the pleased finish run once and the last frame holds.
             let buzzFrames = 3
             if elapsed < Feel.Timing.zapBuzzSeconds {
                 return Int(elapsed * clip.fps) % buzzFrames
@@ -346,10 +337,9 @@ public enum Sprites {
     ///
     /// Exactly one, and it is a correction rather than a technique. `peerDown` was specified as
     /// a head hanging *down* over an edge and generated as a head peeking *up* over one, with
-    /// the paws below the face. That was first worked around by placement — put the top of his
-    /// head on the lip and let his ears clip into the cutout — and on screen it read as what it
-    /// is: a right-way-up cat poking out from under the notch, rather than one draped over the
-    /// edge looking down at you.
+    /// the paws below the face. Placement cannot cover for that: the top of his head on the lip
+    /// reads as what it is, a right-way-up cat poking out from under the notch rather than one
+    /// draped over the edge looking down at you.
     ///
     /// Flipping it costs one transform and turns the drawing into the pose it was asked for:
     /// paws over the lip at the top, head hanging below them, upside down, the way a cat
@@ -399,27 +389,24 @@ public enum Sprites {
     /// he attaches at the nape of his neck. Anchoring him at the bottom would hang him by the
     /// tail. Measured off the sheet at 0.952-0.960 across its four frames.
     ///
-    /// `fall` used to be listed here at 0.30, because on the old sheet he never reached the
-    /// bottom of his band and anchoring at the floor left him hovering. The redrawn sheet ends
-    /// on a frame braced for impact with his legs at full stretch, and those paws land exactly
-    /// on the last row of the band — so the floor is the right anchor again, and the special
-    /// case is gone. Measure this whenever an airborne clip is redrawn; it is a property of the
-    /// sheet, not of the animation.
+    /// Measure this whenever an airborne clip is redrawn: it is a property of the sheet, not of
+    /// the animation. A sheet whose cat never reaches the bottom of his own band needs an entry
+    /// here, or anchoring at the floor leaves him hovering.
     static func footAnchor(_ clip: Clip) -> CGFloat {
         switch clip {
         case .held: return 0.95     // gripped by the scruff, near the top
         // Same situation as `held`: nothing touches the ground, so the point held fixed at
         // `cat.position` is his grip on the wall — his raised front paws, near the top. Every
         // automatic bottom-of-ink reading finds his HANGING TAIL instead and would dangle him
-        // upside down off the window, which is exactly the mistake that once shipped on `fall`.
+        // upside down off the window.
         //
         // Read off the four cut frames by finding his front paws in each: 0.75-0.85, 0.90-0.97,
-        // 0.85-0.95, 0.80-0.90 of the way up the 628px band. 0.875 centres that. It was 0.85,
-        // the bottom of the range, which rode him 30-60px low on frames 1 and 2 — a visible bob
-        // against the wall on a 4fps loop.
+        // 0.85-0.95, 0.80-0.90 of the way up the 628px band. 0.875 centres that. The bottom of
+        // the range rides him 30-60px low on frames 1 and 2, a visible bob against the wall on
+        // a 4fps loop.
         //
-        // Still unconfirmed on screen. Look at him on a real window and adjust; do not
-        // "correct" it from a measured ink box, which finds the tail every time.
+        // Unconfirmed on screen. Look at him on a real window and adjust; do not "correct" it
+        // from a measured ink box, which finds the tail every time.
         case .cling: return 0.875
         // The same grip on the same wall, so the same anchor. These two MUST agree: he switches
         // between them the moment he decides to go up rather than hang, and a different anchor
@@ -464,10 +451,9 @@ public enum Sprites {
     /// size, and it does that silently.
     ///
     /// The eye is whatever stands furthest from the fur, and which direction that is depends on
-    /// the cat. The original was black with white eyes, so his eyes were the brightest thing on
-    /// him. The ginger tabby in `art/character.png` inverts it: he is a mid-value orange and his
-    /// eyes are near-black, the darkest thing on him. Matching both is what lets the sheets be
-    /// replaced one at a time instead of all ten at once.
+    /// the cat. On a black cat with white eyes they are the brightest thing on him. The ginger
+    /// tabby in `art/character.png` inverts it: a mid-value orange whose near-black eyes are the
+    /// darkest thing on him. Matching both is what lets sheets be replaced one at a time.
     ///
     /// Which of the two applies is decided from the fur rather than configured, so a new sheet
     /// still needs no annotation.
@@ -615,8 +601,8 @@ public enum Sprites {
     /// On-screen band height, in points, for the sheets whose eyes cannot be used as the
     /// yardstick. Nil means eye width, which is every other clip.
     ///
-    /// **Two different failures both land here**, and it is worth keeping them straight because
-    /// they suggest different fixes if a sheet is ever redrawn.
+    /// **Different failures land here**, and it is worth keeping them straight because they
+    /// suggest different fixes if a sheet is ever redrawn.
     ///
     /// *Drawn head-on* (`peer`, `peerDown`, `hang`): his eyes are stylistically huge from the
     /// front, so dividing a fixed reference width by the measured eye renders the whole clip
@@ -649,7 +635,7 @@ public enum Sprites {
         // of tail out of the notch on screen, which reads as a stub.
         case .denSleep: Feel.Shape.denSleepHeight
         // Eyes closed again, and this time by construction: the whole point of the pose is
-        // that he has them squeezed shut. Listed with the sheet rather than after it shipped.
+        // that he has them squeezed shut.
         case .stroked:  Feel.Shape.strokedHeight
         default:        nil
         }
@@ -658,13 +644,12 @@ public enum Sprites {
     /// A per-sheet correction on top of the eye-width normalisation, for the sheets that drew
     /// his eye WIDE.
     ///
-    /// Eye width is only half a measurement, and across the twenty-five sheets his eye is not
-    /// one shape. On the ones that render correctly it is a tall almond: `idle` 37x54, `walk`
-    /// 17x25, `sitdown` 21x31, `alert` 32x48, `groom` 22x31, `run` 13x19, every one of them
-    /// between 1.38 and 1.50 tall for its width. On these five it comes back much rounder:
-    /// `lookDown` 34x34, `stretch` 30x26, `turn` 39x42, `shake` 32x35, `peek` 31x37. Dividing
-    /// a fixed number by that inflated width renders the whole clip small, silently, and
-    /// Hamzah saw it long before any metric did: "when he peeks his body gets a bit smaller".
+    /// Eye width is only half a measurement, and across the sheets his eye is not one shape. On
+    /// the ones that render correctly it is a tall almond: `idle` 37x54, `walk` 17x25, `sitdown`
+    /// 21x31, `alert` 32x48, `groom` 22x31, `run` 13x19, every one of them between 1.38 and 1.50
+    /// tall for its width. On these five it comes back much rounder: `lookDown` 34x34, `stretch`
+    /// 30x26, `turn` 39x42, `shake` 32x35, `peek` 31x37. Dividing a fixed number by that
+    /// inflated width renders the whole clip small, and silently: his body shrinks when he peeks.
     ///
     /// The correction is `sqrt(1.45 / aspect)`, the family's shape over the sheet's own, on
     /// the square root because the error is spread across both axes. Checked against

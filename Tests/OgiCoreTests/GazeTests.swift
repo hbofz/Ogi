@@ -8,7 +8,7 @@ private func run(_ g: inout Gaze, target: CGPoint, seconds: CGFloat, dt: CGFloat
 }
 
 @Test func eyesHoldStillDuringTheLatencyBeforeMoving() {
-    // The manifesto's "80ms lag" is a delay before the jump, not smoothing. If this fails
+    // The 80ms lag is a delay before the jump, not smoothing. If this fails
     // the eyes are gliding, which is the single thing that makes a character read as software.
     var g = Gaze()
     run(&g, target: CGPoint(x: 1, y: 0), seconds: Feel.Eyes.latency * 0.6)
@@ -87,7 +87,7 @@ private func run(_ g: inout Gaze, target: CGPoint, seconds: CGFloat, dt: CGFloat
 // MARK: - Repose (the idle ladder)
 
 @Test func heSettlesTheLongerYouAreAway() {
-    // Manifesto §7.1. Cats settle when the room goes quiet.
+    // Cats settle when the room goes quiet.
     #expect(Repose.from(idleSeconds: 5) == .awake)
     #expect(Repose.from(idleSeconds: 60) == .sitting)
     #expect(Repose.from(idleSeconds: 240) == .curled)

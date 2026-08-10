@@ -1,4 +1,4 @@
-// v2c: the taste election. Spec: docs/superpowers/specs/2026-08-04-ogi-v2c-taste-design.md
+// The taste election: how he weighs one place to be against another.
 import Testing
 import Foundation
 import CoreGraphics
@@ -156,11 +156,10 @@ private let dt = Feel.Timing.fixedDT
     #expect(cat.activity == .onCall, "a hot mic must interrupt a lounge")
 }
 
-// MARK: - Task 1: session memory
+// MARK: - Session memory
 
 @Test func theLaunchWorldIsNeverNovel() {
-    // v2b learned this with the window-opened signal: everything is new at launch, so the
-    // furniture he wakes into must carry no novelty, ever.
+    // Everything is new at launch, so the furniture he wakes into must carry no novelty, ever.
     let bar = surface(.menuBar, y: 1205, from: 0, to: 1920, z: -1)
     var cat = CatState(position: CGPoint(x: 900, y: 1205))
     cat.support = .grounded(Perch(id: .menuBar, dx: 900))

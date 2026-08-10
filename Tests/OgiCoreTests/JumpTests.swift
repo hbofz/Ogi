@@ -5,9 +5,9 @@ import CoreGraphics
 @Suite struct JumpTests {
 
     /// Integrate the launch and check he actually arrives, aim error and all. A 60pt hop
-    /// scatters over [53, 67], well inside the 12pt tolerance. It did not used to: solving for
-    /// the angle at a fixed speed sent a short hop off at 85°, where dR/dθ is −751 pt/rad, so
-    /// ±0.06 rad put a 60pt target anywhere in [15, 104].
+    /// scatters over [53, 67], well inside the 12pt tolerance. Solving for the angle at a fixed
+    /// speed instead sends a short hop off at 85°, where dR/dθ is −751 pt/rad, so ±0.06 rad
+    /// puts a 60pt target anywhere in [15, 104].
     private func flightLands(dx: CGFloat, dy: CGFloat) -> Bool {
         guard let v = Cat.launch(dx: dx, dy: dy) else { return false }
         var p = CGPoint.zero
@@ -31,7 +31,7 @@ import CoreGraphics
 
     @Test func aLongFlatLeapIsNotReachable() {
         // At 872 px/s against 2000 px/s^2 gravity, the flat range maxes out at 380pt.
-        // The old code would have solved this exactly and taken it anyway.
+        // A solver that ignores the speed budget would solve this exactly and take it anyway.
         #expect(Cat.launch(dx: 900, dy: 0) == nil)
     }
 
@@ -51,10 +51,10 @@ import CoreGraphics
     }
 
     @Test func aLongJumpVisiblyCostsMoreThanAShortOne() {
-        // W2's acceptance criterion, and the one thing a fixed-speed solve cannot give you:
-        // spending the whole budget on every jump made a 60pt hop climb 189pt and hang for
-        // 0.87s against 98pt and 0.63s for a 380pt leap, so every visible proxy for effort
-        // ran backwards. Both must be monotonic, and neither may exceed the budget.
+        // The one thing a fixed-speed solve cannot give you: spending the whole budget on
+        // every jump makes a 60pt hop climb 189pt and hang for 0.87s against 98pt and 0.63s
+        // for a 380pt leap, so every visible proxy for effort runs backwards. Both must be
+        // monotonic, and neither may exceed the budget.
         var lastSpeed: CGFloat = 0
         var lastApex: CGFloat = 0
         for dx in stride(from: CGFloat(40), through: 360, by: 40) {

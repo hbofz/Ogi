@@ -7,7 +7,7 @@ import CoreGraphics
 ///
 /// 1. **Eyes saccade, they do not glide.** Real eyes snap between targets and then hold
 ///    perfectly still. Smoothly interpolating toward the cursor is the single thing that
-///    makes an animated character read as software. The manifesto's "80ms lag" is a
+///    makes an animated character read as software. The 80ms lag is a
 ///    *latency before the jump*, not a smoothing factor.
 /// 2. **Nothing is on a metronome.** Blinks are Poisson-distributed, and the eyes make
 ///    small involuntary movements even when nothing has changed.
@@ -121,7 +121,7 @@ extension Feel {
     public enum Eyes {
         /// How far the cursor must drift before he re-aims. Below this he simply holds.
         public static let saccadeThreshold: CGFloat = 0.18
-        /// Delay between deciding to look and the eyes moving. The manifesto's "80ms".
+        /// Delay between deciding to look and the eyes moving. 80ms.
         public static let latency: CGFloat = 0.080
         public static let microSaccadeAfter: CGFloat = 1.2
 
@@ -138,8 +138,7 @@ extension Feel {
         /// Perfect symmetry reads as a logo, so the far eye is slightly smaller.
         public static let asymmetry: CGFloat = 0.80
         // Sized against a head radius of H*0.19 (~6pt). Anything larger reads as googly
-        // eyes rather than as a cat, which was the first thing wrong with this.
-        //
+        // eyes rather than as a cat.
         public static let radiusX: CGFloat = 1.9
         public static let radiusY: CGFloat = 2.2
         public static let heightFraction: CGFloat = 0.78   // × body height, for the head
@@ -155,7 +154,3 @@ public func lookDirection(from head: CGPoint, to point: CGPoint) -> CGPoint {
     let m = min(d / 200, 1)
     return CGPoint(x: dx / d * m, y: dy / d * m)
 }
-
-// The Verlet tail that used to trail the procedural silhouette lived here. It died with
-// the silhouette: the drawn sheets carry his tail now, and the sim was stepping every
-// frame to feed a path nothing rendered. Git history has it.

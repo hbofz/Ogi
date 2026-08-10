@@ -33,7 +33,7 @@ public struct Sensations: Sendable {
     public var audioArrived = false
     public var usbArrived = false
 
-    /// He conserves energy when the machine is. Manifesto: a sluggish cat means plug in.
+    /// He conserves energy when the machine is. A sluggish cat means plug in.
     /// Reduce Motion pins the same dial: a permanently calm cat, through the mechanism the
     /// battery already tunes, rather than a second way of being slow.
     public var languor: Double {
@@ -48,11 +48,8 @@ public struct Sensations: Sendable {
 /// **Slow to arm, instant to clear.** Both of Ogi's "is a device live" reads are true the
 /// instant *any* process opens the stream, and on a real Mac that includes things which are not
 /// a call: `corespeechd`, the always-on "Hey Siri" listener, takes the microphone in bursts
-/// shorter than a second. Measured on Hamzah's machine mid-verification, which is how this was
-/// found — he had a cat in a headset with nobody on the other end.
-///
-/// v2 wore that as a flicker between two nearly identical poses and nobody noticed. v3a draws a
-/// headset on him for it, so the same blip became a visible lie.
+/// shorter than a second. Unsettled, that blip puts a headset on a cat with nobody on the other
+/// end of the line.
 ///
 /// The asymmetry is the design. Arming late costs a second and a half of a privacy tell that
 /// macOS's own orange dot has already given you; clearing late would leave him wearing the rig
@@ -96,7 +93,7 @@ public final class Signals {
 
     public private(set) var screenAsleep = false
     /// Fired when the machine comes back. Load-bearing: once the display link is paused it
-    /// stops calling us, so nothing inside the tick loop can ever notice the wake.
+    /// stops ticking, so nothing inside the tick loop can ever notice the wake.
     public var onWake: (() -> Void)?
 
     public init() {
@@ -173,8 +170,7 @@ public final class Signals {
         }
 
         // Power events arrive as a notification rather than waiting for the battery poll:
-        // the 30s cadence is fine for a percentage and terrible for the plug-in stretch,
-        // which Hamzah tested by connecting the charger and watching nothing happen. The
+        // a slow cadence is fine for a percentage and terrible for the plug-in stretch. The
         // callback just invalidates the poll clock, so the next sample re-reads at once.
         let ctx = Unmanaged.passUnretained(self).toOpaque()
         if let source = IOPSNotificationCreateRunLoopSource({ context in
@@ -218,11 +214,10 @@ public final class Signals {
         s.micLive = mic.value
         s.cameraLive = camera.value
 
-        // 2s, not the 30s this shipped with: the IOPS notification should make the re-read
-        // instant, but three rounds of Hamzah plugging the cable in and watching nothing
-        // happen bought the belt AND the braces. Reading the power sources costs
-        // microseconds; at 0.5Hz it is nothing, and it caps the zap's worst-case lag at
-        // two seconds even if the notification never fires at all.
+        // 2s, belt AND braces: the IOPS notification should make the re-read instant, but
+        // reading the power sources costs microseconds, so at 0.5Hz it is nothing, and it
+        // caps the zap's worst-case lag at two seconds even if the notification never fires
+        // at all.
         if now - lastPowerPoll > 2 { battery = Self.power(); lastPowerPoll = now }
         s.batteryPercent = battery?.percent
         s.charging = battery?.charging ?? false
@@ -271,8 +266,7 @@ public final class Signals {
     /// The same question the green privacy LED answers, asked of CoreMediaIO: enumerate the
     /// video devices and ask each whether it is running somewhere. **No permission**, and
     /// structurally incapable of capturing an image — it returns a flag per device and there is
-    /// no path from here to a frame. MANIFESTO Appendix A has listed this as permission-free
-    /// since the beginning; nothing had used it until now.
+    /// no path from here to a frame. It is one of the permission-free reads.
     ///
     /// Unlike the microphone there is no per-*process* CoreMediaIO property, so the device
     /// property is the only read available. That is the same family of property that misreports
@@ -312,17 +306,17 @@ public final class Signals {
     /// Daemons that hold the microphone open as a matter of course, and whose doing so does not
     /// mean anybody is listening to you.
     ///
-    /// **Measured, not guessed.** On Hamzah's Mac `com.apple.CoreSpeech` — the "Hey Siri"
-    /// listener, on by default — reports a running input *continuously*, while
+    /// **Measured, not guessed.** `com.apple.CoreSpeech` — the "Hey Siri" listener, on by
+    /// default — reports a running input *continuously*, while
     /// `kAudioDevicePropertyDeviceIsRunningSomewhere` reports the microphone idle at the same
     /// instant. Without this filter the per-process read is true forever on any Mac with Siri
-    /// enabled, and in v3a that is a cat wearing a headset all day.
+    /// enabled, which is a cat wearing a headset all day.
     ///
-    /// **The obvious alternative is worse.** The device property gets this case right, and v2b
-    /// deliberately moved *away* from it because it always reports false for Bluetooth
-    /// microphones — an Apple bug — which would silently break the signal for everyone who takes
-    /// calls on AirPods. That trades a false positive for a false negative on the commonest
-    /// calling setup. So: keep the per-process read, name the daemon.
+    /// **The obvious alternative is worse.** The device property gets this case right, but it
+    /// always reports false for Bluetooth microphones — an Apple bug — which would silently
+    /// break the signal for everyone who takes calls on AirPods. That trades a false positive
+    /// for a false negative on the commonest calling setup. So: keep the per-process read, name
+    /// the daemon.
     ///
     /// Deliberately not "anything from Apple". `com.apple.FaceTime` is a call.
     static let alwaysListening: Set<String> = ["com.apple.CoreSpeech"]
@@ -391,16 +385,16 @@ public final class Signals {
                   let max = d[kIOPSMaxCapacityKey] as? Int, max > 0 else { continue }
             // "On AC", not kIOPSIsChargingKey: a full battery reports IsCharging=false with
             // the cable in (battery care too), so the plug-in stretch never fired on a
-            // topped-up MacBook — which is exactly the machine it was tested on. Power
-            // present is also the right sense for languor: a plugged-in Mac at 19% that
-            // happens not to be charging is not a Mac he should be conserving for.
+            // topped-up MacBook. Power present is also the right sense for languor: a
+            // plugged-in Mac at 19% that happens not to be charging is not a Mac he should
+            // be conserving for.
             let onAC = (d[kIOPSPowerSourceStateKey] as? String) == kIOPSACPowerValue
             return (cur * 100 / max, onAC)
         }
         return nil   // desktop Macs have no battery
     }
 
-    /// Ground truth at launch, since a lock notification that fired while we were not
+    /// Ground truth at launch, since a lock notification that fired before the app was
     /// running is gone forever.
     static func isLockedNow() -> Bool {
         guard let d = CGSessionCopyCurrentDictionary() as? [String: Any] else { return false }

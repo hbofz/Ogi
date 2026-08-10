@@ -4,8 +4,8 @@ import CoreGraphics
 @testable import OgiCore
 
 /// Clips regenerated against the current `art/character.png`. Add each name as its sheet
-/// lands. Kept by hand on purpose: the old version inferred this from eye colour, which
-/// stopped meaning anything the moment the cat himself became ginger.
+/// lands. Kept by hand on purpose: inferring it from eye colour stops meaning anything the
+/// moment the cat himself is ginger.
 private let redrawnClips: Set<String> = ["walk", "fall", "land", "idle", "jump", "run", "sitdown", "sleep", "alert", "held", "groom", "curl", "cling", "lookDown", "peek", "turn", "shake"]
 
 /// The drawn frames come from separately-generated sheets that draw him at wildly different
@@ -41,9 +41,9 @@ private func eyeToInk(_ clip: Sprites.Clip, _ i: Int) -> Double? {
 @MainActor
 @Test func everyClipMeasuresHisEyeConsistently() {
     // `clipScale` divides a reference width by the measured eye, so a clip whose eye is
-    // mis-measured renders at the wrong size — silently, and only obviously in motion. It has
-    // happened twice: `fall` once read a 5px eye against everything else's 20px and rendered
-    // nearly 3x too big, and `idle` read 14px against its own median of 25.
+    // mis-measured renders at the wrong size, silently, and only obviously in motion. It has
+    // happened twice: `fall` read a 5px eye against everything else's 20px and rendered nearly
+    // 3x too big, and `idle` read 14px against its own median of 25.
     //
     // The invariant is not that clips render to the same height. They must not: a curled cat
     // is legitimately shorter than a sitting one, and an airborne clip's frame is mostly empty
@@ -67,10 +67,9 @@ private func eyeToInk(_ clip: Sprites.Clip, _ i: Int) -> Double? {
     // median lands on a crouch. His *emerged* frame reads 0.093, inside the band and next to
     // `land`'s 0.097, and his measured eye is steady across the four frames at 34/30/28/31px,
     // so the eye is found correctly; only the yardstick fails.
-    // Every clip is IN by default and exclusion is explicit, because the old hardcoded list
-    // silently skipped every clip added after it was written — lounge, stretch and peer all
-    // shipped with no size coverage at all, which is the exact hole this project has fallen
-    // down twice before.
+    // Every clip is IN by default and exclusion is explicit, because a hardcoded list of
+    // clips to check silently skips every clip added after it is written: lounge, stretch and
+    // peer all went out with no size coverage at all.
     //
     // `lounge` is excluded for `climbUp`'s reason with the sign flipped: sprawled flat he is
     // half his standing height while his eye stays the same, so his ratio is honestly high.
@@ -150,9 +149,9 @@ private func eyeToInk(_ clip: Sprites.Clip, _ i: Int) -> Double? {
 @MainActor
 @Test func peeksEmergedFrameIsMeasuredLikeEveryOtherClip() throws {
     // `peek` is out of the aggregate check above because its median lands on a crouch, and
-    // leaving it at that would give the clip NO size coverage at all — which is the exact hole
-    // this project has fallen down twice (`idle` 44% off its own median; `curl` at nearly half
-    // size because the eye finder caught a closed lid reading 5px).
+    // leaving it at that would give the clip NO size coverage at all, which is how clips go
+    // wrong: `idle` 44% off its own median; `curl` at nearly half size because the eye finder
+    // caught a closed lid reading 5px.
     //
     // The last frame is the one to pin: it is the emerged pose that hands straight off to
     // `walk`, so it is the frame that has to agree with everyone else. It measures 0.093,
@@ -258,9 +257,9 @@ private func eyeToInk(_ clip: Sprites.Clip, _ i: Int) -> Double? {
 @Test @MainActor func eachGaitPlaysAtItsOwnClipsDeclaredRate() {
     // The gait cycle is driven by ground covered, not by a clock: `buildPose` advances
     // `walkPhase` by `speed / strideLength` and `Sprites.index` reads `count` frames off it.
-    // So the rate a sheet actually plays at is `speed / stride * count`, and NOTHING connected
-    // that to the `fps` the sheet declares — which is how the run came to play at 31.5fps
-    // against a declared 14, sharing the walk's 30pt stride when a trot covers 67.
+    // So the rate a sheet actually plays at is `speed / stride * count`, and nothing else
+    // connects that to the `fps` the sheet declares, which is how the run came to play at
+    // 31.5fps against a declared 14, sharing the walk's 30pt stride when a trot covers 67.
     //
     // Everything here is derived, so a change to a speed, a stride, a frame count or an fps
     // has to keep agreeing with itself.
@@ -326,9 +325,9 @@ private func eyeToInk(_ clip: Sprites.Clip, _ i: Int) -> Double? {
 
 @MainActor
 @Test func theClimbSheetDoesNotBobAgainstTheWall() {
-    // He hangs from his grip, so the top of his ink is what has to stay put. The cling loop was
-    // the top cosmetic risk in the project partly because it did not. Measured off the cut
-    // frames: 2px of drift across six, because the prompt demanded his head stay at one height.
+    // He hangs from his grip, so the top of his ink is what has to stay put, and a loop that
+    // slides is the loudest cosmetic fault he has. Measured off the cut frames: 2px of drift
+    // across six, because the prompt demanded his head stay at one height.
     var tops: [Int] = []
     for i in 0..<Sprites.Clip.climbUp.count {
         guard let img = Sprites.image(.climbUp, i),
@@ -355,8 +354,8 @@ private func eyeToInk(_ clip: Sprites.Clip, _ i: Int) -> Double? {
     // sheets drew his eye a different shape from the rest. Where the well-behaved clips give
     // a tall almond (idle 37x54, walk 17x25, sitdown 21x31, alert 32x48, run 13x19, all
     // between 1.38 and 1.50 tall for their width), these came back round, so dividing a fixed
-    // number by that inflated width rendered them 10-30% small. Hamzah saw it before any
-    // metric did: "when he peeks his body gets a bit smaller".
+    // number by that inflated width rendered them 10-30% small. It shows on screen long before
+    // any metric catches it: when he peeks, his body gets a bit smaller.
     //
     // Two things are pinned here, because the correction is a constant sitting on top of a
     // measurement and either half can rot.
@@ -384,10 +383,9 @@ private func eyeToInk(_ clip: Sprites.Clip, _ i: Int) -> Double? {
     // with a tail, and its lids measure 30x22.
     let lidded: Set<String> = ["sleep", "denSleep", "curl", "vibe", "droop", "lounge", "cling",
                                "climbUp", "held", "land", "curious", "zap"]
-    // ...and every clip normalised on its band height is out by construction, which used to be
-    // the hard-coded string "peer" and is now asked of `Sprites` directly. v3a added four more
-    // of them, and a list that has to be edited in two places when a sheet lands is a list that
-    // will not be.
+    // ...and every clip normalised on its band height is out by construction, asked of
+    // `Sprites` directly rather than hard-coded: a list that has to be edited in two places
+    // when a sheet lands is a list that will not be.
     for clip in Sprites.Clip.allCases
     where !lidded.contains(clip.rawValue) && Sprites.bandHeight(clip) == nil {
         guard let img = Sprites.image(clip, 0), let eye = Sprites.eyes(clip, 0).first,

@@ -37,13 +37,12 @@ public struct Surface: Sendable {
     /// Where he can physically stand. **Structural** exclusions only: rounded corners, the
     /// notch, anything off-screen. A window raised in front of this one never reduces it.
     ///
-    /// Splitting this from `spans` is the fix for three separate bugs. He used to be able
-    /// to stand on a rounded corner where no window is drawn; a maximized window used to
-    /// delete the floor outright; and the notch was not a hole, so he walked through the
-    /// cutout and vanished.
+    /// Kept separate from `spans` because merging them lets him stand on a rounded corner
+    /// where no window is drawn, lets a maximized window delete the floor outright, and
+    /// stops the notch being a hole, so he walks through the cutout and vanishes.
     public var solid: [ClosedRange<CGFloat>]
     /// Where he is currently visible: `solid` minus everything in front. Governs where he
-    /// *prefers* to be. **Never used to decide whether he falls** — see `Skyline`.
+    /// *prefers* to be. **Never used to decide whether he falls** (see `Skyline`).
     public var spans: [ClosedRange<CGFloat>]
     public var targetable: Bool
     /// The source window's full rect, for clinging to its face. Nil for the menu bar and
@@ -58,15 +57,14 @@ public struct Occluder: Sendable {
 
     /// A real application window, as opposed to system furniture.
     ///
-    /// Defined once because getting it wrong has already caused three separate bugs, all
-    /// with the same root cause: **the Dock process owns a full-screen layer-20 window**
-    /// in addition to the visible Dock. It straddles every surface and sits in front of
-    /// everything, so counting it as geometry variously put the floor at the top of the
-    /// screen, masked him away entirely, and carved every walkable span down to nothing.
+    /// Defined once because **the Dock process owns a full-screen layer-20 window** in
+    /// addition to the visible Dock. It straddles every surface and sits in front of
+    /// everything, so counting it as geometry puts the floor at the top of the screen,
+    /// masks him away entirely, and carves every walkable span down to nothing.
     ///
     /// Menus, popovers, sheets and tooltips are excluded for a second reason: they are
-    /// above our window level, so they already occlude him for real, and they are
-    /// transient — a walkable ledge should not evaporate because someone opened a menu.
+    /// above this window's level, so they already occlude him for real, and they are
+    /// transient (a walkable ledge should not evaporate because someone opened a menu).
     public var isRealWindow: Bool { layer == 0 }
 }
 
@@ -175,32 +173,31 @@ public enum World {
         let fromWindows = visible.enumerated().map { Occluder(rect: $1.rect, z: $0, layer: $1.layer) }
 
         // The notch is a hardware cutout with no pixels behind it, so anything drawn there is
-        // invisible. Modelling it as a permanent occluder in front of everything — z = -2, ahead
-        // of even the menu bar's -1, because it is physically in front of everything — means the
+        // invisible. Modelling it as a permanent occluder in front of everything (z = -2, ahead
+        // of even the menu bar's -1, because it is physically in front of everything) means the
         // mask that already exists does the work: the part of him inside the cutout is clipped
         // away and only the part outside shows. That is what makes peeking out of it real,
-        // rather than a trick that only worked while he was a black cat against a black bezel.
+        // rather than a trick that depends on him being a black cat against a black bezel.
         //
         // `layer: 0` is load-bearing, not decoration: `occluders(above:intersecting:)` filters on
         // `isRealWindow`, so at any other layer this would be silently ignored.
         //
-        // Deliberately NOT in `fromWindows`, which is what `carve` reads — and that array is
-        // named for where it comes from rather than for what it holds, so that appending to the
-        // wrong one is a visible mistake rather than a natural-looking one. The notch covers no
-        // surface's top edge (its underside is the menu bar line, and the bar's own hole is cut
+        // Deliberately NOT in `fromWindows`, which is what `carve` reads. That array is named
+        // for where it comes from rather than for what it holds, so appending to the wrong one
+        // is a visible mistake rather than a natural-looking one. The notch covers no surface's
+        // top edge (its underside is the menu bar line, and the bar's own hole is cut
         // structurally out of `solid` below), so letting it carve walkable spans would delete
         // ground for no reason beyond which array it happened to be added to.
-        // ...and it is extended DOWN to the menu bar line before being used as one.
         //
-        // `safeAreaInsets.top` and the menu bar's own height disagree by a point on real
-        // hardware — measured 37 against 38 on an M2 — so the cutout's underside sits one point
-        // ABOVE the line he walks on. That leaves a one-point seam of live pixels under the
-        // hole, and a cat standing in it (crossing the tunnel, or asleep in the den) shows as a
-        // thin orange line under the notch. Seen on screen while verifying the crossing.
+        // It is extended DOWN to the menu bar line first. `safeAreaInsets.top` and the menu
+        // bar's own height disagree by a point on real hardware (measured 37 against 38 on an
+        // M2), so the cutout's underside sits one point ABOVE the line he walks on. That leaves
+        // a one-point seam of live pixels under the hole, and a cat standing in it (crossing the
+        // tunnel, or asleep in the den) shows as a thin orange line under the notch.
         //
-        // Extending the occluder cannot hide anything it should not: everything v3a draws under
-        // there hangs BELOW the bar line by construction — the tail, the dangling body, the
-        // head and paws — and the seam is the only thing between the two numbers.
+        // Extending the occluder cannot hide anything it should not: everything drawn under
+        // there hangs BELOW the bar line by construction (the tail, the dangling body, the head
+        // and paws), and the seam is the only thing between the two numbers.
         let occluders = screen.notch.map { n -> [Occluder] in
             let bottom = min(n.minY, screen.visibleFrame.maxY)
             let sealed = CGRect(x: n.minX, y: bottom, width: n.width, height: n.maxY - bottom)
@@ -211,11 +208,10 @@ public enum World {
         /// Where he can stand and still be drawn whole, as opposed to where the desktop
         /// happens to extend.
         ///
-        /// The outer edges of the display are as real a boundary as the notch is, and `solid`
-        /// used to run flush to them: he could plant at x=5 on a 1920pt screen, which is a
-        /// third of him off the panel. Hamzah watched him peek over the left edge of the
-        /// screen with only his tail still on it. This is `solid` only. `extent` is the perch
-        /// anchor space and must not shrink for anything.
+        /// The outer edges of the display are as real a boundary as the notch is. Running
+        /// `solid` flush to them lets him plant at x=5 on a 1920pt screen, a third of him off
+        /// the panel, peeking over the left edge with only his tail still on it. This is
+        /// `solid` only. `extent` is the perch anchor space and must not shrink for anything.
         ///
         /// Falls back to the full span on a screen too narrow to inset, which cannot happen on
         /// real hardware but must not produce an inverted range if it ever does.
@@ -237,12 +233,11 @@ public enum World {
 
         /// The notch is a hole in the SCREEN, not a hole in the menu bar.
         ///
-        /// It used to be cut only out of the bar, because the bar was the only ledge up at
-        /// that height. A fullscreen window's top edge is another one: measured on a notched
-        /// Mac it sits *exactly* on the menu bar line, runs the full width of the screen, and
-        /// since the covered-screen retreat learned to put him there it is where he lives.
-        /// Standing anywhere under the cutout draws him into a region with no pixels behind
-        /// it. Hamzah watched a whole cat reduce to a sliver of tail up there.
+        /// The bar is not the only ledge at that height. A fullscreen window's top edge sits
+        /// *exactly* on the menu bar line on a notched Mac, runs the full width of the screen,
+        /// and the covered-screen retreat puts him there. Standing anywhere under the cutout
+        /// draws him into a region with no pixels behind it, and a whole cat reduces to a
+        /// sliver of tail.
         ///
         /// So the rule belongs to any ledge a standing cat would reach into it from, and is
         /// the same rule the bar already had: a hole in `solid`, which `isGap` reads as a wall,
@@ -294,9 +289,9 @@ public enum World {
         }?.rect.maxY
         let floorY = max(screen.visibleFrame.minY, revealedDock ?? -.greatestFiniteMagnitude)
         // The floor's `solid` is deliberately NOT carved. A maximized window's rect starts
-        // at visibleFrame.minY, which IS floorY, so carving deleted the entire floor and
-        // left him with a two-node world. The desktop is still under Chrome; you just
-        // cannot see it, which is what `spans` is for.
+        // at visibleFrame.minY, which IS floorY, so carving deletes the entire floor and
+        // leaves him with a two-node world. The desktop is still under Chrome, it just
+        // cannot be seen, which is what `spans` is for.
         surfaces.append(Surface(id: .floor, z: .max, y: floorY, extent: screenSpan,
                                 solid: [standable],
                                 spans: carve([standable], y: floorY, z: .max),
@@ -341,11 +336,11 @@ public struct WorldTracker {
         // Read before the newcomers are aged, because it gates their reporting as well as
         // the misses below: a Space change replaces the whole cast at once, and the other
         // Space's furniture crossing the age threshold together is not news. Reported, it
-        // would hand the mind a `windowOpened` per switch — 0.30 of arousal, `canTravel`,
-        // two inside a half-life is a trip — which is exactly what app switches were
+        // would hand the mind a `windowOpened` per switch (0.30 of arousal, `canTravel`,
+        // two inside a half-life is a trip), which is exactly what app switches are
         // deliberately barred from doing, smuggled in through the window channel. The new
         // cast crosses `minAgePolls` while the hold is still counting, since the hold is
-        // deeper by design, so keeping quiet during it is the whole fix.
+        // deeper by design, so keeping quiet during it is what stops it.
         let holding = holdOffLeft > 0
         if holding { holdOffLeft -= 1 }
 

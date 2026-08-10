@@ -8,7 +8,7 @@ import CoreGraphics
 public enum Feel {
 
     public enum Physics {
-        /// px/s². Manifesto §6.
+        /// px/s².
         public static let gravity: CGFloat = 2000
         /// Capped so long falls stay readable rather than becoming a blur.
         public static let terminalVelocity: CGFloat = 1400
@@ -18,10 +18,9 @@ public enum Feel {
         /// Bracketed on both sides, and `theShakeIsBeyondHisOwnJump` holds the bracket:
         /// above `jumpImpulse * (1 + aimError)`, because a landing he could have chosen is
         /// not a hard one and his own deliberate leaps must never rattle him; below
-        /// `terminalVelocity`, or no fall could ever qualify. It shipped at 600 — a 90pt
-        /// drop, an ordinary step down between windows — and across 24,000 simulated seconds
-        /// *every* landing was hard, which dilutes the shake exactly the way a tell that
-        /// always fires stops being a tell.
+        /// `terminalVelocity`, or no fall could ever qualify. Keep it well clear of an ordinary
+        /// step down between windows (a 90pt drop): at 600 every landing is a hard one, and a
+        /// tell that always fires stops being a tell.
         public static let hardLanding: CGFloat = 1000
         /// Sideways nudge when the ground vanishes underfoot, so he doesn't drop straight down.
         public static let slipKick: CGFloat = 40
@@ -33,8 +32,7 @@ public enum Feel {
         /// edge" for the tell. Comfortably outside `brakingDistance` on purpose: a step-off has
         /// to be still at speed when it reaches the lip, or he brakes at it instead of over it.
         ///
-        /// It used to be where he stopped to look as well, on the reasoning that it was roughly
-        /// half his drawn width. It is not — see `edgePlant` — and one number cannot be both,
+        /// Where he stops to look is a separate number (`edgePlant`): one cannot do both jobs,
         /// because this one may not shrink.
         public static let edgeApproach: CGFloat = 26
         /// Where he stops to look: how far back from the lip he plants, and the number to move
@@ -50,9 +48,9 @@ public enum Feel {
         /// his own paws, so the head is the part that has to clear the lip.
         ///
         /// That brackets this number, and `hePlantsWithHisPawsOnTheLedgeAndHisHeadOverTheLip`
-        /// derives both ends from `Sprites` and fails if the sheet is redrawn. At 26 he stopped
-        /// 30pt back with an 18pt strip of bare ledge between his nose and the drop, which reads
-        /// as a cat looking at the floor rather than over an edge.
+        /// derives both ends from `Sprites` and fails if the sheet is redrawn. Much larger leaves
+        /// a strip of bare ledge between his nose and the drop, which reads as a cat looking at
+        /// the floor rather than over an edge.
         ///
         /// 6 rather than the 2.5 that would put his toes exactly on the lip, because the clip is
         /// cropped per frame: his paws sit 9.7pt forward of his midline in the standing frame he
@@ -111,16 +109,12 @@ public enum Feel {
         /// The whole jump budget: his launch speed, in px/s. Distance is an *output* of
         /// this and the angle, not an input.
         ///
-        /// v1 solved the ballistic exactly for whatever target it was handed, so a 40pt hop
-        /// and a 420pt leap had identical arc height and neither could fail. Three separate
-        /// constants (maxJumpRise, maxJumpDrop, maxJumpReach) tried to fence that in from
-        /// outside and were ignored by the solver. Fixing the speed collapses all three into
-        /// one physically meaningful number, and makes the discriminant the reachability
-        /// test rather than an assertion.
+        /// Fixing the speed is what makes the envelope real: one physically meaningful number
+        /// rather than separate rise, drop and reach limits fenced on from outside, and the
+        /// discriminant becomes the reachability test rather than an assertion.
         ///
         /// 872 px/s against 2000 px/s² gives a maximum rise of v²/2g = 190pt and a maximum
-        /// flat range of v²/g = 380pt, which reproduces v1's stated envelope (190 up, 420
-        /// across) almost exactly. Keep the ceiling roughly here: raising it lets him climb
+        /// flat range of v²/g = 380pt. Keep the ceiling roughly here: raising it lets him climb
         /// out of places he should be stuck in, and lowering it lets him ratchet steadily
         /// downward over a session, since a downward target is cheaper to reach than the
         /// way back up.
@@ -136,11 +130,6 @@ public enum Feel {
         /// moves a 60pt hop by half a point, so he would never miss at all. Speed error puts
         /// range ∝ (1+ε)², which scatters a 60pt hop over [53, 67] and a 300pt jump over
         /// [265, 337] — proportional to the distance, and signed both ways.
-        ///
-        /// v1 scaled horizontal speed against a fixed flight time, which also gave a signed
-        /// error proportional to distance; in that one respect v1's model was the same shape
-        /// as this one and better than the angular form that briefly replaced it. What v1
-        /// could not do was fail to reach the target at all.
         public static let aimError: CGFloat = 0.06
         /// However hard you flick him, he does not become a projectile.
         public static let maxThrow: CGFloat = 1500
@@ -150,9 +139,9 @@ public enum Feel {
         public static let clingSlideSpeed: CGFloat = 34
         /// ...and how fast he goes UP one, px/s. A separate number because they are not the
         /// same event: the slide is something happening to him, the climb is something he is
-        /// doing. Sharing the slide's 34 made a full-height window a twenty-second climb,
-        /// which is not a cat going up a curtain, it is a progress bar. First knob to turn if
-        /// the climb reads slow or frantic.
+        /// doing. At the slide's 34 a full-height window is a twenty-second climb, which is not
+        /// a cat going up a curtain, it is a progress bar. First knob to turn if the climb reads
+        /// slow or frantic.
         public static let clingClimbSpeed: CGFloat = 110
         /// Within this far of the top edge he climbs up and mantles onto it instead of
         /// sliding down.
@@ -181,8 +170,8 @@ public enum Feel {
     /// What he notices, and how strongly he responds to it.
     ///
     /// One scalar, `arousal`, rises with stimulus and decays with quiet. It is deliberately
-    /// additive: at zero he behaves exactly as he did before there was a mind, which is what
-    /// makes the whole layer testable against the tests that came before it.
+    /// additive: at zero he behaves exactly as he would without it, which keeps the whole layer
+    /// testable against the rest of the suite.
     public enum Mind {
         /// Seconds for excitement to halve. Sets the whole rhythm of the layer.
         ///
@@ -192,13 +181,11 @@ public enum Feel {
         /// clear it. If any of these three numbers move, that relationship is the thing that
         /// has to survive, and `oneWindowIsAGlanceAndTwoIsATrip` fails if it does not.
         ///
-        /// **45 and not the 20 this shipped with.** At 20 the rule was arithmetically true and
-        /// practically invisible: two windows twenty seconds apart landed exactly ON the
-        /// threshold and failed it 60 times out of 60, and opening two windows twenty seconds
-        /// apart is simply what opening two windows looks like. Hamzah opened two and saw
-        /// nothing, which is the failure this whole layer was warned about, a number making a
-        /// correct structure unreachable. At 45 the pair still has to be deliberate, and it now
-        /// survives the pause a person takes between them.
+        /// **45 and not 20.** At 20 the rule is arithmetically true and practically invisible:
+        /// two windows twenty seconds apart land exactly ON the threshold and fail it 60 times
+        /// out of 60, and twenty seconds apart is simply what opening two windows looks like.
+        /// At 45 the pair still has to be deliberate, and it survives the pause a person takes
+        /// between them.
         public static let arousalHalfLife: Double = 45
         public static let arousalWindowOpened: Double = 0.30
         public static let arousalAppSwitched: Double = 0.12
@@ -221,10 +208,9 @@ public enum Feel {
 
         /// How long the microphone or the camera has to stay live before he believes it.
         ///
-        /// Not zero, which is what it was. Both reads go true the instant *any* process opens
-        /// the stream, and `corespeechd` — the always-on "Hey Siri" listener — takes the
-        /// microphone in bursts well under a second. Caught on Hamzah's machine while verifying
-        /// v3a: a cat in a headset with nobody on the other end.
+        /// Not zero. Both reads go true the instant *any* process opens the stream, and
+        /// `corespeechd` (the always-on "Hey Siri" listener) takes the microphone in bursts well
+        /// under a second, which puts a cat in a headset with nobody on the other end.
         ///
         /// Long enough to swallow those bursts, short enough that joining a call still feels
         /// like a reaction. Only the arming is delayed; releasing is instant. See `Settling`.
@@ -247,15 +233,14 @@ public enum Feel {
         ///
         /// Floored by `Shape.hitPad + arrivalSlop`: the click rect reaches `hitPad` past his
         /// ink and the walk overshoots a few points toward its mark, so anything smaller can
-        /// settle him with the cursor still inside the rect that eats clicks. 8 was under
-        /// that floor by one point. Tune by eye upward only;
-        /// `theSettleClearanceKeepsTheCursorOutOfTheClickRect` holds the floor.
+        /// settle him with the cursor still inside the rect that eats clicks. Tune by eye upward
+        /// only; `theSettleClearanceKeepsTheCursorOutOfTheClickRect` holds the floor.
         public static let cursorGap: CGFloat = 12
         /// How long your cursor has to sit on him before he gets up and moves aside.
         ///
-        /// Not zero, which is what it effectively was. Firing on arrival meant that pointing at
-        /// him made him scoot, and since coming over needs a full minute of stillness, "mouse
-        /// near cat" always lost that race and always read as the cat avoiding you. Long enough
+        /// Not zero. Firing on arrival means pointing at him makes him scoot, and since coming
+        /// over needs a full minute of stillness, "mouse near cat" always loses that race and
+        /// reads as the cat avoiding you. Long enough
         /// to sweep the pointer across him, or to reach for him to pick him up, without him
         /// deciding you wanted the thing underneath.
         public static let yieldPatience: TimeInterval = 1.5
@@ -280,20 +265,19 @@ public enum Feel {
         /// swallows clicks while the pointer is inside his hit rect, so a cursor sitting on him
         /// has to move him aside (`yieldPatience`, above) — and a cursor *stroking* him has to
         /// do the opposite. Whether your hand is moving is what tells those apart, and it is
-        /// the same distinction `cursorOnHimFor` was split from `cursorStill` to make.
+        /// the same distinction that separates `cursorOnHimFor` from `cursorStill`.
         ///
         /// How much of your hand's travel has to bank on him before he gives in. Points, not
         /// seconds, and roughly one sweep across a cat who is drawn about 50 wide.
         ///
         /// **A stroke is ground covered, not motion.** Keying it off "is the pointer moving"
         /// is the obvious thing and it is wrong: a pointer jiggling in place is moving every
-        /// single tick, and `aJigglingCursorStillGetsHimToMove` caught it doing exactly what
-        /// that test was written for in the first place — sitting under a twitching cursor,
-        /// eating clicks, now with his eyes shut. The bank below is what tells them apart.
+        /// single tick, which leaves him sitting under a twitching cursor, eating clicks, now
+        /// with his eyes shut. `aJigglingCursorStillGetsHimToMove` holds that line, and the bank
+        /// below is what tells the two apart.
         ///
-        /// Half a sweep across a cat drawn about 50 wide. It was a full sweep, which together
-        /// with the decay below meant a gentle hand took over a second to register and Hamzah
-        /// had to scrub at him.
+        /// Half a sweep across a cat drawn about 50 wide. A full sweep, against the decay below,
+        /// makes a gentle hand take over a second to register.
         public static let strokeSpan: CGFloat = 20
         /// Points per second bled off the bank, which is what makes it a **rate** and not a
         /// total: a jiggle covers ground too, just slowly, so given long enough any pure
@@ -303,13 +287,12 @@ public enum Feel {
         /// than it looks.** Below it lies a jiggling pointer at 48pt/s, which must go on
         /// getting him out of your way; above it lies a hand petting a cat.
         ///
-        /// Both ends have been measured rather than guessed, and both by being wrong first.
-        /// At 150 a gentle stroke did not merely fail to register — the yield fired underneath
-        /// it and he walked out from under the hand. At 90 Hamzah still had to "move the cursor
-        /// a bit aggressively". 60 is a quarter above the jiggle, which is a thinner margin
-        /// than is comfortable, and it is the honest place for it: the jiggle it has to beat is
-        /// a synthetic worst case sustained for twenty seconds, and the hand it has to admit is
-        /// a real one. `aGentleStrokeStillCounts` now holds 84pt/s.
+        /// Both ends are measured. At 150 a gentle stroke does not merely fail to register, the
+        /// yield fires underneath it and he walks out from under the hand; at 90 the cursor has
+        /// to be moved aggressively to count. 60 is a quarter above the jiggle, which is a
+        /// thinner margin than is comfortable, and it is the honest place for it: the jiggle it
+        /// has to beat is a synthetic worst case sustained for twenty seconds, and the hand it
+        /// has to admit is a real one. `aGentleStrokeStillCounts` holds 84pt/s.
         public static let strokeDecay: CGFloat = 60
         /// How long your hand may rest on him mid-pet before he opens his eyes. Your hand stops
         /// at the end of every stroke before going back for the next one, so without this he
@@ -324,14 +307,14 @@ public enum Feel {
         /// a hand that stopped ages ago.
         public static var strokeBank: CGFloat { strokeSpan + strokeDecay * CGFloat(strokeGrace) }
 
-        /// **The purr**, MANIFESTO §7.7: a purr you can physically feel is the detail nobody
+        /// **The purr.** A purr you can physically feel is the detail nobody
         /// forgets, and nothing else on macOS does it.
         ///
         /// A real purr is a continuous ~25Hz flutter and the Taptic engine only gives discrete
         /// taps, so this is a run of taps and the spacing is the whole illusion. **Tuned by
-        /// feel on a real trackpad**, which is the only instrument that applies: 0.06 was
-        /// Hamzah's first pass and read as too slow, and 0.04 is his number. 25Hz proper would
-        /// be 0.04 exactly, so this is as close to a real purr as the hardware goes.
+        /// feel on a real trackpad**, which is the only instrument that applies: 0.06 reads as
+        /// too slow. 25Hz proper is 0.04 exactly, so this is as close to a real purr as the
+        /// hardware goes.
         public static let purrTapInterval: TimeInterval = 0.04
         /// How many taps a click gets. A tap on him is a moment rather than a state, so it
         /// buzzes once and stops; stroking him purrs for as long as your hand keeps going.
@@ -345,16 +328,15 @@ public enum Feel {
         public static let travelUrgency: Double = 0.6
     }
 
-    /// Where he goes when nothing has happened: the taste election, v2c. Candidates are
+    /// Where he goes when nothing has happened: the taste election. Candidates are
     /// scored by six urges and drawn with a temperature, so he leans toward what he likes
     /// and stays unpredictable. Hand-tuned like everything else physical; the two rules
     /// that keep the numbers honest are pinned by `noveltyOutranksHabit` and
     /// `theLoungeWinsBareDesksButNotAlways`.
     public enum Taste {
-        /// How opinionated he is. Lower is more compulsive; higher approaches the old
-        /// coin flip. 0.25 measured out at a choice-vs-dwell divergence of 0.095 on the
-        /// real desktop — taste you could measure and not quite feel — and sharpening to
-        /// 0.18 is the knob the plan names first.
+        /// How opinionated he is. Lower is more compulsive; higher approaches a coin flip.
+        /// 0.25 measures out at a choice-vs-dwell divergence of 0.095 on a real desktop, which
+        /// is taste you can measure and not quite feel. First knob to turn.
         public static let temperature: Double = 0.18
         /// New furniture stays interesting for minutes, not for a glance. Dominant by
         /// design: a new window must beat any stale, familiar perch.
@@ -381,7 +363,7 @@ public enum Feel {
         /// A lounge is a spell, not a pose. The rest jitter after it provides the variety.
         public static let loungeSeconds: TimeInterval = 45
         /// Surfaces recorded in the first moments are the world he woke into, and the
-        /// launch world is not news. v2b learned this with the window-opened signal.
+        /// launch world is not news. Same rule the window-opened signal follows.
         public static let launchGrace: TimeInterval = 5
     }
 
@@ -395,8 +377,6 @@ public enum Feel {
         public static let anticipation: TimeInterval = 0.100
         public static let squashRecovery: TimeInterval = 0.080
 
-        /// How long he stays put between ideas. Restraint is the feature: he is still by
-        /// default and most interesting when you are not working.
         /// The mid-air twist. Fixed duration, so he is always feet-down before he lands.
         public static let righting: TimeInterval = 0.18
         /// How long he holds still after grabbing on. The "oh no" beat.
@@ -448,15 +428,18 @@ public enum Feel {
         /// derives the floor from the clip and fails if either number moves.
         public static let peekSeconds: TimeInterval = 1.1
 
+        /// How long he stays put between ideas. Restraint is the feature: he is still by
+        /// default, and most interesting when you are not working.
+        ///
         /// OGI_RESTLESS=1 collapses these so his behaviour can actually be watched.
         /// Living with him wants long pauses; testing him does not.
         public static let restMin: TimeInterval = restless ? 0.4 : 3.5
         public static let restJitter: TimeInterval = restless ? 0.8 : 9.0
         /// How long one washing bout lasts. Six lick cycles at the clip's 8fps.
         public static let groomSeconds: TimeInterval = 4.5
-        /// How long the wake-up bow and yawn runs. Sized for the coming 5-frame sheet at
-        /// 5fps plus a beat holding its settled last frame; pin against the clip when it
-        /// lands, the way the shake and the peek are pinned.
+        /// How long the wake-up bow and yawn runs. Sized for a 5-frame sheet at 5fps plus a
+        /// beat holding its settled last frame; pin it against the clip the way the shake and
+        /// the peek are pinned.
         public static let stretchSeconds: TimeInterval = 1.3
         /// Chance an in-place bout of boredom is a stretch rather than a wash. Below half:
         /// the wash stays the commoner idle behaviour.
@@ -464,10 +447,10 @@ public enum Feel {
         /// How long he peers over the lip of the window that was hiding him before pulling
         /// himself up onto it. A good long nosy look: about eight blink-loops of the sheet.
         ///
-        /// Raised from 6 because the covered-screen retreat made this the pose you actually
-        /// see. Swiping to a fullscreen Space surfaces him at the lip within half a second,
-        /// and Hamzah asked for the head to stay up there a while: "it is cute ngl". The same
-        /// number covers being buried under an ordinary window, which is the same act.
+        /// Long, because the covered-screen retreat makes this the pose you actually see:
+        /// swiping to a fullscreen Space surfaces him at the lip within half a second, and the
+        /// head is worth leaving up there a while. The same number covers being buried under an
+        /// ordinary window, which is the same act.
         public static let peerSeconds: TimeInterval = 12
 
         /// The event performances. Each non-looping one is floored by its own sheet, the
@@ -477,16 +460,16 @@ public enum Feel {
         /// like running out of battery; the vibe loops for a proper little groove.
         public static let zapSeconds: TimeInterval = 3.5
         /// How long the jolt itself cycles before the recovery: ten passes of the three
-        /// buzz frames at the clip's 10fps. Tuned by Hamzah's eye in three rounds — 0.8
-        /// and 1.2 both read as short on screen against what the arithmetic promised, and
-        /// a gag holds longer than a reflex says it should. Every 0.3 here is one more
-        /// full pass; `theBuzzLoopsBeforeTheRecovery` holds the relationships.
+        /// buzz frames at the clip's 10fps. Tuned by eye: 0.8 and 1.2 both read as short on
+        /// screen against what the arithmetic promised, because a gag holds longer than a
+        /// reflex says it should. Every 0.3 here is one more full pass;
+        /// `theBuzzLoopsBeforeTheRecovery` holds the relationships.
         public static let zapBuzzSeconds: TimeInterval = 3.0
         public static let vibeSeconds: TimeInterval = 8
         public static let droopSeconds: TimeInterval = 4.2
         public static let curiousSeconds: TimeInterval = 1.6
         /// Chance that a bout of boredom becomes a wash rather than a trip somewhere.
-        /// Manifesto §7.1 wants an occasional in-place behaviour roughly every few minutes,
+        /// An occasional in-place behaviour is wanted roughly every few minutes,
         /// and washing is currently the only one of those that exists.
         public static let groomChance: Double = 0.15
 
@@ -502,7 +485,7 @@ public enum Feel {
         static let restless = ProcessInfo.processInfo.environment["OGI_RESTLESS"] != nil
     }
 
-    /// The notch as a place with rules. v3a.
+    /// The notch as a place with rules.
     ///
     /// Everything here follows from one fact `World.punchNotch` already encodes: the cutout is a
     /// hole in `solid` sitting **above** the menu bar line, and `notch.minY` IS that line. So he
@@ -613,7 +596,7 @@ public enum Feel {
         /// points. Sized so the head over the lip matches the head on his side-view body;
         /// tune by eye.
         public static let peerHeight: CGFloat = 19
-        /// The same yardstick for v3a's two front-facing clips. See `Sprites.frontFacingHeight`.
+        /// The same yardstick for the two front-facing clips. See `Sprites.frontFacingHeight`.
         ///
         /// `peerDown` is the same subject as `peer` — his head and his two front paws over a
         /// lip — in a squarer band, so it starts near `peerHeight` scaled for the taller frame.
@@ -621,7 +604,7 @@ public enum Feel {
         /// the tallest thing he ever renders as: longer than his standing height, because a
         /// hanging cat is longer than a standing one.
         ///
-        /// Both are tune-by-eye and neither has been seen on screen.
+        /// Both are tune-by-eye.
         public static let peerDownHeight: CGFloat = 22
         public static let hangHeight: CGFloat = 46
         /// ...and the same yardstick again for the three call sheets, which need it for a
@@ -636,16 +619,14 @@ public enum Feel {
         public static let callDeskHeight: CGFloat = 35
         /// ...and once more for the den, for a third reason: his eyes are *closed*, and the
         /// lids measure 30x22 — wide rather than small in both directions, so eye-width
-        /// normalisation rendered the whole clip about 30% short. Seen on screen: 17pt of tail
-        /// hanging out of the notch, which reads as a stub rather than a tail.
+        /// normalisation renders the whole clip about 30% short: 17pt of tail hanging out of
+        /// the notch, which reads as a stub rather than a tail.
         ///
         /// Half the band is tail and half is the body that the cutout masks away, so this is
         /// roughly twice the length of tail you want hanging below the lip.
         public static let denSleepHeight: CGFloat = 50
         /// ...and again for the stroke, for the same reason as the den: a contentedly shut eye
         /// is drawn as one flat curved line, so it measures WIDE and the clip renders short.
-        /// The second sheet in the project to need this, and it was put here before the first
-        /// build rather than after somebody noticed him shrink.
         ///
         /// A whole sitting cat in the band, so this is his full drawn height, and it is pinned
         /// against `idle` by `beingPettedDoesNotChangeHisSize` rather than left as a bare
@@ -654,8 +635,8 @@ public enum Feel {
         /// **Derived, not guessed.** `idle` renders a sitting cat at 30pt and its band is 99.8%
         /// ink; the stroke's band is 416px holding 393px of cat in its lowest frame, because the
         /// cutter has to crop to the tallest frame and his head goes up. So the same cat wants
-        /// `30 * 416/393`. Guessing put it at 44 and rendered a petted cat half again the size
-        /// of a sitting one.
+        /// `30 * 416/393`. A guess at 44 renders a petted cat half again the size of a sitting
+        /// one.
         public static let strokedHeight: CGFloat = 32
         /// How far from a hole in his world he has to stand to be drawn whole. Half his
         /// nominal box, so it covers every pose rather than the one clip that happens to play
@@ -663,10 +644,9 @@ public enum Feel {
         ///
         /// His world has two kinds of hole and both cost him the same way. The **notch** is a
         /// hardware cutout with no pixels behind it: parked centred on its lip he loses
-        /// everything past it, and Hamzah watched a whole cat reduce to a sliver of tail up
-        /// there. The **edges of the display** are the other: standing at x=5 on a 1920pt
-        /// screen puts a third of him off the panel, which is what his peek over the left edge
-        /// actually looked like.
+        /// everything past it, which reduces a whole cat to a sliver of tail. The **edges of
+        /// the display** are the other: standing at x=5 on a 1920pt screen puts a third of him
+        /// off the panel.
         ///
         /// *Moving* through either is fine and is sometimes the point. The launch emergence
         /// comes half out of the notch, and the goodbye walks back into it. Coming to rest
@@ -684,25 +664,24 @@ public enum Feel {
         /// One per gait, because a trotting cat covers much more ground per stride than a
         /// strolling one and the gait is cycled off distance: `buildPose` advances the phase by
         /// `speed / stride`, so a stride that is too short cranks the sheet. Sharing the walk's
-        /// 30pt ran the 8-frame run sheet at 31.5fps against the 14 it declares — 2.25x, a blur
-        /// of legs rather than a trot, and the one thing the distance-driven gait was supposed
-        /// to have fixed.
+        /// 30pt runs the 8-frame run sheet at 31.5fps against the 14 it declares (2.25x), a blur
+        /// of legs rather than a trot.
         ///
         /// The run figure is `runSpeed * frames / fps`: the stride that makes the sheet play at
-        /// the rate it was drawn for. The walk's 30 is a hand-tuned figure that predates the
-        /// arithmetic and leaves its sheet 8% slow, which is invisible and stops the paws
-        /// skating; `eachGaitPlaysAtItsOwnClipsDeclaredRate` holds both against their clips.
+        /// the rate it was drawn for. The walk's 30 is hand-tuned rather than derived and leaves
+        /// its sheet 8% slow, which is invisible and stops the paws skating;
+        /// `eachGaitPlaysAtItsOwnClipsDeclaredRate` holds both against their clips.
         public static let strideLength: CGFloat = 30
         public static let runStrideLength: CGFloat = 67
         /// How much wall one full six-frame `climbUp` cycle covers.
         ///
-        /// The sheet came back as three poses drawn twice rather than six distinct ones, so a
-        /// full cycle reads as TWO reaches, which is why this is 55 and not half of it. At 27.5pt
+        /// The sheet is three poses drawn twice rather than six distinct ones, so a full cycle
+        /// reads as TWO reaches, which is why this is 55 and not half of it. At 27.5pt
         /// a reach against his 32pt height that is a plausibly long stretch for a climbing cat.
         ///
         /// `Sprites.Clip.climbUp.fps` is derived from this and `clingClimbSpeed`, so the sheet
-        /// can never play at a rate the ascent does not match. That is the run-gait bug, which
-        /// shipped because two numbers that had to agree were written down twice.
+        /// can never play at a rate the ascent does not match. That is the run-gait trap above:
+        /// two numbers that have to agree, written down twice.
         public static let climbStride: CGFloat = 55
         /// Impact speed that produces maxSquash.
         public static let squashReference: CGFloat = 900

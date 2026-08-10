@@ -23,12 +23,12 @@ import CoreGraphics
     }
 
     @Test func aCoveredScreenIsAStandingOrderNotAnEvent() {
-        // What Hamzah watched: close everything, open Chrome fullscreen. The edge-triggered
-        // retreat fired on the first sighting, before the fullscreen window had aged into
-        // furniture he may climb, consumed itself against an unroutable world, and was gone:
-        // he sat at the bottom of a covered screen, chilling, with no urgency at all. No
-        // stimulus is delivered in this test — only the level signal — and he must still
-        // end up at the top, by climbing the covering window's own face.
+        // Close everything, open a browser fullscreen. An edge-triggered retreat fires on the
+        // first sighting, before the fullscreen window has aged into furniture he may climb,
+        // consumes itself against an unroutable world, and is gone: he sits at the bottom of
+        // a covered screen with no urgency at all. No stimulus is delivered in this test,
+        // only the level signal, and he must still end up at the top, by climbing the
+        // covering window's own face.
         let world = fullscreenWorld()
         let floor = world.surface(.floor)!
         let barY = world.surface(.menuBar)!.y
@@ -46,12 +46,12 @@ import CoreGraphics
             if case .grounded(let p) = cat.support, let s = world.surface(p.id),
                s.y >= barY - Feel.World.coplanarTolerance { break }
         }
-        // ...and fast. Timed on a real fullscreen Space, the ordinary route took eighteen
-        // seconds (a run along a floor nobody can see, then a ten-second climb) on a Space
-        // Hamzah is on for three, so he never once saw it finish. He is behind the covering
+        // ...and fast. Timed on a real fullscreen Space, the ordinary route takes eighteen
+        // seconds (a run along a floor nobody can see, then a ten-second climb), which is
+        // longer than most people spend on the Space at all. He is behind the covering
         // window for all of it, so he surfaces at its lip instead of climbing to it.
         #expect(elapsed < 2,
-                "took \(String(format: "%.1f", elapsed))s to get up top; Hamzah is gone by then")
+                "took \(String(format: "%.1f", elapsed))s to get up top; the film is over by then")
         guard case .grounded(let p) = cat.support, let top = world.surface(p.id) else {
             Issue.record("not grounded at the end, at y=\(cat.position.y)")
             return
@@ -60,10 +60,10 @@ import CoreGraphics
                 "still at y=\(Int(cat.position.y)): chilling at the bottom of a covered screen")
     }
 
-    /// Chrome's fullscreen, dumped live off Hamzah's machine: four stacked full-width bands
+    /// Chrome's fullscreen, dumped live from a real window list: four stacked full-width bands
     /// rather than one window. The band that buries him has its own top edge buried under the
-    /// next one, so "the lip of the window over me" is not somewhere anyone could see him,
-    /// and he sat on the floor of a covered screen for the whole film because of it.
+    /// next one, so "the lip of the window over me" is not somewhere anyone can see him, and he
+    /// stays on the floor of a covered screen for the whole film because of it.
     @Test func heSurfacesOnAFullscreenThatIsFourStackedBands() {
         // The real screen too, not the square one the tests above use: on a notched Mac the
         // menu bar line is y=1205 and the bands stop exactly there, which is the whole reason
@@ -116,9 +116,9 @@ import CoreGraphics
                 "surfaced at x=\(Int(cat.position.x)), part of him off the panel")
     }
 
-    /// He used to come up directly above wherever he was buried, which on a desktop you use
-    /// the same way every day is the same spot every time. Hamzah: "it looks like he comes out
-    /// the same place everytime". Nobody can see him before he surfaces, so the draw is free.
+    /// Coming up directly above wherever he was buried is the same spot every time on a desktop
+    /// you use the same way every day, and it looks like it. Nobody can see him before he
+    /// surfaces, so the draw is free.
     @Test func heDoesNotSurfaceInTheSamePlaceEveryTime() {
         let world = fullscreenWorld()
         let floor = world.surface(.floor)!
@@ -140,11 +140,10 @@ import CoreGraphics
         // The standing order must stop asking once it is satisfied, or a film is a cat walking
         // on the spot for two hours.
         //
-        // **What satisfies it changed in v3a, and this test changed with it.** It used to be
-        // "anywhere up top", which is what let Hamzah watch him fall asleep in the ordinary
-        // curl on an arbitrary spot with a fullscreen Chrome up: he was on the bar, so nothing
-        // ever walked him the rest of the way to the doorway, and the den was unreachable. It
-        // is "at the door" now, so this asserts the settling rather than the staying put.
+        // What satisfies it is being AT THE DOOR, not merely up top. "Anywhere up top" leaves
+        // him asleep in the ordinary curl on an arbitrary spot with a film on: he is on the
+        // bar, so nothing ever walks him the rest of the way to the doorway and the den is
+        // unreachable. So this asserts the settling rather than the staying put.
         let world = fullscreenWorld()
         let bar = world.surface(.menuBar)!
         var cat = CatState(position: CGPoint(x: 500, y: bar.y))
