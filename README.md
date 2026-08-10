@@ -1,177 +1,117 @@
-# Ogi
+<p align="center">
+  <img src="docs/ogi-walk.gif" width="180" alt="Ogi, a ginger tabby, walking">
+</p>
 
-**A cat that lives in your notch and treats your windows as terrain.**
+<h1 align="center">Ogi</h1>
 
-Ogi walks along the top edges of your open windows, jumps between them, and falls when you
-close the one he is standing on. He goes *behind* windows that are in front of him. He notices
-your battery, your microphone, and how long you have been working without a break.
+<p align="center">
+  <b>A cat that lives in your notch and treats your windows as terrain.</b>
+</p>
 
-He asks nothing of you, ever, and there is nothing to manage.
-
-- [MANIFESTO.md](MANIFESTO.md) — what he is, and why
-- [ROADMAP.md](ROADMAP.md) — what works, what doesn't, and what is being built next
-- [docs/DESIGN.md](docs/DESIGN.md) — architecture, and the research behind every decision
-
----
-
-## He cannot spy on you, by construction
-
-**Ogi requests no permissions. Not one.** There is no permission prompt on first launch,
-because there is nothing he could ask for that he needs.
-
-He reads the *position and size* of your windows, never their titles and never their pixels.
-Window titles would require Screen Recording permission, so we don't read them. He can feel
-your typing *rhythm* through a system-wide keystroke counter that reports a number and cannot
-report a key. He can tell the microphone is live without listening to it.
-
-This is a design constraint, not an afterthought. If a feature needs a permission, it does not
-ship. Two behaviours described in the manifesto were cut for exactly this reason.
-
-There is no account, no network, no telemetry, and no backend.
+<p align="center">
+  <a href="LICENSE.md"><img src="https://img.shields.io/badge/license-PolyForm%20Noncommercial-blue" alt="License"></a>
+  <img src="https://img.shields.io/badge/macOS-14%2B-black?logo=apple" alt="macOS 14+">
+  <a href="https://github.com/hbofz/Ogi/releases/latest"><img src="https://img.shields.io/github/v/release/hbofz/Ogi" alt="Latest release"></a>
+  <img src="https://img.shields.io/badge/permissions-none-brightgreen" alt="No permissions">
+</p>
 
 ---
 
-## Status: built, and not yet watched
+Ogi walks along the top edges of your open windows, jumps between them, and falls when you close
+the one he was standing on. He goes **behind** windows that are in front of him, which nothing
+else on any platform does.
 
-He walks your window edges and he walks *off* them. Given a desktop with windows on it he
-works his way down: stepping across a gap that is small enough, jumping one he can reach,
-stepping off a ledge onto whatever is below, and deciding again the moment he lands. At a drop
-he stops at the lip, leans over it, looks down, holds there, and then either commits or backs
-off and goes somewhere else instead. Set him down on the face of a window and he clings to it,
-holds, then climbs onto the ledge above him or slides down it. He comes out of the notch at
-launch and goes back into it when you quit. He turns on the spot instead of flipping, and
-shakes himself off after a hard landing.
-
-He still **goes behind windows that are in front of him**, which nothing else on any platform
-does. He still falls when you close the window under him. He settles when you stop typing, and
-freezes when your microphone goes live.
-
-Set him down on a window's face and he **grabs it and climbs**, whatever your cursor was doing
-at the time. He can climb to get back up, too: jump at a face, catch it on the way past, and
-haul himself onto the ledge. He will not grab a face he is *falling* past, which is deliberate,
-because catching every fall at the first window would kill the fall.
-
-He has taste: where he goes when nothing has happened is an election over what the world
-offers — novelty, staleness, height, effort — not a coin flip, and on an empty desktop he
-sprawls and watches the room instead of pacing. Bury him behind a window and he surfaces at
-its top edge, head and paws over the lip. The notch is his den, and he waits in its doorway
-facing out. And the machine's own moments are little performances: plug in the charger and he
-is comically electrocuted, connect your AirPods and he grooves, run the battery low and he
-powers down flat, plug in your phone and he head-tilts at it.
-
-The notch is not just his front door any more. He walks *through* it, in one side and out the
-other, which makes the menu bar one ledge instead of two that could never reach each other. He
-hangs off its lower lip and does pull-ups, because the one stretch of ledge he cannot stand on
-is the only one he can hang from. He drapes over that lip and watches you. And asleep in there,
-the only thing on your screen is a tail.
-
-When your microphone goes live he puts on a headset and talks; when your camera goes live he
-sits down at a tiny laptop and works; on a real call he does both. The camera lives in the
-notch, so while it runs he is evicted from his own house.
-
-It is covered by 327 unit tests and by simulation (the descent was soaked at 400 runs of 600
-seconds, and he was stranded in none of them). The first pass was tuned entirely against that
-simulation; watching him for fifteen minutes then corrected four things it could not see, and
-more of it will need the same. He also still lives on one display: he survives a monitor being
-plugged in, unplugged, or rearranged, and he survives a Space change, but he does not cross to
-another screen.
-
-He is a ginger tabby, drawn across 149 frames in thirty-one animations. Cursor-tracking eyes are
-built and currently switched off: painting a live pupil needs an empty socket in the artwork,
-and the drawn frames have the eye complete. See `docs/ART-BRIEF.md`.
-
-**Idle cost: 0.0% CPU, measured.** Once he is asleep the display link is stopped outright and
-he watches for your return once a second. The battery cost of a desktop pet is processor
-wakeups rather than pixels (the best-known offender in this category draws complaints at four
-wakeups a second), so when he has nothing to do he does nothing, rather than redrawing an
-unchanged cat sixty times a second.
-
-See [ROADMAP.md](ROADMAP.md) for what is left, and for what did not land.
+He asks for no permissions, has no settings, no account, and no network. He is just there.
 
 ## Install
 
-Download `Ogi-<version>.zip` from [Releases](https://github.com/hbofz/Ogi/releases), unzip it,
-and drag `Ogi.app` to `/Applications`.
+Download the latest `Ogi.zip` from [**Releases**](https://github.com/hbofz/Ogi/releases/latest),
+unzip, and drag `Ogi.app` to `/Applications`.
 
-**macOS will refuse to open it the first time, and that is expected.** Ogi is signed ad hoc
-rather than notarised, because notarising requires a paid Apple Developer account and there
-isn't one yet. So Gatekeeper cannot check who built it and blocks it, with a message about
-being unable to verify it is free of malware.
+The first launch is blocked by macOS, because Ogi is signed but not notarised (that needs a paid
+Apple Developer account, and there isn't one yet). To allow it:
 
-To allow it, either:
+**System Settings → Privacy & Security →** scroll down **→ Open Anyway**
 
-- **System Settings → Privacy & Security**, scroll to the bottom, and click **Open Anyway**
-  next to the message about Ogi. Then open it again.
-- Or, in Terminal: `xattr -c /Applications/Ogi.app`
+Or, in a terminal: `xattr -c /Applications/Ogi.app`
 
-You should be suspicious of any app that asks you to do this. The honest answer is that the
-source is right here, `./run.sh` builds the same bundle from it, and doing that instead is a
-completely reasonable response.
+> Being suspicious of an app that asks you to do that is the right instinct. The source is all
+> here, and `./run.sh` builds the identical bundle from it.
 
-Ogi asks for no permissions at all and requests no entitlements. Everything he reads about your
-machine is permission-free by design; see [MANIFESTO.md](MANIFESTO.md) Appendix A for the list
-and the sources.
+**To quit, click the cat in your menu bar.** There is no Dock icon by design.
 
-## Build and run
+## What he does
 
-Requires macOS 14+ and a Swift 6 toolchain (Xcode 26).
+**He treats your desktop as terrain.** Window edges are ledges. He steps across small gaps,
+jumps ones he can reach, stops at a drop to lean over and look down before committing, and
+climbs the face of a window to get back up. Close the window under him and he falls.
+
+**He notices your machine.** Plug in the charger and he is comically electrocuted. Connect
+AirPods and he grooves. Run the battery low and he powers down flat. When your microphone goes
+live he puts on a headset; when your camera goes live he sits at a tiny laptop and works.
+
+**The notch is his house.** He walks out of it at launch, walks *through* it to cross the menu
+bar, hangs off its lower lip doing pull-ups, and sleeps inside it with only his tail showing.
+
+<img src="docs/ogi-petted.gif" width="110" align="right" alt="Ogi being petted">
+
+**You can pet him.** Move your cursor across his body and he shuts his eyes, pushes his head up
+into your hand, and **purrs through your trackpad** using haptic feedback. A purr you can
+physically feel.
+
+**He costs nothing.** 0.0% CPU when idle, measured. Once he settles, the display link stops
+outright and he wakes once a second to check whether you are back. The battery cost of a desktop
+pet is processor wakeups, not pixels.
+
+## He cannot spy on you, by construction
+
+**Ogi requests no permissions. Not one.** There is no prompt on first launch, because there is
+nothing he needs to ask for.
+
+He reads the *position and size* of your windows, never their titles and never their pixels.
+Titles would need Screen Recording permission, so he does not read them. He feels your typing
+*rhythm* through a system keystroke counter that reports a number and cannot report a key. He
+can tell your microphone is live without listening to it.
+
+This is a constraint, not a claim: **if a feature needs a permission, it does not ship.** Several
+planned behaviours were cut for exactly that reason.
+
+## Build from source
+
+Requires macOS 14+ and a Swift 6 toolchain.
 
 ```sh
+git clone https://github.com/hbofz/Ogi.git && cd Ogi
 ./run.sh
 ```
 
-That builds Ogi, wraps it in an app bundle, and launches it. **To quit, use the cat in your
-menu bar.** There is no Dock icon by design, so that menu bar item is the way out.
-
 ```sh
-swift test     # the world model and physics are pure functions, and tested as such
+swift test          # 350 tests; the world model and physics are pure functions
+./release.sh 1.0.0  # builds, tests, bundles and zips a release
 ```
+
+Some of what was learned building this is written up in
+[docs/macos-notes.md](docs/macos-notes.md) — most of it is either undocumented or widely
+misremembered.
 
 ## Uninstall
 
-Quit from the menu bar and delete the folder. Ogi writes nothing outside it, creates no
+Quit from the menu bar and delete the app. Ogi writes nothing outside itself, creates no
 preferences, and installs no login item, agent, or helper.
-
-## Verified on macOS 26.5.1
-
-Notes from building this, since most of it is either undocumented or widely misremembered:
-
-- `CGWindowListCopyWindowInfo` is **not deprecated**. Its imaging sibling
-  `CGWindowListCreateImage` was obsoleted in macOS 15, and the two get conflated constantly.
-  Geometry and stacking order cost no permission; only `kCGWindowName` is gated.
-- Reading the window list costs **298 µs** with 19 windows, so a 10 Hz world poll is about
-  0.3% of one core. Terrain that lags is a choice, not a constraint.
-- **Per-pixel alpha click-through is broken on macOS 26.5.1.** Transparent regions of a
-  borderless window intercept clicks instead of passing them through. Ogi drives
-  `ignoresMouseEvents` from the cursor position instead, so he only swallows a click when it
-  is actually on him.
-- The Dock process owns a **full-screen** layer-20 window as well as the visible Dock.
-  Identifying the Dock by owner and layer alone will find the wrong one.
-- Entering native fullscreen **recreates** a window with a new ID. Ogi reads that as his world
-  vanishing, and falls. That is the intended behaviour.
-- A level-25 panel with `.fullScreenAuxiliary` and `.canJoinAllSpaces` still draws over
-  another app's fullscreen Space.
 
 ## License
 
-**[PolyForm Noncommercial 1.0.0](LICENSE.md). Source-available, not open source.**
+**[PolyForm Noncommercial 1.0.0](LICENSE.md) — source-available, not open source.**
 
-Use it, read it, change it, share it, for anything that is not commercial. Personal use, study,
-hobby projects, and non-profit, educational and government organisations are all covered
-explicitly by the licence. What you may not do is make money from it.
+Free for anything that is not commercial: personal use, study, hobby projects, and non-profit,
+educational and government organisations are all covered explicitly. What you may not do is make
+money from it. Commercial rights are retained.
 
-That word matters and is not a synonym for open source: this licence is not OSI-approved, and
-commercial rights are retained. It is short and in plain English, so read it rather than taking
-this summary for it.
-
-The sprite frames were generated with an AI tool and hand-cut. In the United States, material
-generated by AI without sufficient human authorship is unlikely to attract copyright, so it is
-entirely possible that nobody, including me, holds copyright in the individual frames. The
-licence covers them along with everything else, and where it has no copyright to act on, it has
-nothing to grant or withhold. The engine is a different matter and is mine.
+"Source-available" is not a synonym for open source, and the distinction is deliberate rather
+than sloppy. The licence is one page of plain English; read it rather than this summary.
 
 ## Contributing
 
-Read [CONTRIBUTING.md](CONTRIBUTING.md) before opening a pull request. Short version: bug
-reports and issues are very welcome; code contributions need a copyright assignment first, and
-the reason is written down there rather than left for you to guess at.
+**Bug reports are the most useful thing you can send**, and they need nothing from you but the
+report. Code contributions need a copyright assignment first, and
+[CONTRIBUTING.md](CONTRIBUTING.md) explains exactly why rather than leaving you to guess.

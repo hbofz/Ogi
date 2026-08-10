@@ -6,3 +6,13 @@ __pycache__/
 
 # Release artifacts, built by release.sh
 Ogi-*.zip
+
+# Hamzah's working documents. Manifesto, roadmap, design notes, art brief, specs.
+# Deliberately not published: see CONTRIBUTING.md.
+private/
+
+# Source art: reference sheet and the raw generated sheets. Kept locally, not published.
+art/
+
+# Local agent config and skills.
+.claude/

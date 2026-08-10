@@ -36,4 +36,10 @@ Open an issue first so we can agree the shape of it. Then:
 - Every physics and timing constant lives in `Sources/OgiCore/Feel.swift`, with a comment saying
   what it is for and, where it was tuned by eye, what it looked like when it was wrong. If you
   move a number, move the comment with it.
-- New sprite sheets go through `docs/ART-BRIEF.md` and `Tools/extract-sprites.swift`.
+- `docs/macos-notes.md` collects the platform behaviour that cost the most time to discover.
+  Worth reading before you fight the window server.
+
+Art is not open to contribution. The sprites are generated and hand-cut through a private
+pipeline, and the frame counts, rates and anchors in `Sprites.swift` are tied to specific
+sheets. If a clip looks wrong on your machine, an issue with a screen recording is the right
+way to report it.
