@@ -97,14 +97,7 @@ preferences, and installs no login item, agent, or helper.
 
 ## License
 
-**[PolyForm Noncommercial 1.0.0](LICENSE.md) — source-available, not open source.**
-
-Free for anything that is not commercial: personal use, study, hobby projects, and non-profit,
-educational and government organisations are all covered explicitly. What you may not do is make
-money from it. Commercial rights are retained.
-
-"Source-available" is not a synonym for open source, and the distinction is deliberate rather
-than sloppy. The licence is one page of plain English; read it rather than this summary.
+[PolyForm Noncommercial 1.0.0](LICENSE.md). Source-available, not open source.
 
 ## Contributing
 
