@@ -6,13 +6,9 @@ the full text of that licence, unmodified and byte for byte as published at
 taken out of it, and these few lines above the rule are the only part of this file that is not
 the licence itself.
 
-It is short, and it is in plain English rather than in capitals, because that is what the
-PolyForm project is for. That is not a summary of a licence kept somewhere else — it is the
-licence.
 
 **In one sentence, and this sentence has no legal effect:** you may do anything with Ogi that is
-not commercial, and commercial rights stay with the author. Where that sentence and the text
-below disagree, the text below is what counts.
+not commercial, and commercial rights stay with the author.
 
 ---
 
