@@ -9,7 +9,7 @@ leave this page quietly wrong. Run it after installing any new clip:
 
 Needs ffmpeg (brew install ffmpeg).
 """
-import math, os, re, struct, subprocess, sys
+import math, os, re, shutil, struct, subprocess, sys, tempfile
 
 REPO = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 SPRITES = os.path.join(REPO, "Sources/OgiCore/Resources/Sprites")
@@ -117,6 +117,46 @@ def canvas(clip, n):
     return max(w for w, _ in sizes), max(h for _, h in sizes)
 
 
+def render(clip, n, rate, out):
+    """Pad every frame to a common canvas ON DISK, then assemble. Two passes, deliberately.
+
+    Doing the padding inside the same filter graph looks equivalent and is not. `palettegen`
+    collects every frame and emits one palette at the end, and a change in input frame size
+    reconfigures the graph underneath it — so a clip whose frames differ in width came out as a
+    SINGLE frame. Silently: ffmpeg exits 0 and writes a valid GIF containing one picture, which
+    is why `run`, `fall`, `cling` and `jump` sat still on the page while the script reported
+    success both times it was wrong.
+    """
+    w, h = canvas(clip, n)
+    with tempfile.TemporaryDirectory() as tmp:
+        for i in range(n):
+            subprocess.run(
+                ["ffmpeg", "-y", "-loglevel", "error",
+                 "-i", os.path.join(SPRITES, f"{clip}{i}.png"),
+                 "-vf", f"format=rgba,pad={w}:{h}:({w}-iw)/2:({h}-ih)/2:color=0x00000000",
+                 os.path.join(tmp, f"f{i}.png")], check=True)
+        subprocess.run(
+            ["ffmpeg", "-y", "-loglevel", "error", "-framerate", str(rate),
+             "-i", os.path.join(tmp, "f%d.png"),
+             "-vf", f"scale=-1:{HEIGHT}:flags=lanczos,split[s0][s1];"
+                    "[s0]palettegen=reserve_transparent=1[p];"
+                    "[s1][p]paletteuse=alpha_threshold=128",
+             "-loop", "0", out], check=True)
+    check(out, clip, n)
+
+
+def check(path, clip, n):
+    """Read the GIF back. ffmpeg's exit code says nothing about whether it animated."""
+    d = open(path, "rb").read()
+    frames = d.count(b"\x21\xf9\x04")
+    i = d.find(b"\x21\xf9\x04")
+    transparent = bool(d[i + 3] & 1) if i >= 0 else False
+    if frames != n:
+        sys.exit(f"{clip}: wrote {frames} frames, expected {n}")
+    if not transparent:
+        sys.exit(f"{clip}: no transparency, so its green screen will show")
+
+
 def looping_clips(src):
     """The `case ...: true` arm of the loops switch, and only that arm.
 
@@ -162,23 +202,7 @@ def main():
                 print(f"warning: {clip} not found in Sprites.swift", file=sys.stderr)
                 continue
             gif = f"{clip}.gif"
-            w, h = canvas(clip, n)
-            scale = HEIGHT / h
-            # Ceil, not round: rounding down put the box a pixel narrower than the widest
-            # frame and pad refuses to shrink its input.
-            box = math.ceil(w * scale)
-            box += box % 2
-            # Each frame keeps its own width and is centred on the clip's widest canvas, with
-            # the padding fully transparent. `format=rgba` first so the pad has an alpha channel
-            # to write into.
-            subprocess.run(
-                ["ffmpeg", "-y", "-loglevel", "error", "-framerate", str(rate),
-                 "-i", os.path.join(SPRITES, f"{clip}%d.png"),
-                 "-vf", f"format=rgba,scale=iw*{scale:.6f}:{HEIGHT}:flags=lanczos,"
-                        f"pad={box}:{HEIGHT}:({box}-iw)/2:0:color=0x00000000,"
-                        "split[s0][s1];[s0]palettegen=reserve_transparent=1[p];"
-                        "[s1][p]paletteuse=alpha_threshold=128",
-                 "-loop", "0", os.path.join(OUT_DIR, gif)], check=True)
+            render(clip, n, rate, os.path.join(OUT_DIR, gif))
             held = "" if clip in loops else " (holds its last frame)"
             lines.append(f'| <img src="clips/{gif}" height="{HEIGHT}"> | `{clip}` | {n} | '
                          f"{rate:g}fps{held} | {WHEN.get(clip, '')} |")
