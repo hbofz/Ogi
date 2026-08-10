@@ -16,6 +16,17 @@ cd "$(dirname "$0")"
 
 VERSION="${1:?usage: ./release.sh <version>   e.g. ./release.sh 1.0.0}"
 
+# Refuse to build a release out of a dirty tree. Three separate releases have gone out stale,
+# every one of them for something that changes the .app rather than the code: sprites left
+# beside the binary, resources the binary could not find, and an icon added two commits after
+# the tag. None of it shows up in a diff of the source, and none of it would fail a test.
+if [ -n "$(git status --porcelain)" ]; then
+  echo "uncommitted changes: whatever ships would not match any commit" >&2
+  git status --short >&2
+  exit 1
+fi
+echo "building $VERSION from $(git rev-parse --short HEAD) ($(git log -1 --format=%s))"
+
 # The suite is the gate, not a formality: a release nobody can un-download is the wrong place
 # to find out the world model regressed.
 swift test
