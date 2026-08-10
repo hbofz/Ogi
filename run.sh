@@ -8,6 +8,8 @@ set -euo pipefail
 cd "$(dirname "$0")"
 
 CONFIG="${1:-debug}"
+# Stamped into the bundle so a downloaded build can say which one it is. `release.sh` sets it.
+VERSION="${OGI_VERSION:-0.1}"
 swift build -c "$CONFIG"
 BIN="$(swift build -c "$CONFIG" --show-bin-path)/Ogi"
 
@@ -16,7 +18,17 @@ rm -rf "$APP"
 mkdir -p "$APP/Contents/MacOS"
 cp "$BIN" "$APP/Contents/MacOS/Ogi"
 
-cat > "$APP/Contents/Info.plist" <<'PLIST'
+# The sprites, and they are NOT optional. SwiftPM emits a package's resources as a separate
+# .bundle beside the binary rather than inside it, so copying the executable alone produces an
+# app that runs perfectly on this machine and draws nothing on any other: the generated
+# `Bundle.module` accessor falls back to the absolute build path, which exists only here. The
+# first release zip was built without this and was 206KB of cat with no cat in it.
+mkdir -p "$APP/Contents/Resources"
+BUNDLES=("$(dirname "$BIN")"/*.bundle)
+[ -e "${BUNDLES[0]}" ] || { echo "no resource bundle beside $BIN — he would ship with no art" >&2; exit 1; }
+cp -R "${BUNDLES[@]}" "$APP/Contents/Resources/"
+
+cat > "$APP/Contents/Info.plist" <<PLIST
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0"><dict>
@@ -24,7 +36,7 @@ cat > "$APP/Contents/Info.plist" <<'PLIST'
   <key>CFBundleName</key><string>Ogi</string>
   <key>CFBundleExecutable</key><string>Ogi</string>
   <key>CFBundlePackageType</key><string>APPL</string>
-  <key>CFBundleShortVersionString</key><string>0.1</string>
+  <key>CFBundleShortVersionString</key><string>$VERSION</string>
   <key>CFBundleVersion</key><string>1</string>
   <key>NSPrincipalClass</key><string>NSApplication</string>
   <key>NSHighResolutionCapable</key><true/>
@@ -40,4 +52,6 @@ codesign --force --sign - --options runtime "$APP" 2>/dev/null || \
   codesign --force --sign - "$APP"
 
 echo "built $APP"
+# `release.sh` wants the bundle, not a running cat.
+[ -n "${OGI_NO_LAUNCH:-}" ] && exit 0
 exec "$APP/Contents/MacOS/Ogi"

@@ -3,3 +3,6 @@
 *.xcuserstate
 art/cut/
 __pycache__/
+
+# Release artifacts, built by release.sh
+Ogi-*.zip
