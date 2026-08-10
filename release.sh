@@ -34,6 +34,34 @@ rm -f "$OUT"
 # resource forks a plain zip quietly flattens.
 ditto -c -k --keepParent .build/Ogi.app "$OUT"
 
+# **Run the packaged app somewhere it cannot cheat.** Every static check passed on the build
+# that shipped as v1.0.0 and crashed for everyone who was not the person who built it: SwiftPM's
+# `Bundle.module` accessor looks in the .app directory itself (not Contents/Resources, where
+# resources belong) and then falls back to an absolute path in the build tree. On the build
+# machine that path exists, so the app runs and nothing looks wrong. Anywhere else it is
+# `fatalError` on the first drawn frame.
+#
+# So the check hides the build tree's copy, leaving the one inside the .app as the only
+# resources on the machine, and launches it. That is the only arrangement that tells the truth.
+SIM="$(mktemp -d)"
+BUNDLE="$(swift build -c release --show-bin-path)/Ogi_OgiCore.bundle"
+restore() { [ -e "$SIM/hidden.bundle" ] && mv "$SIM/hidden.bundle" "$BUNDLE"; }
+trap 'restore; rm -rf "$SIM"' EXIT
+ditto -x -k "$OUT" "$SIM/app"
+mv "$BUNDLE" "$SIM/hidden.bundle"
+OGI_DEBUG=1 "$SIM/app/Ogi.app/Contents/MacOS/Ogi" > "$SIM/run.log" 2>&1 &
+SIMPID=$!
+sleep 8
+kill "$SIMPID" 2>/dev/null || true
+restore
+if grep -q "Fatal error" "$SIM/run.log"; then
+  echo "the packaged app cannot find its own resources away from this build tree:" >&2
+  grep "Fatal error" "$SIM/run.log" >&2
+  exit 1
+fi
+grep -q "screen=" "$SIM/run.log" || { echo "the packaged app did not start" >&2; exit 1; }
+echo "  verified: runs with the build tree's resources hidden"
+
 echo
 echo "packaged $OUT"
 shasum -a 256 "$OUT"

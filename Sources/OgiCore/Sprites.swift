@@ -204,12 +204,35 @@ public enum Sprites {
     // Everything in this app runs on the main actor, so a plain cache needs no lock.
     private static var cache: [String: CGImage] = [:]
 
+    /// Where the drawings actually are, which is not where SwiftPM thinks it left them.
+    ///
+    /// **`Bundle.module` cannot be trusted inside an `.app` and shipping proved it.** The
+    /// accessor SwiftPM generates looks in `Bundle.main.bundleURL` — the `.app` directory
+    /// itself — and then falls back to a hard-coded absolute build path. Inside an app bundle,
+    /// resources belong under `Contents/Resources`, so the first candidate never matches and
+    /// the second is a path on the machine that built it.
+    ///
+    /// v1.0.0 shipped that way. On Hamzah's Mac the build path existed and was under
+    /// `~/Desktop`, so macOS asked a cat that requests no permissions for permission to read
+    /// his Desktop — which is how this was found. On any other Mac neither path exists and the
+    /// accessor calls `fatalError`, so the release crashed for everyone who was not the person
+    /// who built it.
+    ///
+    /// So: ask the app bundle first, and keep `.module` for `swift test` and `swift run`, where
+    /// it is correct and where `Bundle.main` is the test runner. Evaluated once, and lazily,
+    /// which matters — merely *touching* `.module` when the resources are absent is the crash.
+    static let resources: Bundle = {
+        if let url = Bundle.main.resourceURL?.appendingPathComponent("Ogi_OgiCore.bundle"),
+           let bundle = Bundle(url: url) { return bundle }
+        return .module
+    }()
+
     public static func image(_ clip: Clip, _ index: Int) -> CGImage? {
         let name = "\(clip.rawValue)\(min(max(index, 0), clip.count - 1))"
         if let c = cache[name] { return c }
-        guard let url = Bundle.module.url(forResource: name, withExtension: "png",
-                                          subdirectory: "Sprites")
-                ?? Bundle.module.url(forResource: name, withExtension: "png"),
+        guard let url = resources.url(forResource: name, withExtension: "png",
+                                      subdirectory: "Sprites")
+                ?? resources.url(forResource: name, withExtension: "png"),
               let data = try? Data(contentsOf: url),
               let src = NSImage(data: data),
               let cg = src.cgImage(forProposedRect: nil, context: nil, hints: nil)
