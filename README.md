@@ -1,11 +1,15 @@
-<p align="center">
-  <img src="docs/ogi-walk.gif" width="180" alt="Ogi, a ginger tabby, walking">
-</p>
-
 <h1 align="center">Ogi</h1>
 
 <p align="center">
   <b>A cat that lives in your notch and treats your windows as terrain.</b>
+</p>
+
+<p align="center">
+  <img src="docs/ogi-hero.gif" width="820" alt="Ogi walking along a window's title bar, stepping off the edge, and leaping across to another window">
+</p>
+
+<p align="center">
+  <sub>Real screen recording. He walks the edge of one window, steps off, and jumps to the next.</sub>
 </p>
 
 <p align="center">
