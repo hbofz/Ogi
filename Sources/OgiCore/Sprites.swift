@@ -29,6 +29,8 @@ public enum Sprites {
         // v3a, the notch and the call.
         case callTalk, callWork, callFull
         case denSleep, hang, peerDown
+        // v3b: your hand on him.
+        case stroked
 
         var count: Int {
             switch self {
@@ -62,6 +64,7 @@ public enum Sprites {
             case .callWork, .callFull: 4
             case .denSleep, .peerDown: 4
             case .hang: 6
+            case .stroked: 5
             }
         }
 
@@ -113,6 +116,10 @@ public enum Sprites {
             case .denSleep: 2.5   // breathing and a tail, like sleep, which is what it is
             case .hang: 6         // a rep takes two thirds of a second
             case .peerDown: 4     // a nosy look down, a shade quicker than peer's 2.5
+            // A cat pushing his head up into your hand does it slowly. Faster than the
+            // breathing clips because this is a motion rather than a breath, and slower than
+            // anything he does on purpose, because the whole pose is him not doing anything.
+            case .stroked: 4
             }
         }
 
@@ -132,7 +139,9 @@ public enum Sprites {
             // peerDown loops: a nosy look is a spell, like peer's.
             case .walk, .run, .idle, .sleep, .held, .alert, .groom, .cling, .climbUp,
                  .lounge, .peer, .vibe,
-                 .callTalk, .callWork, .callFull, .denSleep, .hang, .peerDown: true
+            // stroked loops: he keeps pushing his head up into your hand for as long as your
+            // hand keeps going, and the last frame settles back toward the first's pose.
+                 .callTalk, .callWork, .callFull, .denSleep, .hang, .peerDown, .stroked: true
             // curl settles into the sleep pose and holds it until sleep takes over.
             // lookDown holds its last frame too: he leans out over the lip and stays there
             // while he thinks. The hold IS the tell, so it must not cycle back to standing.
@@ -254,6 +263,7 @@ public enum Sprites {
         case .vibe:                 return .vibe
         case .droop:                return .droop
         case .curious:              return .curious
+        case .stroked:              return .stroked
         case .alert, .brace:        return .alert
         case .groom:                return .groom
         case .idle:                 return .idle
@@ -611,6 +621,9 @@ public enum Sprites {
         // wide flat blob, so dividing the reference width by it renders the clip short — 17pt
         // of tail out of the notch on screen, which reads as a stub.
         case .denSleep: Feel.Shape.denSleepHeight
+        // Eyes closed again, and this time by construction: the whole point of the pose is
+        // that he has them squeezed shut. Listed with the sheet rather than after it shipped.
+        case .stroked:  Feel.Shape.strokedHeight
         default:        nil
         }
     }

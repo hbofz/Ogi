@@ -72,6 +72,7 @@ public enum Activity: Sendable, Equatable {
     case curious    // head-tilt at a question mark: something plugged into the machine
     case alert      // frozen and listening: the mic went live
     case onCall     // your mic or your camera is live, and he has joined in. See CatState.rig
+    case stroked    // your hand is moving over him, no button down: eyes shut, leaning into it
     case hang       // hanging off the notch's lower lip by his front paws, doing reps
     case peerDown   // lying in the notch, head and paws over its lower lip, watching you
     case scruffed   // limp, legs tucked, dangling
@@ -486,6 +487,21 @@ public struct CatState: Sendable {
     /// in place resets it for ever, so he would sit under it swallowing clicks and never decide
     /// he was in the way. Measured at fourteen seconds before this existed.
     public var cursorOnHimFor: TimeInterval = 0
+
+    /// Points of your hand's travel banked on him, bleeding away at `Feel.Mind.strokeDecay`.
+    /// Resets outright when your hand leaves him.
+    ///
+    /// Bleeding rather than resetting is what makes the pause at the end of each stroke
+    /// survivable; resetting on the way out is what stops the bank from following your hand
+    /// across the screen and re-arming the moment it brushes him again.
+    public var strokeTravel: CGFloat = 0
+    /// Where your hand was last tick, so the bank can be fed a distance. Nil when it is not
+    /// on him, which is also how the first tick of contact is kept from banking the whole
+    /// jump from wherever the pointer was before.
+    public var lastCursor: CGPoint?
+    /// Your hand is on him and covering ground. See `Feel.Mind.strokeSpan`.
+    public var beingStroked: Bool { strokeTravel >= Feel.Mind.strokeSpan }
+
     /// The rect he was actually drawn in last frame, screen-global. Set by `App` each render;
     /// nil until the first one. The sprite is normalised on eye width and is usually larger
     /// than the nominal `Feel.Shape` figure, and the yield has to measure the box that
@@ -509,6 +525,9 @@ public struct CatState: Sendable {
         // A show is motion: the zap's tremble at a settled cat's 8-12Hz render rate is a
         // slideshow. Bounded by each show's own hold, so it cannot pin the link.
         if Cat.isShow(activity) { return true }
+        // Being petted breathes, and at a settled cat's 4Hz a breath is a slideshow. Bounded by
+        // your hand rather than by a clock: stop stroking and the pose ends within a grace.
+        if activity == .stroked { return true }
         // The intent SURVIVES a freeze by design, so that a hot mic at launch no longer destroys
         // the walk out of the notch. Without this clause that same design would pin the display
         // link at 60Hz for the length of every call, which is a far worse bug than the one it
@@ -569,8 +588,21 @@ public enum Cat {
         // How long you have not been able to see him. Counted here rather than in the branch
         // that acts on it, so that time spent hidden while walking somewhere still counts.
         s.hiddenFor = isHidden(s, world: world) ? s.hiddenFor + dt : 0
-        s.cursorOnHimFor = s.cursor.map { hisBox(s).contains($0) } == true
-            ? s.cursorOnHimFor + dt : 0
+        let handOnHim = s.cursor.map { hisBox(s).contains($0) } == true
+        s.cursorOnHimFor = handOnHim ? s.cursorOnHimFor + dt : 0
+        // ...and how much ground that hand is covering ON him, which is the whole of the
+        // stroke. Fed a distance and bled at a rate, so what it really measures is how fast
+        // your hand is moving over him: fast enough is a pet, and everything slower — a jiggle,
+        // a pointer drifting to rest — never fills it.
+        if handOnHim, let cursor = s.cursor {
+            let moved = s.lastCursor.map { hypot(cursor.x - $0.x, cursor.y - $0.y) } ?? 0
+            s.strokeTravel = min(max(0, s.strokeTravel + moved - Feel.Mind.strokeDecay * CGFloat(dt)),
+                                 Feel.Mind.strokeBank)
+            s.lastCursor = cursor
+        } else {
+            s.strokeTravel = 0
+            s.lastCursor = nil
+        }
 
         // A glance is a one-shot: consumed here, cleared, and never written back, so it cannot
         // re-fire on the next 120 ticks. The gaze is `App`'s only read of this.
@@ -1147,7 +1179,11 @@ public enum Cat {
         // first thing I reached for: a pointer jiggling in place keeps resetting stillness, so
         // he sat under it swallowing clicks for fourteen seconds and never decided he was in
         // the way.
-        if s.intent == nil, let cursor = s.cursor,
+        // ...but a hand that is MOVING over him is a pet, not an obstruction, and the yield is
+        // the one thing in the app that would read it backwards. Without this guard, stroking
+        // him for longer than `yieldPatience` walks him out from under your hand — which is
+        // the only way v3b could look broken.
+        if s.intent == nil, !s.beingStroked, let cursor = s.cursor,
            s.cursorOnHimFor >= Feel.Mind.yieldPatience,
            let x = beside(cursor: cursor, on: surface, from: s.position.x,
                           width: s.drawnBox?.width ?? Feel.Shape.width),
@@ -1299,6 +1335,11 @@ public enum Cat {
             // on clearing: the hold-still branch returns early, so without that reset he stayed
             // bolt upright for the whole of his next rest.
             case .alert where s.glanceLeft > 0: break
+            // Being petted, for exactly as long as you are petting him. Conditional for the
+            // same reason the glance above is: an unconditional `break` would leave him blissed
+            // out for ever after your hand left, and the default arm is the only thing that
+            // hands him back a waiting pose.
+            case .stroked where s.beingStroked: break
             default: s.activity = s.repose.restingActivity
             }
             // At a den door he waits IN the doorway, facing out, instead of sitting beside
@@ -1419,6 +1460,29 @@ public enum Cat {
                     s.activity = .land
                     s.activityElapsed = 0
                 }
+                return s
+            }
+
+            // Your hand is on him and moving. Eyes shut, head into it. MANIFESTO §7.7.
+            //
+            // **Above the in-place holds and gated on `isShow` instead**, which is the same
+            // ordering lesson v3a learned twice, learned once more from the other side. Below
+            // them it could not cancel a jolt of electricity, which was the point — but it also
+            // could not interrupt a wash or a sprawl, and a lounge holds for forty-five
+            // seconds. Hamzah found it immediately: "he does not purr when he is already doing
+            // a movement, like if he is laying down or licking himself." A wash and a sprawl
+            // are what he does when nothing is happening, and a hand arriving is something
+            // happening. A performance is not, and `isShow` is exactly that distinction, so it
+            // is the guard rather than the position in the file.
+            //
+            // The freeze, the yield and sleep all returned long before this, so a cat frozen by
+            // your microphone stays frozen. That is deliberate: he is being quiet for you. The
+            // notch behaviours returned just above, so they keep their own way out of the hole.
+            if s.beingStroked, !isShow(s.activity) {
+                if s.activity != .stroked { s.activity = .stroked; s.activityElapsed = 0 }
+                // Boredom does not drain while he is occupied, so he cannot get an idea and
+                // walk off mid-pet — the same failure the yield guard above prevents, arriving
+                // by the other road.
                 return s
             }
 

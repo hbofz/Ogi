@@ -273,6 +273,70 @@ public enum Feel {
         /// under a hard landing's 0.30: a hand is not a floor.
         public static let petSquash: CGFloat = 0.12
 
+        /// **The stroke.** Not a click and not a drag: your cursor moving across his body with
+        /// no button down, which is how you pet an actual cat.
+        ///
+        /// The whole feature is one distinction, and these three numbers are it. His window
+        /// swallows clicks while the pointer is inside his hit rect, so a cursor sitting on him
+        /// has to move him aside (`yieldPatience`, above) — and a cursor *stroking* him has to
+        /// do the opposite. Whether your hand is moving is what tells those apart, and it is
+        /// the same distinction `cursorOnHimFor` was split from `cursorStill` to make.
+        ///
+        /// How much of your hand's travel has to bank on him before he gives in. Points, not
+        /// seconds, and roughly one sweep across a cat who is drawn about 50 wide.
+        ///
+        /// **A stroke is ground covered, not motion.** Keying it off "is the pointer moving"
+        /// is the obvious thing and it is wrong: a pointer jiggling in place is moving every
+        /// single tick, and `aJigglingCursorStillGetsHimToMove` caught it doing exactly what
+        /// that test was written for in the first place — sitting under a twitching cursor,
+        /// eating clicks, now with his eyes shut. The bank below is what tells them apart.
+        ///
+        /// Half a sweep across a cat drawn about 50 wide. It was a full sweep, which together
+        /// with the decay below meant a gentle hand took over a second to register and Hamzah
+        /// had to scrub at him.
+        public static let strokeSpan: CGFloat = 20
+        /// Points per second bled off the bank, which is what makes it a **rate** and not a
+        /// total: a jiggle covers ground too, just slowly, so given long enough any pure
+        /// accumulator credits it.
+        ///
+        /// **This is a floor on how fast your hand has to move, and the window is narrower
+        /// than it looks.** Below it lies a jiggling pointer at 48pt/s, which must go on
+        /// getting him out of your way; above it lies a hand petting a cat.
+        ///
+        /// Both ends have been measured rather than guessed, and both by being wrong first.
+        /// At 150 a gentle stroke did not merely fail to register — the yield fired underneath
+        /// it and he walked out from under the hand. At 90 Hamzah still had to "move the cursor
+        /// a bit aggressively". 60 is a quarter above the jiggle, which is a thinner margin
+        /// than is comfortable, and it is the honest place for it: the jiggle it has to beat is
+        /// a synthetic worst case sustained for twenty seconds, and the hand it has to admit is
+        /// a real one. `aGentleStrokeStillCounts` now holds 84pt/s.
+        public static let strokeDecay: CGFloat = 60
+        /// How long your hand may rest on him mid-pet before he opens his eyes. Your hand stops
+        /// at the end of every stroke before going back for the next one, so without this he
+        /// would blink out of the pose between strokes.
+        ///
+        /// **Must stay well under `yieldPatience`**, or a cursor parked on him rides out the
+        /// grace and he never gets out of the way of your click.
+        public static let strokeGrace: TimeInterval = 0.35
+        /// The ceiling on the bank, derived rather than tuned so the grace above is the only
+        /// knob: exactly enough banked travel to survive one `strokeGrace` of a still hand and
+        /// no more. Without a cap a long pet banks minutes of credit and leaves him purring at
+        /// a hand that stopped ages ago.
+        public static var strokeBank: CGFloat { strokeSpan + strokeDecay * CGFloat(strokeGrace) }
+
+        /// **The purr**, MANIFESTO §7.7: a purr you can physically feel is the detail nobody
+        /// forgets, and nothing else on macOS does it.
+        ///
+        /// A real purr is a continuous ~25Hz flutter and the Taptic engine only gives discrete
+        /// taps, so this is a run of taps and the spacing is the whole illusion. **Tuned by
+        /// feel on a real trackpad**, which is the only instrument that applies: 0.06 was
+        /// Hamzah's first pass and read as too slow, and 0.04 is his number. 25Hz proper would
+        /// be 0.04 exactly, so this is as close to a real purr as the hardware goes.
+        public static let purrTapInterval: TimeInterval = 0.04
+        /// How many taps a click gets. A tap on him is a moment rather than a state, so it
+        /// buzzes once and stops; stroking him purrs for as long as your hand keeps going.
+        public static let petPurrTaps = 8
+
         /// `restLeft` drains at `1 + arousal * this`, so a fully roused cat has an idea about
         /// two and a half times sooner.
         public static let restUrgency: Double = 1.5
@@ -578,6 +642,21 @@ public enum Feel {
         /// Half the band is tail and half is the body that the cutout masks away, so this is
         /// roughly twice the length of tail you want hanging below the lip.
         public static let denSleepHeight: CGFloat = 50
+        /// ...and again for the stroke, for the same reason as the den: a contentedly shut eye
+        /// is drawn as one flat curved line, so it measures WIDE and the clip renders short.
+        /// The second sheet in the project to need this, and it was put here before the first
+        /// build rather than after somebody noticed him shrink.
+        ///
+        /// A whole sitting cat in the band, so this is his full drawn height, and it is pinned
+        /// against `idle` by `beingPettedDoesNotChangeHisSize` rather than left as a bare
+        /// number the way every other height here was.
+        ///
+        /// **Derived, not guessed.** `idle` renders a sitting cat at 30pt and its band is 99.8%
+        /// ink; the stroke's band is 416px holding 393px of cat in its lowest frame, because the
+        /// cutter has to crop to the tallest frame and his head goes up. So the same cat wants
+        /// `30 * 416/393`. Guessing put it at 44 and rendered a petted cat half again the size
+        /// of a sitting one.
+        public static let strokedHeight: CGFloat = 32
         /// How far from a hole in his world he has to stand to be drawn whole. Half his
         /// nominal box, so it covers every pose rather than the one clip that happens to play
         /// there.

@@ -58,6 +58,11 @@ public final class OgiApp: NSObject, NSApplicationDelegate {
 
     public func applicationDidFinishLaunching(_ note: Notification) {
         NSApp.setActivationPolicy(.accessory)
+        // Line-buffered, or redirecting the narration to a file gets you the first 4KB and
+        // nothing else until the process exits cleanly — and a GUI app being watched is one
+        // you kill. "Watch it on the machine" is the only instrument that has ever found the
+        // real bugs here, so the instrument has to survive being switched off.
+        if debug { setvbuf(stdout, nil, _IOLBF, 0) }
 
         guard let screen = NSScreen.main else { return }
         homeScreen = screen
@@ -630,6 +635,44 @@ public final class OgiApp: NSObject, NSApplicationDelegate {
             log("\(lastActivity) -> \(cat.activity) at x=\(Int(cat.position.x)) y=\(Int(cat.position.y))")
             lastActivity = cat.activity
         }
+        // He purrs for exactly as long as he is being petted. Edge-triggered off the pose
+        // rather than off `beingStroked`, so the buzz and the drawing can never disagree:
+        // whatever bars him from the pose (a show, the freeze, being carried) bars the purr.
+        if (cat.activity == .stroked) != purring { purr(cat.activity == .stroked) }
+    }
+
+    // MARK: - The purr
+
+    private var purrTimer: DispatchSourceTimer?
+    private var purrTapsLeft = 0
+    private var purring: Bool { purrTimer != nil }
+
+    /// A purr through the trackpad. `taps: nil` runs until stopped.
+    ///
+    /// **Its own timer rather than the tick**, which is the whole reason this is not four
+    /// lines. The render ladder drops a settled cat to 4Hz and slumber stops the display link
+    /// outright, and a cat you reach over and pet is precisely a settled one — driven off
+    /// `tick` the purr would be a handful of thuds, or nothing at all.
+    ///
+    /// On a Mac without a Force Touch trackpad this silently does nothing, which is correct:
+    /// there is no fallback that would be better than no fallback.
+    private func purr(_ on: Bool, taps: Int? = nil) {
+        purrTimer?.cancel()
+        purrTimer = nil
+        guard on else { return }
+        purrTapsLeft = taps ?? .max
+        let t = DispatchSource.makeTimerSource(queue: .main)
+        t.schedule(deadline: .now(), repeating: Feel.Mind.purrTapInterval)
+        t.setEventHandler { [weak self] in
+            MainActor.assumeIsolated {
+                guard let self else { return }
+                NSHapticFeedbackManager.defaultPerformer.perform(.generic, performanceTime: .now)
+                self.purrTapsLeft -= 1
+                if self.purrTapsLeft <= 0 { self.purr(false) }
+            }
+        }
+        t.resume()
+        purrTimer = t
     }
 
     private let logStart = CACurrentMediaTime()
@@ -670,6 +713,10 @@ public final class OgiApp: NSObject, NSApplicationDelegate {
             if pressStart != nil {
                 pressStart = nil
                 dragSamples = []
+                // A tap gets a burst of the same purr a stroke gets a stream of. Guarded by the
+                // same fact `Cat.pet` guards on: mid-air and mid-carry it returns him untouched,
+                // and a buzz for a pet that did not land is a lie you can feel.
+                if case .grounded = cat.support { purr(true, taps: Feel.Mind.petPurrTaps) }
                 cat = Cat.pet(cat, at: point)
                 log("petted")
                 return

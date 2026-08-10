@@ -708,6 +708,187 @@ private func twoLedges() -> Skyline {
     #expect(Cat.pet(cat, at: .zero).squash == 0)
 }
 
+// MARK: - v3b: the stroke
+
+/// Sweeps your hand back and forth across him for `seconds`, `perTick` points at a time,
+/// staying inside his box. `perTick: 0` is a hand resting on him without moving.
+///
+/// Real motion rather than a "moving" flag on purpose: the flag is what the first version of
+/// this feature keyed off, and a jiggling pointer sets it every single tick.
+@discardableResult
+private func stroke(_ cat: CatState, around: CGPoint, perTick: CGFloat, seconds: TimeInterval,
+                    world: Skyline) -> CatState {
+    var s = cat
+    var offset: CGFloat = 0
+    var direction: CGFloat = 1
+    for _ in 0..<Int(seconds / dt) {
+        if perTick > 0 {
+            offset += direction * perTick
+            if abs(offset) > 16 { direction = -direction }   // well inside his 52pt box
+        }
+        s.cursor = CGPoint(x: around.x + offset, y: around.y)
+        s.cursorStill = perTick > 0 ? 0 : s.cursorStill + dt
+        s = Cat.step(s, world: world, dt: dt)
+    }
+    return s
+}
+
+/// A comfortable sweep: 4pt a tick is 480pt/s, which is an unhurried hand at 120Hz and three
+/// times `strokeDecay`.
+private let strokePace: CGFloat = 4
+
+@Test func movingYourHandOverHimIsAStroke() {
+    // v3b. Not a click and not a drag: the cursor crossing his body with no button down is
+    // how you pet a real cat, and it is the one gesture that costs nothing on a desktop.
+    let bar = surface(.menuBar, y: 1205, from: 0, to: 1920, z: -1)
+    var cat = CatState(position: CGPoint(x: 900, y: 1205))
+    cat.support = .grounded(Perch(id: .menuBar, dx: 900))
+    cat.restLeft = .infinity
+
+    cat = stroke(cat, around: CGPoint(x: 900, y: 1215), perTick: strokePace,
+                 seconds: 0.5, world: sky([bar]))
+    #expect(cat.activity == .stroked, "he ignored being petted (\(cat.activity))")
+    #expect(abs(cat.position.x - 900) < 1, "a stroke moved him")
+}
+
+@Test func aGentleStrokeStillCounts() {
+    // `strokeDecay` is a floor on how fast your hand has to move, and it sits between two
+    // things that are only three times apart: the jiggle in
+    // `aJigglingCursorStillGetsHimToMove` is 48pt/s and has to fail, and an unhurried hand
+    // petting a cat is not much quicker than 150. Set the floor by the gentle stroke, not by
+    // the brisk one, or petting him properly means scrubbing at him.
+    let bar = surface(.menuBar, y: 1205, from: 0, to: 1920, z: -1)
+    var cat = CatState(position: CGPoint(x: 900, y: 1205))
+    cat.support = .grounded(Perch(id: .menuBar, dx: 900))
+    cat.restLeft = .infinity
+
+    // 0.7pt a tick at 120Hz: 84pt/s, a slow drag back and forth across a 50pt cat. Hamzah's
+    // second run: "I kinda need to move the cursor a bit aggressively to make him purr".
+    cat = stroke(cat, around: CGPoint(x: 900, y: 1215), perTick: 0.7,
+                 seconds: 2, world: sky([bar]))
+    #expect(cat.activity == .stroked, "a gentle hand did not read as petting him")
+}
+
+@Test func youCanPetHimWhileHeIsWashingOrSprawled() {
+    // Hamzah, watching it: "he does not purr when he is already doing a movement, like if he
+    // is laying down or licking himself."
+    //
+    // A wash and a sprawl are not performances, they are what he does when nothing is
+    // happening, and a hand arriving IS something happening. The stroke sat below every
+    // in-place hold so that a jolt of electricity could not be cancelled by a passing cursor —
+    // correct for the zap, badly wrong for these two, because a lounge holds for 45 seconds
+    // and he was simply unpettable for all of it.
+    let bar = surface(.menuBar, y: 1205, from: 0, to: 1920, z: -1)
+    for busy in [Activity.groom, .lounge] {
+        var cat = CatState(position: CGPoint(x: 900, y: 1205))
+        cat.support = .grounded(Perch(id: .menuBar, dx: 900))
+        cat.restLeft = .infinity
+        cat.activity = busy
+
+        cat = stroke(cat, around: CGPoint(x: 900, y: 1215), perTick: strokePace,
+                     seconds: 0.5, world: sky([bar]))
+        #expect(cat.activity == .stroked, "a \(busy) cat cannot be petted (\(cat.activity))")
+    }
+}
+
+@Test func aCursorPassingOverHimIsNotAStroke() {
+    // The pointer crosses him on its way somewhere else constantly. That is traffic, not
+    // affection, and a cat who shut his eyes every time it happened would be a twitch.
+    let bar = surface(.menuBar, y: 1205, from: 0, to: 1920, z: -1)
+    var cat = CatState(position: CGPoint(x: 900, y: 1205))
+    cat.support = .grounded(Perch(id: .menuBar, dx: 900))
+    cat.restLeft = .infinity
+
+    // One flick across him and straight off again: about a fiftieth of a second of contact.
+    cat = stroke(cat, around: CGPoint(x: 900, y: 1215), perTick: strokePace,
+                 seconds: dt * 2, world: sky([bar]))
+    #expect(cat.activity != .stroked, "a pointer merely crossing him read as a pet")
+}
+
+@Test func aStillCursorOnHimIsStillYouWantingWhatIsUnderneath() {
+    // The collision this whole feature has to survive. His window swallows clicks while the
+    // pointer is inside his hit rect, so a PARKED cursor still has to move him aside — the
+    // yield is not weakened, it is only told apart from a stroke by whether your hand moves.
+    let bar = surface(.menuBar, y: 1205, from: 0, to: 1920, z: -1)
+    var cat = CatState(position: CGPoint(x: 900, y: 1205))
+    cat.support = .grounded(Perch(id: .menuBar, dx: 900))
+    cat.restLeft = .infinity
+
+    cat = stroke(cat, around: CGPoint(x: 900, y: 1215), perTick: 0,
+                 seconds: Feel.Mind.yieldPatience * 1.5, world: sky([bar]))
+    #expect(cat.intent != nil, "he sat under a parked cursor eating clicks")
+}
+
+@Test func heDoesNotWalkOffMidStroke() {
+    // The other half of the same collision, and the one that would read as broken: stroke him
+    // for longer than `yieldPatience` and the yield must not fire underneath the pet.
+    let bar = surface(.menuBar, y: 1205, from: 0, to: 1920, z: -1)
+    var cat = CatState(position: CGPoint(x: 900, y: 1205))
+    cat.support = .grounded(Perch(id: .menuBar, dx: 900))
+    cat.restLeft = .infinity
+
+    cat = stroke(cat, around: CGPoint(x: 900, y: 1215), perTick: strokePace,
+                 seconds: Feel.Mind.yieldPatience * 3, world: sky([bar]))
+    #expect(cat.activity == .stroked, "he broke off being petted (\(cat.activity))")
+    #expect(cat.intent == nil, "he walked away from a hand that was still stroking him")
+}
+
+@Test func aPauseMidStrokeDoesNotEndIt() {
+    // Your hand stops at the end of every stroke before it goes back for the next one. If
+    // that beat dropped him out of the pose he would blink in and out of it the whole time.
+    let bar = surface(.menuBar, y: 1205, from: 0, to: 1920, z: -1)
+    var cat = CatState(position: CGPoint(x: 900, y: 1205))
+    cat.support = .grounded(Perch(id: .menuBar, dx: 900))
+    cat.restLeft = .infinity
+    let at = CGPoint(x: 900, y: 1215)
+
+    cat = stroke(cat, around: at, perTick: strokePace, seconds: 0.5, world: sky([bar]))
+    cat = stroke(cat, around: at, perTick: 0, seconds: Feel.Mind.strokeGrace * 0.6, world: sky([bar]))
+    #expect(cat.activity == .stroked, "a pause between strokes ended the pet")
+}
+
+@Test func takingYourHandAwayEndsTheStroke() {
+    let bar = surface(.menuBar, y: 1205, from: 0, to: 1920, z: -1)
+    var cat = CatState(position: CGPoint(x: 900, y: 1205))
+    cat.support = .grounded(Perch(id: .menuBar, dx: 900))
+    cat.restLeft = .infinity
+
+    cat = stroke(cat, around: CGPoint(x: 900, y: 1215), perTick: strokePace,
+                 seconds: 0.5, world: sky([bar]))
+    #expect(cat.activity == .stroked)
+    // Off him entirely, which is a reset rather than a bleed.
+    cat = stroke(cat, around: CGPoint(x: 200, y: 1215), perTick: strokePace,
+                 seconds: dt * 2, world: sky([bar]))
+    #expect(cat.activity != .stroked, "he stayed blissed out after your hand left")
+    #expect(cat.strokeTravel == 0, "leaving him has to reset the bank, not bleed it")
+}
+
+@Test func aCatBeingCarriedIsNotBeingStroked() {
+    // Being held puts the cursor on him by definition, and it is already a whole other
+    // interaction. Same guard the freeze and the yield rely on.
+    let bar = surface(.menuBar, y: 1205, from: 0, to: 1920, z: -1)
+    var cat = CatState(position: CGPoint(x: 900, y: 1205))
+    cat.support = .held(CGPoint(x: 900, y: 1215))
+
+    cat = stroke(cat, around: CGPoint(x: 900, y: 1215), perTick: strokePace,
+                 seconds: 0.5, world: sky([bar]))
+    #expect(cat.activity == .scruffed, "he is dangling from your hand, not enjoying it")
+}
+
+@Test func heDoesNotBreakOffAShowToBeStroked() {
+    // A jolt of electricity through a cat is the gag; a hand on him mid-zap must not cancel
+    // it. Same rule every other interrupt in `standing` already obeys.
+    let bar = surface(.menuBar, y: 1205, from: 0, to: 1920, z: -1)
+    var cat = CatState(position: CGPoint(x: 900, y: 1205))
+    cat.support = .grounded(Perch(id: .menuBar, dx: 900))
+    cat.activity = .zap
+    cat.restLeft = .infinity
+
+    cat = stroke(cat, around: CGPoint(x: 900, y: 1215), perTick: strokePace,
+                 seconds: Feel.Timing.zapSeconds * 0.5, world: sky([bar]))
+    #expect(cat.activity == .zap, "a stroke assassinated the zap")
+}
+
 @Test func aCoveredScreenGetsNoStrolls() {
     // After the retreat the world is still there — the fullscreen window's top edge, the menu
     // bar, the floor — and ordinary boredom would put him back on top of the movie within a
