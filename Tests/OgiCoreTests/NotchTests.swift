@@ -332,9 +332,13 @@ private func onBar(at x: CGFloat, world: Skyline) -> CatState {
     cat.homeX = OgiApp.denX(notch.minX, notch: notch)
 
     for _ in 0..<(120 * 180) { cat = Cat.step(cat, world: world, dt: dt) }
-    #expect(abs(cat.position.x - cat.homeX!) < Feel.Physics.arrivalSlop * 3,
+    // ...or he is IN the notch, which is where the door leads and is a better answer than
+    // standing at it. Now that the notch poses survive a covered screen they run for four to
+    // twelve seconds each, so a snapshot at an arbitrary instant lands inside one about one
+    // time in ten, at `notch.midX`, 126pt from the door. He got there either way.
+    #expect(cat.inNotch || abs(cat.position.x - cat.homeX!) < Feel.Physics.arrivalSlop * 3,
             "he is still at \(cat.position.x) with a film on, not at the door")
-    #expect(Cat.denDoor(cat, on: world.surface(.menuBar)!) != nil)
+    #expect(cat.inNotch || Cat.denDoor(cat, on: world.surface(.menuBar)!) != nil)
 
     // ...and the ladder then finds him there, which is the only way into the den.
     cat.repose = .asleep

@@ -385,3 +385,20 @@ private let screen = ScreenGeometry(
                         + "\(Feel.Shape.height)pt body; spans say visible=\(visible)"))
     }
 }
+
+/// The window list is global across every display and `snapshot` flips it against the primary,
+/// so a window straddling onto a taller neighbouring screen has a top edge above this one's.
+/// Unclipped that became walkable ground off the top of the panel, reachable with an ordinary
+/// jump, and standing there means being grounded somewhere he is never drawn.
+@Test func aWindowTallerThanTheScreenIsNotWalkableGroundAboveIt() {
+    let s = ScreenGeometry(frame: CGRect(x: 0, y: 0, width: 1920, height: 1080),
+                           visibleFrame: CGRect(x: 0, y: 0, width: 1920, height: 1080),
+                           notch: nil)
+    let tall = RawWindow(id: 1, pid: 1, layer: 0,
+                         rect: CGRect(x: 100, y: 500, width: 600, height: 1000), alpha: 1, owner: "Tall")
+    let world = World.build(windows: [tall], screen: s, ownPID: 99)
+    #expect(!world.surfaces.contains { $0.id == .window(1) },
+            "a top edge at y=1500 became a ledge on a screen that ends at 1080")
+    #expect(world.surfaces.allSatisfy { $0.y <= s.frame.maxY },
+            "there is a walkable surface above the top of the screen")
+}

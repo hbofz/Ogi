@@ -268,6 +268,12 @@ public enum World {
         // Menu bar. Always present, effectively never occluded (z = -1), but the notch is a
         // genuine hole in it: a hardware cutout with no pixels behind it. Cutting it out of
         // `solid` is what stops him walking through the doorway and disappearing.
+        // NOT clamped to keep his whole body on the panel, though on a 24pt menu bar a few
+        // points of his head do sit above the top edge. `visibleFrame.maxY == frame.maxY` is
+        // true both for a display with the menu bar auto-hidden AND inside a fullscreen space,
+        // where this line is synthetic and has to stay coplanar with the fullscreen window's
+        // top edge or every landing on it re-plans as a jump. The geometry cannot tell those
+        // two apart, and a few points of overlap is the cheaper of the two wrongs.
         let menuY = screen.visibleFrame.maxY
         let barSolid = punchNotch([standable], at: menuY)
             .filter { $0.length >= Feel.World.minStandWidth }
@@ -277,7 +283,14 @@ public enum World {
         // Normal windows are the only platform candidates.
         for (i, w) in visible.enumerated() where w.layer == 0 {
             let inset = Feel.World.cornerInset
-            guard w.rect.width >= Feel.World.minStandWidth + 2 * inset, w.rect.height >= 20 else { continue }
+            // Clipped in y as well as in x. The window list is global across every display,
+            // and `snapshot` flips it against the PRIMARY, so a window straddling onto a
+            // taller neighbouring screen has a top edge above this one's. Unclipped that
+            // became walkable ground off the top of the panel: he can reach it with an
+            // ordinary ~190pt jump, and then he is grounded somewhere he is never drawn, with
+            // the click dead zone parked up there with him. It stays an occluder either way.
+            guard w.rect.width >= Feel.World.minStandWidth + 2 * inset, w.rect.height >= 20,
+                  w.rect.maxY <= screen.frame.maxY else { continue }
             let extent = w.rect.minX...w.rect.maxX
             let start = subtract([(w.rect.minX + inset)...(w.rect.maxX - inset)],
                                  // clip to where he is drawable by cutting everything outside it

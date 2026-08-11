@@ -1432,8 +1432,14 @@ public enum Cat {
             // retreat is when you see it, and the pull-ups happen in the den he retreats to.
             // Two branches in one function, cancelling each other.
             if s.screenCovered, let home = s.homeX,
-               inPlaceHold(s.activity) == nil,   // covers hang and peerDown too
-               s.activity != .peer, !s.inNotch, !s.beingStroked,
+               // Only what owns its own way out, which is the notch poses (`hang`, `peerDown`
+               // and the den, all of which imply `inNotch`), the `.peer` this branch itself
+               // produces over a lip, and your hand. An ordinary performance is still
+               // interrupted: a lounge is what he does when nothing is happening, and a film
+               // starting is something happening. Exempting every `inPlaceHold` instead, as
+               // first written here, let a chain of them keep him 126pt from the door for the
+               // length of a film.
+               !s.inNotch, s.activity != .peer, !s.beingStroked,
                !upTop(s, on: surface, world: world)
                    || abs(s.position.x - home) > Feel.Physics.arrivalSlop * 3,
                let move = nextMove(from: s, on: surface, toward: .menuBar, x: home,

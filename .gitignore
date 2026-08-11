@@ -19,3 +19,6 @@ art/
 
 # The generated iconset; Ogi.icns and the source art are committed.
 icon/Ogi.iconset/
+
+# Xcode/SwiftPM local state, created by opening the package.
+.swiftpm/
