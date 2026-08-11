@@ -1406,3 +1406,39 @@ private func partlyCoveredLedge() -> Surface {
     #expect(Repose.from(idleSeconds: 601, scale: 1) == .asleep)
     #expect(Repose.from(idleSeconds: 0, scale: 1) == .awake)
 }
+
+/// The rule itself, driven second by second. A sleeping cat has to sleep through a keystroke:
+/// waking used to be instant, because any HID event drops the idle clock to zero and the ladder
+/// says awake on the very next tick.
+@MainActor
+@Test func oneKeystrokeDoesNotWakeHimButComingBackDoes() {
+    var since: CFTimeInterval?
+
+    // One key, then you go back to reading. Idle climbs, and he sleeps on.
+    var woke = false
+    for t in stride(from: 0.0, through: 30.0, by: 0.25) {
+        let idle = t == 0 ? 0 : t                       // one event at t=0, nothing after
+        if OgiApp.wakeIsEarned(idle: idle, now: t, since: &since) { woke = true }
+    }
+    #expect(!woke, "a single keystroke woke him")
+
+    // A short burst and then you go back to reading. The idle clock only climbs after you
+    // stop, so a burst counts as its own length plus a stir window; the bar has to clear both.
+    since = nil
+    woke = false
+    for t in stride(from: 0.0, through: 30.0, by: 0.25) {
+        let idle = t < 2 ? 0.1 : t - 2          // two seconds of typing, then quiet
+        if OgiApp.wakeIsEarned(idle: idle, now: t, since: &since) { woke = true }
+    }
+    #expect(!woke, "a two-second burst of typing woke him")
+
+    // Actually coming back to the machine: continuous use.
+    since = nil
+    var wokeAt: CFTimeInterval?
+    for t in stride(from: 0.0, through: 30.0, by: 0.25) {
+        if OgiApp.wakeIsEarned(idle: 0.1, now: t, since: &since), wokeAt == nil { wokeAt = t }
+    }
+    #expect(wokeAt != nil, "he never woke up, which is worse than waking too easily")
+    #expect(wokeAt! >= Feel.Timing.wakeSettle - 0.3 && wokeAt! <= Feel.Timing.wakeSettle + 0.3,
+            Comment(rawValue: "woke after \(wokeAt!)s, expected about \(Feel.Timing.wakeSettle)s"))
+}

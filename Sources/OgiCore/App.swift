@@ -935,6 +935,13 @@ public final class OgiApp: NSObject, NSApplicationDelegate {
     /// `stirWindow` puts him back to sleep and restarts the count. Tap one key and he sleeps
     /// on. Actually come back to the machine and he gets up, with the stretch `onWake` owes him.
     private func wakeIsEarned(idle: Double, now: CFTimeInterval) -> Bool {
+        OgiApp.wakeIsEarned(idle: idle, now: now, since: &stirredAt)
+    }
+
+    /// Pure, so the rule can be tested without an NSApplication or ten minutes of real idle.
+    /// `since` is the caller's memory of when continuous use began, and this owns it.
+    static func wakeIsEarned(idle: Double, now: CFTimeInterval,
+                             since stirredAt: inout CFTimeInterval?) -> Bool {
         guard idle < Feel.Timing.stirWindow else { stirredAt = nil; return false }
         let start = stirredAt ?? now
         stirredAt = start

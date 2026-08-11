@@ -370,7 +370,7 @@ public enum Feel {
     public enum Timing {
         /// A gap in input longer than this means he settled again, so the wake timer restarts.
         /// Short enough that a real burst of typing keeps it alive between keystrokes.
-        public static let stirWindow: TimeInterval = 2
+        public static let stirWindow: TimeInterval = 1.5
 
         /// How long the machine has to be in CONTINUOUS use before a sleeping cat wakes.
         ///
@@ -378,7 +378,13 @@ public enum Feel {
         /// and he snapped upright, which Hamzah described as scary. A real cat sleeps through a
         /// keystroke. Four seconds of sustained use is roughly "you have actually come back",
         /// and a stray keypress or a nudge of the mouse no longer counts as one.
-        public static let wakeSettle: TimeInterval = 4
+        /// Six, not four, and the arithmetic is why. The idle clock only climbs after you
+        /// stop, so a burst of use counts as its own length PLUS a whole `stirWindow` before
+        /// the count resets. At four, a two-second burst of typing already cleared the bar,
+        /// which is not "you came back", it is a sentence. Six against a 1.5s window means
+        /// about four and a half seconds of real, continuous use: roughly the thirty
+        /// keystrokes Hamzah asked for.
+        public static let wakeSettle: TimeInterval = 6
 
         public static let fixedDT: TimeInterval = 1.0 / 120
         /// Without this clamp the first tick after the display link resumes from screen
