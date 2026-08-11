@@ -173,8 +173,10 @@ import CoreGraphics
 
         let dt = Feel.Timing.fixedDT
         for _ in 0..<Int(60 / dt) { cat = Cat.step(cat, world: world, dt: dt) }
-        #expect(abs(cat.position.x - 500) < Feel.Physics.arrivalSlop * 3,
-                "he stayed at \(cat.position.x) with a film on instead of going to the door")
+        // To his YARD, not to the doorstep. He started 1000pt away; the standing order stops
+        // asking once he is within `denYard` of home, which is the room he needs to mooch.
+        #expect(abs(cat.position.x - 500) <= Feel.Notch.denYard,
+                "he stayed at \(cat.position.x) with a film on instead of heading home")
     }
 
     @Test func heDoesNotJumpAtASurfaceCoplanarWithHisOwn() {

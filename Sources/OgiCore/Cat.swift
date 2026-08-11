@@ -1525,7 +1525,14 @@ public enum Cat {
                // length of a film.
                !s.inNotch, s.activity != .peer, !s.beingStroked,
                !upTop(s, on: surface, world: world)
-                   || abs(s.position.x - home) > Feel.Notch.denYard,
+                   // **The yard is for a cat who is awake.** As he settles it tightens back to
+                   // the doorstep, because the den is entered from the door and nowhere else:
+                   // left at a yard, he fell asleep 54pt away and slept ON the bar, so the den
+                   // sleep and its tail (the whole reason the notch is his house) stopped
+                   // happening. Awake he mooches; drowsy he comes home.
+                   || abs(s.position.x - home) > (s.repose == .awake || s.repose == .sitting
+                                                  ? Feel.Notch.denYard
+                                                  : Feel.Physics.arrivalSlop * 3),
                let move = nextMove(from: s, on: surface, toward: .menuBar, x: home,
                                    world: world) {
                 s.intent = Intent(destination: .menuBar, destinationX: home, move: move)
@@ -1705,6 +1712,28 @@ public enum Cat {
                         s.activity = Double.random(in: 0...1, using: &s.roll) < Feel.Timing.stretchChance
                             ? .stretch : .groom
                     }
+                    s.activityElapsed = 0
+                } else if s.screenCovered, let home = s.homeX,
+                          Double.random(in: 0...1, using: &s.roll) < Feel.Notch.moochChance,
+                          // **A mooch, inside the yard.** Ideas are off while the screen is
+                          // covered, which is right (he belongs at his den during a film, not
+                          // touring the desktop), but with nothing proposing a walk he never
+                          // used the yard `denYard` gave him: measured at 0 walks and 32pt of
+                          // travel in ten covered minutes, across three seeds. The range he
+                          // covered was the notch poses moving him, not him going anywhere.
+                          //
+                          // So: somewhere else on the bar, near home. Kept to 70% of the yard
+                          // so the destination cannot sit on the boundary the standing order
+                          // above enforces, which would put the two in a tug of war.
+                          let spot = standingRoom(
+                              near: home + CGFloat.random(in: -1...1, using: &s.roll)
+                                  * Feel.Notch.denYard * 0.7,
+                              in: surface.spans),
+                          abs(spot - s.position.x) > Feel.Physics.arrivalSlop * 3,
+                          let move = nextMove(from: s, on: surface, toward: surface.id,
+                                              x: spot, world: world) {
+                    s.intent = Intent(destination: surface.id, destinationX: spot, move: move)
+                    if case .jump = move { s.activity = .crouch } else { s.activity = .walk }
                     s.activityElapsed = 0
                 } else if !s.screenCovered,
                           let choice = idea(from: &s, on: surface, world: world) {

@@ -544,6 +544,15 @@ public enum Feel {
         /// the notch rather than roaming the bar.
         public static let denYard: CGFloat = 150
 
+        /// How often a bored cat at the den actually gets up, while the screen is covered.
+        ///
+        /// Not 1. A mooch inside the yard nearly always finds somewhere to go, whereas an
+        /// ordinary idea often comes back with nothing and he rests instead, so taking every
+        /// one made him pace: 80 short trips in ten covered minutes against the 15 to 30
+        /// longer ones a normal screen produces. This is the reluctance that ordinary life
+        /// gets for free from `idea` returning nil.
+        public static let moochChance: Double = 0.3
+
         public static let coveredSlumberScale: Double = 0.5
         /// How far up the cutout's side he grips when he peeks out of a vertical edge, as a
         /// fraction of its height. Two thirds: level with the top of the strip rather than

@@ -338,13 +338,22 @@ private func onBar(at x: CGFloat, world: Skyline) -> CatState {
     // standing at it. Now that the notch poses survive a covered screen they run for four to
     // twelve seconds each, so a snapshot at an arbitrary instant lands inside one about one
     // time in ten, at `notch.midX`, 126pt from the door. He got there either way.
-    #expect(cat.inNotch || abs(cat.position.x - cat.homeX!) < Feel.Physics.arrivalSlop * 3,
-            "he is still at \(cat.position.x) with a film on, not at the door")
-    #expect(cat.inNotch || Cat.denDoor(cat, on: world.surface(.menuBar)!) != nil)
+    // Within his yard, not on the doorstep: `denYard` is what the standing order enforces now.
+    #expect(cat.inNotch || abs(cat.position.x - cat.homeX!) <= Feel.Notch.denYard,
+            "he is still at \(cat.position.x) with a film on, nowhere near his den")
 
     // ...and the ladder then finds him there, which is the only way into the den.
+    //
+    // Through `curled` first, because that is what ten idle minutes actually does and it is
+    // what walks him back to the doorstep: the yard is for a cat who is AWAKE, and the leash
+    // tightens as he settles. Jumping straight to `.asleep` from wherever he was mooching
+    // skips that walk, and the sleep gate returns before the standing order, so he would sleep
+    // where he lay. Measured over three seeds: mooching at 796-830, curled brings him to
+    // 830-833, and the den takes him.
+    cat.repose = .curled
+    for _ in 0..<(120 * 30) { cat = Cat.step(cat, world: world, dt: dt); cat.repose = .curled }
     cat.repose = .asleep
-    for _ in 0..<(120 * 5) { cat = Cat.step(cat, world: world, dt: dt) }
+    for _ in 0..<(120 * 10) { cat = Cat.step(cat, world: world, dt: dt); cat.repose = .asleep }
     #expect(cat.inDen, "he slept on the bar instead of in the notch")
 }
 
@@ -364,15 +373,20 @@ private func onBar(at x: CGFloat, world: Skyline) -> CatState {
     // Distance covered *walking* only. The notch poses move him without walking — into the
     // middle of the cutout and back out to a lip — and that is the branch doing its job, not
     // pacing. What must not happen is him treading the bar.
-    var walked: CGFloat = 0
-    var last = cat.position.x
-    for _ in 0..<(120 * 120) {
+    // He is allowed to mooch around his yard now, so the old bound (less than one body width
+    // of walking in two minutes) is no longer the right question: it would fail on the very
+    // behaviour that was asked for. What must still never happen is TREADING, so this counts
+    // the share of the time he spends walking. Mooching is a few short trips between long
+    // sits; pacing is walking most of the time.
+    var walkingTicks = 0
+    let ticks = 120 * 120
+    for _ in 0..<ticks {
         cat = Cat.step(cat, world: world, dt: dt)
-        if cat.activity == .walk { walked += abs(cat.position.x - last) }
-        last = cat.position.x
+        if cat.activity == .walk { walkingTicks += 1 }
     }
-    #expect(walked < Feel.Shape.width,
-            "he walked \(Int(walked))pt at the door over two minutes of film")
+    let share = Double(walkingTicks) / Double(ticks)
+    #expect(share < 0.25,
+            "he spent \(Int(share * 100))% of two minutes of film walking, which is pacing")
 }
 
 @Test func heDoesNotFallOutOfTheDenHeIsAsleepIn() {
@@ -826,4 +840,39 @@ func aNotchPoseRunsItsFullLengthWithAFilmUp(pose: Activity) {
     }
     #expect(peeks == 1, Comment(rawValue: "he peeked \(peeks) times in five minutes at the den"))
     #expect(others > 6, Comment(rawValue: "he only did \(others) other things: the den is a loop, not a life"))
+}
+
+/// A film should not turn him into an ornament. Widening the leash (`denYard`) was not enough
+/// on its own: ideas are switched off while the screen is covered, so nothing ever proposed a
+/// walk and he took literally zero in ten covered minutes, across every seed tried. The range
+/// he covered was the notch poses repositioning him, not him going anywhere.
+@MainActor
+@Test func heMoochesAroundHisDenDuringAFilm() {
+    let world = notchedWorld([
+        RawWindow(id: 1, pid: 100, layer: 0, rect: CGRect(x: 0, y: 90, width: 1920, height: 1115),
+                  alpha: 1, owner: "Film"),
+    ])
+    for seed in [3, 11, 42] {
+        var cat = onBar(at: 300, world: world)
+        cat.roll = Roll(seed: UInt64(seed))
+        cat.screenCovered = true
+        cat.homeX = OgiApp.denX(notch.minX, notch: notch)
+        var walks = 0, settled = false, last: Activity = .idle
+        var lo = CGFloat.greatestFiniteMagnitude, hi: CGFloat = 0
+        for _ in 0..<(120 * 600) {
+            cat = Cat.step(cat, world: world, dt: dt)
+            if !settled, abs(cat.position.x - cat.homeX!) < 30 { settled = true }
+            if settled {
+                lo = min(lo, cat.position.x); hi = max(hi, cat.position.x)
+                if cat.activity == .walk, last != .walk { walks += 1 }
+            }
+            last = cat.activity
+        }
+        #expect(walks > 8, Comment(rawValue: "seed \(seed): only \(walks) walks in ten covered minutes"))
+        // ...and he stays home while he does it. The standing order allows a yard either side.
+        #expect(lo > cat.homeX! - Feel.Notch.denYard - Feel.Shape.width,
+                Comment(rawValue: "seed \(seed): wandered west to \(Int(lo)), off his yard"))
+        #expect(hi < cat.homeX! + Feel.Notch.denYard + Feel.Shape.width,
+                Comment(rawValue: "seed \(seed): wandered east to \(Int(hi)), off his yard"))
+    }
 }
