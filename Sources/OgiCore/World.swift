@@ -219,12 +219,27 @@ public enum World {
             ? (screenSpan.lowerBound + Feel.Shape.clearance)...(screenSpan.upperBound - Feel.Shape.clearance)
             : screenSpan
 
-        /// Cuts every occluder in front of `z` whose body straddles the line at `y`.
+        /// Cuts every occluder in front of `z` that overlaps the cat standing at `y`.
+        ///
+        /// **Against his body, not against the line under his feet.** He is
+        /// `Feel.Shape.height` tall and the renderer masks him wherever a front window meets
+        /// that box, but this tested only whether an occluder straddled `y` itself, so a
+        /// window covering 31 of his 32 points reported him fully visible:
+        ///
+        ///     front.minY = ledge + 0.4  ->  spans said visible, 31.6 of his 32pt covered
+        ///
+        /// `spans` is the mind's only answer to "can he be seen": `isHidden` is a straight
+        /// `spans.contains(x)`, and it feeds `hiddenFor` and the ten-second recovery. Reported
+        /// visible, `hiddenFor` stays pinned at zero and the recovery never runs, which is
+        /// exactly the lost-cat failure that block exists to prevent, and it does not
+        /// self-correct because nothing else ever revises the answer.
         func carve(_ initial: [ClosedRange<CGFloat>], y: CGFloat, z: Int) -> [ClosedRange<CGFloat>] {
             var spans = initial
             for o in fromWindows where o.isRealWindow && o.z < z {
-                // `>` and not `>=`: coplanar top edges must not erase each other.
-                guard o.rect.minY <= y, o.rect.maxY > y + Feel.World.coplanarEpsilon else { continue }
+                // `>` and not `>=` on the lower edge: coplanar top edges must not erase each
+                // other. The upper edge is his head, so a window hanging into his body counts.
+                guard o.rect.minY < y + Feel.Shape.height,
+                      o.rect.maxY > y + Feel.World.coplanarEpsilon else { continue }
                 guard o.rect.minX <= o.rect.maxX else { continue }
                 spans = subtract(spans, o.rect.minX...o.rect.maxX)
             }

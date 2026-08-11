@@ -353,3 +353,35 @@ private let screen = ScreenGeometry(
     let second = tracker.ingest(World.build(windows: [w], screen: screen, ownPID: 99))
     #expect(second.surface(.window(1))?.targetable == true)
 }
+
+/// `Surface.spans` is documented as "where he is currently visible" and is the mind's only
+/// visibility oracle: `Cat.isHidden` is a straight `spans.contains(x)`, feeding `hiddenFor`
+/// and the ten-second recovery. It used to ask whether an occluder straddled the line under
+/// his feet, so a window covering all but the last point of him reported him fully visible,
+/// the recovery never ran, and nothing else ever revised the answer.
+@Test func aWindowOverHisBodyHidesHimEvenIfItClearsHisFeet() {
+    let screen = ScreenGeometry(frame: CGRect(x: 0, y: 0, width: 1920, height: 1080),
+                                visibleFrame: CGRect(x: 0, y: 0, width: 1920, height: 1080),
+                                notch: nil)
+    let back = RawWindow(id: 1, pid: 1, layer: 0,
+                         rect: CGRect(x: 100, y: 100, width: 900, height: 400), alpha: 1, owner: "Back")
+    let ledge = back.rect.maxY
+
+    // Sweep the front window from flush with his feet to clear of his head.
+    for lift in stride(from: CGFloat(0), through: Feel.Shape.height, by: 1) {
+        let front = RawWindow(id: 2, pid: 2, layer: 0,
+                              rect: CGRect(x: 300, y: ledge + lift, width: 400, height: 400), alpha: 1, owner: "Front")
+        let world = World.build(windows: [front, back], screen: screen, ownPID: 99)   // front-to-back
+        guard let s = world.surfaces.first(where: { $0.id == .window(1) }) else {
+            Issue.record("the back window is not a surface at lift \(lift)")
+            return
+        }
+        let covered = Feel.Shape.height - lift        // how much of him the window overlaps
+        let visible = s.spans.contains { $0.contains(front.rect.midX) }
+        // Clear of his head is the only lift where he is genuinely all there.
+        let shouldSee = covered <= 0
+        #expect(visible == shouldSee,
+                Comment(rawValue: "at lift \(lift) the window covers \(covered) of his "
+                        + "\(Feel.Shape.height)pt body; spans say visible=\(visible)"))
+    }
+}
