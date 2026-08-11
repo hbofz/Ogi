@@ -302,6 +302,17 @@ public final class OgiApp: NSObject, NSApplicationDelegate {
         if let h = homeX, !(screen.visibleFrame.minX...screen.visibleFrame.maxX).contains(h) {
             homeX = nil
         }
+        // ...and this screen may have a doorway he has never been told about. `homeX` was
+        // written only by `arrival` and the goodbye, and cleared here, so it was decided once
+        // at launch and could only ever be lost. Launch on an external, unplug it, and he
+        // spends the rest of the session on a notched built-in with no home: the retreats and
+        // the quit walk go to the status item instead of into the den beside him.
+        if homeX == nil, let notch = ScreenGeometry(screen).notch,
+           let bar = skyline.surface(.menuBar) {
+            let goRight = (screen.frame.maxX - notch.maxX) > notch.minX
+            let doorway = goRight ? notch.maxX : notch.minX
+            if bar.solid.contains(where: { $0.contains(doorway) }) { homeX = doorway }
+        }
         // He is not woken for this. If he was asleep the world is rebuilt around him and he
         // finds out when he next opens his eyes; one redraw keeps the picture honest until
         // then, without restarting the clock.
@@ -819,7 +830,12 @@ public final class OgiApp: NSObject, NSApplicationDelegate {
         let dt = CGFloat(Feel.Timing.fixedDT * Double(lastSteps))
         let pose = buildPose(dt: dt)
         let frame = Sprites.frame(for: cat, pose: pose)
-        drawnRect = frame.rect(at: cat.position)
+        // Where he is DRAWN, which during a notch pose is not where he is: the lift up the
+        // cutout wall and the quarter turn onto its side both move the picture. Computed
+        // here from the same helper `Overlay` pivots on, because when this worked it out
+        // independently the two disagreed and the click box missed the drawing entirely.
+        drawnRect = Sprites.drawnBox(frame, at: cat.position,
+                                     lift: cat.notchLift, side: cat.notchSide)
         // The simulation's copy of the drawn rect, so the yield guard measures the same box
         // that swallows clicks. One frame stale at worst, which is what the click poll costs
         // anyway.

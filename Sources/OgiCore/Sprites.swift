@@ -357,6 +357,37 @@ public enum Sprites {
     /// Only the clip that can be hung off an edge may be turned by this.
     ///
     /// Positive is counter-clockwise, so the head going out to the LEFT is the negative turn.
+    /// Where he is actually DRAWN, as opposed to where he is.
+    ///
+    /// Two things move the drawing off his logical position, and both belong to the notch: the
+    /// lift up the cutout's wall, and the quarter turn onto its side. `App` needs this for the
+    /// hit rect and `Overlay` needs it for the mask, and while they each worked it out
+    /// separately they disagreed. During a notch side peek the click box and the drawing did
+    /// not overlap **at all**: his visible head was click-through, and a patch below him petted
+    /// a cat who was not there.
+    ///
+    /// Exact bounds rather than `Overlay`'s square-about-the-anchor, which is deliberately
+    /// generous because a mask that is too big clips nothing, while a hit rect that is too big
+    /// swallows clicks off him.
+    static func drawnBox(_ f: Frame, at position: CGPoint,
+                         lift: CGFloat, side: CatState.NotchSide) -> CGRect {
+        let at = CGPoint(x: position.x, y: position.y + lift)
+        let box = f.rect(at: at)
+        let t = turn(f.clip, side: side)
+        guard t != 0 else { return box }
+        // The turn pivots on the anchor, which is where `Overlay` puts the layer's position.
+        let c = cos(t), s = sin(t)
+        let xs = [box.minX, box.maxX], ys = [box.minY, box.maxY]
+        var rx: [CGFloat] = [], ry: [CGFloat] = []
+        for x in xs { for y in ys {
+            let dx = x - at.x, dy = y - at.y
+            rx.append(at.x + dx * c - dy * s)
+            ry.append(at.y + dx * s + dy * c)
+        } }
+        return CGRect(x: rx.min()!, y: ry.min()!,
+                      width: rx.max()! - rx.min()!, height: ry.max()! - ry.min()!)
+    }
+
     static func turn(_ clip: Clip, side: CatState.NotchSide) -> CGFloat {
         guard flipsVertically(clip) else { return 0 }
         switch side {
