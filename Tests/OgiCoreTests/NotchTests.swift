@@ -795,3 +795,30 @@ func aNotchPoseRunsItsFullLengthWithAFilmUp(pose: Activity) {
     }
     #expect(!sawSlip, "he slipped coming out of the notch onto ground that was always there")
 }
+
+/// The den peek is a greeting, not a loop. It used to re-arm every tick he rested at the door:
+/// set `.peek`, hold 1.1s, expire back to the resting pose, and the resting pose qualifies
+/// again immediately. On a covered screen that is the same animation replayed at you for the
+/// length of the film, which is what it looked like on Hamzah's machine.
+@MainActor
+@Test func heGreetsTheDenOnceAndThenLivesInIt() {
+    let world = notchedWorld([
+        RawWindow(id: 1, pid: 100, layer: 0, rect: CGRect(x: 0, y: 90, width: 1920, height: 1115),
+                  alpha: 1, owner: "Film"),
+    ])
+    var cat = onBar(at: 300, world: world)
+    cat.screenCovered = true
+    cat.homeX = OgiApp.denX(notch.minX, notch: notch)
+
+    var peeks = 0, others = 0
+    var last: Activity = .idle
+    for _ in 0..<(120 * 300) {
+        cat = Cat.step(cat, world: world, dt: dt)
+        if cat.activity != last {
+            if cat.activity == .peek { peeks += 1 } else { others += 1 }
+            last = cat.activity
+        }
+    }
+    #expect(peeks == 1, Comment(rawValue: "he peeked \(peeks) times in five minutes at the den"))
+    #expect(others > 6, Comment(rawValue: "he only did \(others) other things: the den is a loop, not a life"))
+}

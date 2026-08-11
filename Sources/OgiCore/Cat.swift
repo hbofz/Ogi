@@ -404,6 +404,11 @@ public struct CatState: Sendable {
     /// the desktop, wearing a laptop. The freeze, the yield and the sleep gate all did it. Held
     /// as state, the exemption outlives whatever took the behaviour away, and `standing` puts
     /// him back on the lip in its own time. See `leaveNotch`.
+    /// He has already done his one peek out of the den doorway on this visit. Cleared when he
+    /// wanders away from the door. Without it the peek re-arms every time it expires, and a
+    /// covered screen becomes the same 1.1s animation on repeat.
+    public var settledInDen = false
+
     public var inNotch = false
 
     /// ...and asleep in there specifically, which is the one that changes the drawing.
@@ -1418,20 +1423,49 @@ public enum Cat {
             // drains underneath it, so in ordinary life the next idea gets him up; on a
             // covered screen, where elections are gated, the den is how he watches the whole
             // film.
-            if s.activity == s.repose.restingActivity, s.repose != .asleep,
-               let den = denDoor(s, on: surface) {
+            //
+            // **Once per arrival, not every tick he rests there.** Without the latch this is a
+            // loop: it sets `.peek`, the peek holds for `peekSeconds`, expires back to the
+            // resting pose, and the resting pose qualifies again on the very next tick.
+            // Measured on a covered screen that is peek/idle/peek/idle for as long as the film
+            // runs, so he plays the same 1.1s animation at you forever instead of settling in.
+            //
+            // Latched rather than gated on position, which was tried and is worse: the retreat
+            // already walks him to within `arrivalSlop` of this exact spot, so a position check
+            // blocks the FIRST peek too and the pose is never seen at all.
+            if let den = denDoor(s, on: surface) {
+                // Wandered off, so the next arrival is a fresh one.
+                if abs(s.position.x - den.standAt) > Feel.Shape.clearance * 2 {
+                    s.settledInDen = false
+                }
+                if !s.settledInDen, s.activity == s.repose.restingActivity, s.repose != .asleep {
                 // Out of the hole before he settles into it. Whatever is drawn inside the notch
                 // is simply gone, so a cat centred on the lip is missing his back half. The
                 // retreats aim at this spot already (`OgiApp.denX`), so on the common path this
                 // is a few points at most; it is here as well because the retreats are not the
                 // only way he ends up on a lip. A wall bump parks him on one, and so does a
                 // launch walk that never finished because the room went quiet.
-                s.position.x = den.standAt
-                s.support = .grounded(Perch(id: surface.id,
-                                            dx: den.standAt - surface.extent.lowerBound))
-                s.facing = den.out
-                s.activity = .peek
-                s.activityElapsed = 0
+                    s.position.x = den.standAt
+                    s.support = .grounded(Perch(id: surface.id,
+                                                dx: den.standAt - surface.extent.lowerBound))
+                    // Turn first, peek second, and they cannot share a tick. `ground()` wraps
+                    // the whole of `standing` and rewrites the activity to `.turn` whenever
+                    // `facing` changed, so setting both here means the turn eats the peek. That
+                    // went unnoticed while this branch re-armed every tick (the next attempt
+                    // stuck); latched to once per arrival, the single attempt was eaten and the
+                    // pose never played at all. So: point him out of the den now, and let the
+                    // peek land on a later tick once he is already facing that way.
+                    if s.facing != den.out {
+                        s.facing = den.out
+                        return s
+                    }
+                    s.activity = .peek
+                    s.activityElapsed = 0
+                    s.settledInDen = true
+                    // The beat IS the animation; nothing below overwrites it on the tick it
+                    // starts. The hold near the top of `standing` catches it from here on.
+                    return s
+                }
             }
 
 
