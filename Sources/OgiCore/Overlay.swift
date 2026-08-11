@@ -344,7 +344,19 @@ final class OgiView: NSView {
         // app. Procedural for the same reason the z's are: it tracks his height continuously,
         // and an ellipse needs no sheet. It sits inside the mask container, so the occlusion
         // clips it exactly as it clips him.
-        shadowLayer.path = Body.shadow(width: size.width, height: h)
+        //
+        // Sized off his BODY, not off the current frame's width. The sheets are cropped to
+        // each frame's own ink, and five of them (run, cling, jump, fall, held) predate the
+        // pass in `Tools/extract-sprites.swift` that pads every frame of a clip to one common
+        // width. `run` is 256, 247, 239, 242, 254, 230, 222, 243 across its eight frames, so
+        // the shadow swung about 15% eight times a second at full ground opacity, which reads
+        // as a flicker under a cat who is not changing size. `walk` is 379 on all six and
+        // looks right, which is why this only ever showed on the run.
+        //
+        // A contact shadow is where he meets the ledge anyway; it has no business tracking how
+        // much tail happens to be in frame. Regenerating those five sheets is still worth
+        // doing, since the same crop makes his drawing shift horizontally between frames.
+        shadowLayer.path = Body.shadow(width: Feel.Shape.width * cat.scale.width, height: h)
         shadowLayer.position = CGPoint(x: cat.position.x - origin.x,
                                        y: cat.position.y - h - origin.y)
         // Nothing to cast onto inside the cutout. His world position up there is his grip on
