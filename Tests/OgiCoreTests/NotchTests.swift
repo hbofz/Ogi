@@ -708,3 +708,34 @@ func aNotchPoseRunsItsFullLengthWithAFilmUp(pose: Activity) {
             Comment(rawValue: "dropped at \(Int(dropX)) and ended at \(Int(s.position.x)): "
                     + "the notch exit fired on a surface he never came from"))
 }
+
+/// The crossing takes about seven seconds. Freezing partway through (typing hard, or a call
+/// starting) used to park him inside the cutout, which is a permanent occluder, so he was
+/// invisible for as long as the freeze lasted. On a call that is the whole call, and the
+/// camera eviction cannot reach him because `denDoor` asks `edgeAhead`, which is nil inside
+/// the hole in `solid`.
+@MainActor
+@Test func freezingMidCrossingDoesNotParkHimInTheCutout() {
+    let world = World.build(windows: [], screen: screen, ownPID: 99)
+    let bar = world.surface(.menuBar)!
+    var s = CatState(position: CGPoint(x: notch.minX - 10, y: bar.y))
+    s.support = .grounded(Perch(id: .menuBar, dx: notch.minX - 10 - bar.extent.lowerBound))
+    s.intent = Intent(destination: .menuBar, destinationX: notch.maxX + 10,
+                      move: .crossNotch(notch.maxX + 10))
+    s.facing = 1
+
+    // Walk him into the tunnel, then freeze him there.
+    for _ in 0..<Int(2 / dt) {
+        s = Cat.step(s, world: world, dt: dt)
+        if s.position.x > notch.minX + 20 { break }
+    }
+    #expect(s.insideNotch, "he never got into the tunnel, so this proves nothing")
+
+    s.typingHard = true
+    for _ in 0..<Int(20 / dt) { s = Cat.step(s, world: world, dt: dt) }
+
+    #expect(!s.insideNotch,
+            Comment(rawValue: "frozen at x=\(Int(s.position.x)), inside the cutout, invisible"))
+    #expect(bar.solid.contains { $0.contains(s.position.x) },
+            "frozen somewhere the bar has no pixels behind it")
+}

@@ -1138,6 +1138,23 @@ public enum Cat {
         // the display link at 60Hz for the length of every call.
         if s.holdingStill {
             s.perchSpeed = 0
+            // **Not in the tunnel.** The crossing takes about seven seconds, and freezing
+            // partway through parks him inside the cutout, where the permanent notch occluder
+            // masks him away completely: on a call, that is the whole call spent invisible.
+            // The camera eviction just below cannot rescue him either, because `denDoor` asks
+            // `edgeAhead`, which is nil while his x sits in the hole in `solid`.
+            //
+            // `inNotch` is exempt: a cat who chose the den is meant to be in there. This is
+            // only the one who was walking through when you started typing. The rule stated
+            // below, that he does not get to stand in the doorway because half of him would be
+            // inside a cutout with no pixels behind it, applies with more force to all of him.
+            if s.insideNotch, !s.inNotch, case .grounded(var perch) = s.support,
+               let out = nearestSpanX(to: s.position.x, in: surface.solid) {
+                perch.dx = out - surface.extent.lowerBound
+                s.support = .grounded(perch)
+                s.position.x = out
+                s.intent = nil
+            }
             // **The camera lives in the notch, and the notch is his house.** While it is running
             // he does not get to stand in the doorway: half of him would be inside a cutout with
             // no pixels behind it, and the call pose is the one he holds for the whole call.
