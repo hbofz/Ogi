@@ -17,8 +17,13 @@ VERSION="${OGI_VERSION:-0.1}"
 # stay native because nobody is debugging the other architecture and it doubles the build.
 ARCH=()
 [ "$CONFIG" = "release" ] && ARCH=(--arch arm64 --arch x86_64)
-swift build -c "$CONFIG" "${ARCH[@]}"
-BIN="$(swift build -c "$CONFIG" "${ARCH[@]}" --show-bin-path)/Ogi"
+# `${ARCH[@]+"${ARCH[@]}"}` rather than `"${ARCH[@]}"`, and it is not a style choice: expanding
+# an EMPTY array is an unbound-variable error under `set -u` in bash before 4.4, and `/bin/bash`
+# on macOS is 3.2.57 and always will be. Written the obvious way, a bare `./run.sh` died on this
+# line on every Mac ever to run it. Nothing caught it because CI and `release.sh` both pass
+# `release`, which is the one path where the array is not empty.
+swift build -c "$CONFIG" ${ARCH[@]+"${ARCH[@]}"}
+BIN="$(swift build -c "$CONFIG" ${ARCH[@]+"${ARCH[@]}"} --show-bin-path)/Ogi"
 
 APP=".build/Ogi.app"
 rm -rf "$APP"
