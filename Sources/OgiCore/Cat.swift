@@ -1368,7 +1368,23 @@ public enum Cat {
             //
             // The arrival slop has to be wider than the walk's overshoot and narrower than
             // `denDoor`'s reach, or he either paces at the door forever or stops short of it.
+            //
+            // **It yields to anything already holding him in place, and it did not used to.**
+            // Sitting this high in the idle region, it pre-empted every branch below it: the
+            // notch exit, the stroke, the in-place holds and the peer. Its own test is "more
+            // than 9pt from the den door", and `enterNotch` puts him at `notch.midX` while
+            // `homeX` is the door beside it, 130pt away BY CONSTRUCTION, so every notch pose
+            // was cancelled on the tick after it started. Measured against the shipping
+            // geometry: hang 4.008s -> 0.008s, peerDown 10.000s -> 0.008s, peer 12.008s ->
+            // 0.008s, and 94 notch entries out of 200 with not one held past a second.
+            //
+            // Which made three advertised behaviours invisible in exactly the situation they
+            // were written for: `Feel.Timing.peerSeconds` is 12 *because* the covered-screen
+            // retreat is when you see it, and the pull-ups happen in the den he retreats to.
+            // Two branches in one function, cancelling each other.
             if s.screenCovered, let home = s.homeX,
+               inPlaceHold(s.activity) == nil,   // covers hang and peerDown too
+               s.activity != .peer, !s.inNotch, !s.beingStroked,
                !upTop(s, on: surface, world: world)
                    || abs(s.position.x - home) > Feel.Physics.arrivalSlop * 3,
                let move = nextMove(from: s, on: surface, toward: .menuBar, x: home,

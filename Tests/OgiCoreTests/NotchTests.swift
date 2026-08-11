@@ -644,3 +644,38 @@ private func onBar(at x: CGFloat, world: Skyline) -> CatState {
         }
     }
 }
+
+/// The covered-screen retreat used to sit above every in-place hold in `standing`, so the
+/// notch poses it exists to produce were cancelled on the tick after they started. Its own
+/// test is "more than 9pt from the den door" and `enterNotch` puts him at `notch.midX`, which
+/// is 130pt away by construction, so it could never be satisfied from inside the hole.
+@MainActor
+@Test(arguments: [Activity.hang, .peerDown])
+func aNotchPoseRunsItsFullLengthWithAFilmUp(pose: Activity) {
+    let world = World.build(windows: [], screen: screen, ownPID: 99)
+    let hold = Cat.inPlaceHold(pose)!
+
+    func heldFor(covered: Bool) -> TimeInterval {
+        var s = CatState(position: CGPoint(x: notch.midX, y: notch.minY))
+        s.support = .grounded(Perch(id: .menuBar,
+                                    dx: notch.midX - world.surface(.menuBar)!.extent.lowerBound))
+        s.inNotch = true
+        s.homeX = notch.minX - 26
+        s.screenCovered = covered
+        s.activity = pose
+        s.activityElapsed = 0
+        var t: TimeInterval = 0
+        for _ in 0..<Int((hold + 2) / dt) {
+            s = Cat.step(s, world: world, dt: dt)
+            if s.activity != pose { break }
+            t += dt
+        }
+        return t
+    }
+
+    let uncovered = heldFor(covered: false)
+    let covered = heldFor(covered: true)
+    #expect(uncovered > hold - 0.1, "\(pose) does not run its length even uncovered")
+    let msg = "\(pose) lasted \(String(format: "%.3f", covered))s of \(hold)s with a film up: the retreat cancelled the pose it exists to produce"
+    #expect(covered > hold - 0.1, Comment(rawValue: msg))
+}
