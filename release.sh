@@ -43,7 +43,16 @@ OUT="Ogi-$VERSION.zip"
 rm -f "$OUT"
 # ditto rather than zip: it is what Apple documents for bundles, and it keeps the symlinks and
 # resource forks a plain zip quietly flattens.
-ditto -c -k --keepParent .build/Ogi.app "$OUT"
+#
+# --norsrc --noextattr are NOT optional. Every file in the bundle carries a
+# `com.apple.provenance` xattr, and without these ditto encodes each one as an AppleDouble
+# member: the v1.0.0 zip shipped with 167 of them, including `Contents/MacOS/._Ogi`. Finder
+# and `ditto -x` ignore those, but Info-ZIP's `unzip` restores them as real files INSIDE the
+# signed bundle, which breaks the seal. macOS then refuses that copy with "Ogi is damaged and
+# can't be opened", offering only Move to Trash: no Open Anyway, no Privacy & Security entry,
+# no way back. That is a worse first launch than the ordinary Gatekeeper block, and it hits
+# everyone who downloads with curl and extracts in a terminal.
+ditto -c -k --keepParent --norsrc --noextattr .build/Ogi.app "$OUT"
 
 # **Run the packaged app somewhere it cannot cheat.** Every static check passed on the build
 # that shipped as v1.0.0 and crashed for everyone who was not the person who built it: SwiftPM's
@@ -54,8 +63,27 @@ ditto -c -k --keepParent .build/Ogi.app "$OUT"
 #
 # So the check hides the build tree's copy, leaving the one inside the .app as the only
 # resources on the machine, and launches it. That is the only arrangement that tells the truth.
+# Extract the way a terminal user does, not the way this script finds convenient. `ditto -x`
+# silently absorbs the AppleDouble members that `unzip` turns into real files, so a gate that
+# only ever uses ditto cannot see the failure above. This is the check that would have caught
+# it, and it costs a second.
+UNZ="$(mktemp -d)"
+unzip -q "$OUT" -d "$UNZ"
+codesign --verify --deep --strict "$UNZ/Ogi.app" 2>&1 \
+  || { echo "plain \`unzip\` produces a bundle macOS calls damaged" >&2; rm -rf "$UNZ"; exit 1; }
+find "$UNZ/Ogi.app" -name '._*' -print -quit | grep -q . \
+  && { echo "AppleDouble files landed inside the .app: the seal is broken" >&2; rm -rf "$UNZ"; exit 1; }
+rm -rf "$UNZ"
+echo "  verified: survives plain \`unzip\`, not just \`ditto -x\`"
+
 SIM="$(mktemp -d)"
-BUNDLE="$(swift build -c release --show-bin-path)/Ogi_OgiCore.bundle"
+# The SAME flags run.sh built with. `swift build --show-bin-path` without them answers for a
+# native build (.build/arm64-apple-macosx/release) while the universal one writes to
+# .build/apple/Products/Release. On a clean clone this `mv` died and took the release with it;
+# on a tree with a stale native build it "succeeded" by hiding the wrong copy, which is why the
+# guard written after three broken releases had never once tested the thing it guards.
+BUNDLE="$(swift build -c release --arch arm64 --arch x86_64 --show-bin-path)/Ogi_OgiCore.bundle"
+[ -d "$BUNDLE" ] || { echo "expected the resource bundle at $BUNDLE" >&2; exit 1; }
 restore() { [ -e "$SIM/hidden.bundle" ] && mv "$SIM/hidden.bundle" "$BUNDLE"; }
 trap 'restore; rm -rf "$SIM"' EXIT
 ditto -x -k "$OUT" "$SIM/app"
