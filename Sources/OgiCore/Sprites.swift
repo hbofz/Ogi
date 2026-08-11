@@ -46,7 +46,7 @@ public enum Sprites {
             case .curl: 5
             case .cling: 4
             case .climbUp: 6
-            case .lookDown: 4
+            case .lookDown: 5
             case .peek: 4
             case .turn: 4
             case .shake: 4
@@ -92,7 +92,12 @@ public enum Sprites {
             // the only fix that stays fixed.
             case .climbUp:
                 Double(Feel.Physics.clingClimbSpeed / Feel.Shape.climbStride) * 6
-            case .lookDown: 6   // head over the side in half a second, then he holds
+            // Five frames, so 8 rather than 6: the lean has to reach its held frame inside
+            // `hesitation(forDrop:)`'s shortest look (0.5s) or he commits to the drop while
+            // still leaning, and the pose is never seen. Four frames at 6 met that exactly;
+            // a fifth frame at 6 would have taken 0.83s. `theLeanAlwaysFinishesBeforeHeCanCommit`
+            // derives the bound from these two numbers, so it catches either one moving.
+            case .lookDown: 8   // head over the side in half a second, then he holds
             case .peek: 5       // creeping out of the doorway; slower than he ever walks
             case .turn: 12      // a pivot is quick
             case .shake: 12     // a shudder, not a wobble
