@@ -348,9 +348,13 @@ public final class OgiApp: NSObject, NSApplicationDelegate {
         }
 
         let g = ScreenGeometry(screen)
-        guard let notch = g.notch, let bar = skyline.surface(.menuBar) else {
-            // No notch, or no menu bar to walk out onto: he simply drops in.
+        guard let bar = skyline.surface(.menuBar) else {
+            // Nothing up there to stand on at all. He drops in and finds his own floor.
             return CatState(position: CGPoint(x: screen.frame.midX, y: screen.frame.maxY - 60))
+        }
+        // No notch, so no doorway: he starts standing on the bar instead of falling past it.
+        guard let notch = g.notch else {
+            return OgiApp.arrivalOnBar(bar: bar, near: screen.frame.midX)
         }
 
         let c = OgiApp.arrival(notch: notch, bar: bar, screenMaxX: screen.frame.maxX)
@@ -381,6 +385,32 @@ public final class OgiApp: NSObject, NSApplicationDelegate {
         let out = goRight ? notch.maxX + Feel.Shape.width : notch.minX - Feel.Shape.width
         c.intent = Intent(destination: .menuBar, destinationX: out, move: .walk(out))
         c.facing = goRight ? 1 : -1
+        c.restLeft = Feel.Timing.restMin
+        return c
+    }
+
+    /// A Mac with no notch, which is every Mac except a 2021-or-later MacBook Pro or a
+    /// 2022-or-later Air, plus every external display and every clamshell. He has no doorway
+    /// to come out of, so he simply starts standing on the menu bar.
+    ///
+    /// **This branch used to drop him in mid-air and strand him for the session.** The guard
+    /// above unwrapped the bar and then threw it away, spawning him at `frame.maxY - 60` with
+    /// `support` defaulting to `.falling`. The bar sits at `visibleFrame.maxY`, at most ~38pt
+    /// below `frame.maxY`, so that spawn was ALWAYS strictly below the only thing up there,
+    /// and `Skyline.supportBelow` searches downward only. On a bare desktop he fell straight
+    /// past it onto the Dock line and stayed: a jump clears ~190pt against a ~1000pt climb,
+    /// with no window face to climb. His whole first impression was a cat dropping out of the
+    /// sky and never moving again.
+    ///
+    /// Pure and static so the launch placement is testable without an NSApplication, like
+    /// `arrival(notch:bar:screenMaxX:)` beside it.
+    static func arrivalOnBar(bar: Surface, near x: CGFloat) -> CatState {
+        // Onto pixels, not merely into the extent: the bar's `solid` already excludes the
+        // rounded corners and anything off-screen.
+        let x = Cat.nearestSpanX(to: x, in: bar.solid)
+            ?? min(max(x, bar.extent.lowerBound), bar.extent.upperBound)
+        var c = CatState(position: CGPoint(x: x, y: bar.y))
+        c.support = .grounded(Perch(id: .menuBar, dx: x - bar.extent.lowerBound))
         c.restLeft = Feel.Timing.restMin
         return c
     }

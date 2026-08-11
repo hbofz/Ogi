@@ -1841,3 +1841,49 @@ private func lookDownReach() -> (toes: CGFloat, nose: CGFloat) {
     #expect(Sprites.clip(for: .climb, dangling: false) == .climbUp)
     #expect(Sprites.clip(for: .cling, dangling: false) == .cling)
 }
+
+/// Every Mac that is not a 2021-or-later MacBook Pro or a 2022-or-later Air, plus every
+/// external display and every clamshell. `notched` is the only screen the rest of this file
+/// uses, which is exactly why the launch was broken here and green everywhere.
+private let notchless = ScreenGeometry(frame: CGRect(x: 0, y: 0, width: 1728, height: 1117),
+                                       visibleFrame: CGRect(x: 0, y: 90, width: 1728, height: 1002),
+                                       notch: nil)
+
+@MainActor
+@Test func aNotchlessMacStartsHimOnTheMenuBarRatherThanInMidAir() {
+    let world = World.build(windows: [], screen: notchless, ownPID: 99)
+    let bar = world.surface(.menuBar)!
+    var cat = OgiApp.arrivalOnBar(bar: bar, near: notchless.frame.midX)
+
+    guard case .grounded(let perch) = cat.support else {
+        Issue.record("he arrives in mid-air on a Mac with no notch")
+        return
+    }
+    #expect(perch.id == .menuBar)
+    #expect(cat.position.y == bar.y)
+    #expect(bar.solid.contains { $0.contains(cat.position.x) },
+            "placed where the menu bar has no pixels behind it")
+}
+
+@MainActor
+@Test func heIsNotStrandedOnTheDockForTheWholeSessionOnANotchlessMac() {
+    // The shipped spawn was `frame.maxY - 60`, ungrounded. The bar is at `visibleFrame.maxY`,
+    // at most ~38pt down, so that is always BELOW it, and `supportBelow` only looks downward:
+    // he fell past the one surface up there, landed on the Dock line, and could never get
+    // back. His jump clears ~190pt against a ~1000pt climb, with no window face to climb.
+    let world = World.build(windows: [], screen: notchless, ownPID: 99)
+    let bar = world.surface(.menuBar)!
+    var cat = OgiApp.arrivalOnBar(bar: bar, near: notchless.frame.midX)
+
+    var lowest = cat.position.y
+    for _ in 0..<Int(60 / dt) {
+        cat = Cat.step(cat, world: world, dt: dt)
+        lowest = min(lowest, cat.position.y)
+    }
+    guard case .grounded = cat.support else {
+        Issue.record("he fell out of the world at x=\(Int(cat.position.x))")
+        return
+    }
+    #expect(lowest > world.surface(.floor)!.y + 1,
+            "he reached the floor and a bare notchless desktop has no way back up")
+}
