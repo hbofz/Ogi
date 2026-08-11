@@ -483,7 +483,7 @@ public enum Sprites {
     ///
     /// The eye is whatever stands furthest from the fur, and which direction that is depends on
     /// the cat. On a black cat with white eyes they are the brightest thing on him. The ginger
-    /// tabby in `art/character.png` inverts it: a mid-value orange whose near-black eyes are the
+    /// tabby he is drawn from inverts it: a mid-value orange whose near-black eyes are the
     /// darkest thing on him. Matching both is what lets sheets be replaced one at a time.
     ///
     /// Which of the two applies is decided from the fur rather than configured, so a new sheet

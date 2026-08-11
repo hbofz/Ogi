@@ -144,7 +144,7 @@ let dropWarm = ProcessInfo.processInfo.environment["DROP_WARM"] != nil
 
 let key = keyChannel(for: bg)
 print(key.map { "key channel \(["R", "G", "B"][$0.index]), range \(Int($0.range))" }
-      ?? "neutral background, opaque edges (halo will survive — see docs/ART-BRIEF.md)")
+      ?? "neutral background, opaque edges: the halo will survive, so regenerate the sheet on a flat background rather than trying to cut it out here")
 
 // Flood fill each connected blob of ink. Iterative: a recursive fill blows the stack on a
 // 1500px sheet.
@@ -245,8 +245,8 @@ if let n = ProcessInfo.processInfo.environment["FRAMES"].flatMap(Int.init) {
 // straddle a 60px boundary came out swapped. It cost a walk cycle that played 1,2,4,3,5,6.
 //
 // Row grouping was never real support for grids anyway — the shared band below spans the whole
-// sheet, so a second row would be given the first row's vertical extent. One row per sheet is
-// the rule in docs/ART-BRIEF.md, and this now matches it honestly.
+// sheet, so a second row would be given the first row's vertical extent. Every sheet this
+// reads is generated as a single row, and this now matches that honestly.
 let kept = merged.filter {
     let bh = $0.maxY - $0.minY + 1, bw = $0.maxX - $0.minX + 1
     return bh >= minH && bh <= maxH && bw >= 20 && $0.count > 400
@@ -261,7 +261,7 @@ let sheetBottom = kept.map(\.maxY).max() ?? 0
 
 // GROUNDED=1 additionally pulls every frame down so its lowest paw rests on the sheet's floor.
 //
-// Rule 1 of docs/ART-BRIEF.md is that his feet share one ground line, and it says that matters
+// The first rule the sheets are drawn to is that his feet share one ground line, and it matters
 // more than the drawing does, because a frame drawn a few pixels high makes him bob no matter
 // how good the art is. The generator gets it close and not exact: `land` came back with the
 // standing frame sitting 16px above the squash frame's paws, which is him rising off the

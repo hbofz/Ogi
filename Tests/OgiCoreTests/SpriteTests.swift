@@ -3,7 +3,7 @@ import Foundation
 import CoreGraphics
 @testable import OgiCore
 
-/// Clips regenerated against the current `art/character.png`. Add each name as its sheet
+/// Clips regenerated against the current character reference. Add each name as its sheet
 /// lands. Kept by hand on purpose: inferring it from eye colour stops meaning anything the
 /// moment the cat himself is ginger.
 private let redrawnClips: Set<String> = ["walk", "fall", "land", "idle", "jump", "run", "sitdown", "sleep", "alert", "held", "groom", "curl", "cling", "lookDown", "peek", "turn", "shake"]

@@ -2,8 +2,8 @@
 import PackageDescription
 
 // ponytail: SPM + a 15-line bundle script instead of a checked-in .xcodeproj.
-// `swift test` on the pure logic is what M0 actually needs. Add the xcodeproj
-// when the repo goes public and contributors need ⌘R.
+// `swift test` on the pure logic is what this needs, and `run.sh` makes the .app.
+// Add an xcodeproj the day somebody actually wants ⌘R.
 let package = Package(
     name: "Ogi",
     platforms: [.macOS(.v14)],   // NSView.displayLink(target:selector:)

@@ -3,7 +3,7 @@
 #
 # ponytail: 15 lines instead of a checked-in .xcodeproj. The bundle is required, not
 # optional: LSUIElement and window-level behaviour differ for a bare CLI binary, and those
-# are exactly what M0 is testing. Swap for an .xcodeproj when the repo goes public.
+# are exactly what this is for.
 set -euo pipefail
 cd "$(dirname "$0")"
 

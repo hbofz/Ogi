@@ -5,7 +5,10 @@ The Mac's system python has no PIL and no PyObjC, and doing this inside a debug-
 takes minutes because the inner loop is not optimised. So: a minimal RGBA8 PNG decoder, which is
 all these frames ever are.
 
-    python3 Tools/measure-frames.py art/cut/climbup
+    python3 Tools/measure-frames.py <directory-of-cut-frames>
+
+It reads a directory of already-cut PNG frames, which `extract-sprites.swift` produces.
+The source sheets themselves are not in this repository.
 
 Reports, per frame: the ink box, where the topmost and bottommost ink sits as a fraction of the
 frame (which is what `footAnchor` wants), and the horizontal centroid of the top and bottom

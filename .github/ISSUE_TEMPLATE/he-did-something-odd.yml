@@ -1,0 +1,64 @@
+name: He did something odd
+description: A bug report, which is the most useful thing you can send.
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Almost every real defect in this project was found by somebody running it and watching,
+        never by reading the code and never by the test suite. If he did something wrong on your
+        machine, that is genuinely valuable.
+
+        The four boxes below are here because nearly every bug so far turned out to depend on
+        one of them, and asking afterwards costs a round trip.
+
+  - type: textarea
+    id: what
+    attributes:
+      label: What did he do?
+      description: What you saw, and what you expected instead. A screen recording beats any description.
+      placeholder: He walked into the notch and never came out.
+    validations:
+      required: true
+
+  - type: input
+    id: mac
+    attributes:
+      label: Which Mac?
+      description: The model, from  > About This Mac.
+      placeholder: MacBook Air M2, 2022
+    validations:
+      required: true
+
+  - type: input
+    id: macos
+    attributes:
+      label: Which macOS?
+      placeholder: "26.1"
+    validations:
+      required: true
+
+  - type: dropdown
+    id: notch
+    attributes:
+      label: Does the screen he was on have a notch?
+      description: >
+        The notch is his house, and a screen without one takes a different path through most of
+        this. If he was on an external display, answer for the external.
+      options:
+        - Yes, built-in display with a notch
+        - No notch
+        - An external display
+        - More than one display attached
+    validations:
+      required: true
+
+  - type: textarea
+    id: narration
+    attributes:
+      label: What was he narrating? (optional, and worth a lot)
+      description: >
+        Quit him, then run the app from a terminal with `OGI_DEBUG=1` and reproduce it:
+        `OGI_DEBUG=1 /Applications/Ogi.app/Contents/MacOS/Ogi`. Paste the last twenty or so
+        lines. He narrates every decision he makes, which usually says more than the symptom does.
+      render: text

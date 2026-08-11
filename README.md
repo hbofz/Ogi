@@ -31,20 +31,28 @@ and size of your windows, never their titles and never their pixels. He is just 
 
 ## Install
 
-Download the latest `Ogi.zip` from [**Releases**](https://github.com/hbofz/Ogi/releases/latest),
-unzip, and drag `Ogi.app` to `/Applications`.
+Download the latest `Ogi-<version>.zip` from
+[**Releases**](https://github.com/hbofz/Ogi/releases/latest), unzip it, and drag `Ogi.app` to
+`/Applications`.
 
-The first launch is blocked by macOS, because Ogi is signed but not notarised (that needs a paid
-Apple Developer account, and there isn't one yet). To allow it:
+macOS blocks the first launch, because Ogi is signed but not notarised (that needs a paid Apple
+Developer account, and there isn't one yet). Three steps, and the first one is not optional:
 
-**System Settings → Privacy & Security →** scroll down **→ Open Anyway**
+1. **Open `Ogi.app`.** It will refuse, and say it cannot be opened. Do it anyway: the button in
+   step 2 does not exist until macOS has blocked it once, and it expires about an hour later.
+2. **System Settings → Privacy & Security**, scroll down to the message about Ogi, and click
+   **Open Anyway**. Authenticate when asked.
+3. **Open it again** and confirm at the last dialog. That is the one that sticks.
 
-Or, in a terminal: `xattr -c /Applications/Ogi.app`
+Or, in a terminal, instead of all three:
+`xattr -dr com.apple.quarantine /Applications/Ogi.app`
 
 > Being suspicious of an app that asks you to do that is the right instinct. The source is all
-> here, and `./run.sh` builds the identical bundle from it.
+> here, and `./release.sh 1.0.0` builds the same bundle from it.
 
-**To quit, click the cat in your menu bar.** There is no Dock icon by design.
+**To quit, click the cat in your menu bar.** There is no Dock icon by design, so that icon is
+the only way out: if your menu bar is full and macOS has hidden it, `killall Ogi` in a terminal
+does the same thing.
 
 ## What he does
 
@@ -54,16 +62,21 @@ climbs the face of a window to get back up. Close the window under him and he fa
 
 **He notices your machine.** Plug in the charger and he is comically electrocuted. Connect
 AirPods and he grooves. Run the battery low and he powers down flat. When your microphone goes
-live he puts on a headset; when your camera goes live he sits at a tiny laptop and works.
+live he puts on a headset; when your camera goes live he sits at a tiny laptop and works. (The
+two battery reactions need a battery, so on a desktop Mac they never fire.)
 
 **The notch is his house.** He walks out of it at launch, walks *through* it to cross the menu
 bar, hangs off its lower lip doing pull-ups, and sleeps inside it with only his tail showing.
+**This part needs a notch**, so a 2021-or-later MacBook Pro or a 2022-or-later Air. Anywhere
+else he lives on the menu bar instead and the three den animations do not play. Everything
+above still does.
 
 <img src="docs/ogi-petted.gif" width="110" align="right" alt="Ogi being petted">
 
 **You can pet him.** Move your cursor across his body and he shuts his eyes, pushes his head up
 into your hand, and **purrs through your trackpad** using haptic feedback. A purr you can
-physically feel.
+physically feel, on any Mac with a Force Touch trackpad. With a mouse, or on a desktop, you
+still get the cat; you just don't feel him.
 
 **[Every animation is documented](docs/animations.md)** — all 32 of them, playing, with what
 each one is for.
@@ -81,10 +94,21 @@ git clone https://github.com/hbofz/Ogi.git && cd Ogi
 ./run.sh
 ```
 
+That builds a debug, this-machine-only bundle and launches it, which is all you need to work on
+him.
+
 ```sh
-swift test          # 350 tests; the world model and physics are pure functions
+swift test          # 363 tests; the world model and physics are pure functions
 ./release.sh 1.0.0  # builds, tests, bundles and zips a release
 ```
+
+`release.sh` needs a **full Xcode**, not just the Command Line Tools: a release is built for
+Intel and Apple Silicon together, and that routes through XCBuild, which only ships inside
+Xcode.app. Plain `swift build` and `swift test` are fine with the Command Line Tools alone.
+
+The suite is honest but probabilistic: a dozen behavioural tests roll dice, so it fails on luck
+roughly one run in twenty. Re-run it before you go hunting. That is also why CI builds and
+packages but does not run it, and it is the first thing worth fixing in here.
 
 Some of what was learned building this is written up in
 [docs/macos-notes.md](docs/macos-notes.md) — most of it is either undocumented or widely
