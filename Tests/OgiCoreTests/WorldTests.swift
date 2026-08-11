@@ -402,3 +402,43 @@ private let screen = ScreenGeometry(
     #expect(world.surfaces.allSatisfy { $0.y <= s.frame.maxY },
             "there is a walkable surface above the top of the screen")
 }
+
+/// `visibleFrame.maxY == frame.maxY` means nothing is reserved at the top, and that is true in
+/// two situations the geometry alone cannot tell apart: a fullscreen Space, where the menu bar
+/// line is synthetic and must stay coplanar with the fullscreen window's top edge, and a menu
+/// bar merely set to auto-hide, where perching him at the very top draws his whole body off
+/// the display. All four rows here, so neither fix can be made at the other's expense.
+@Test func theMenuBarLineKnowsWhyThereIsNoBar() {
+    let H = CGFloat(1117), W = CGFloat(1728)
+    func geometry(bar: CGFloat, notch: CGRect? = nil) -> ScreenGeometry {
+        ScreenGeometry(frame: CGRect(x: 0, y: 0, width: W, height: H),
+                       visibleFrame: CGRect(x: 0, y: 90, width: W, height: H - 90 - bar),
+                       notch: notch)
+    }
+    func fullscreenWindow(_ g: ScreenGeometry) -> RawWindow {
+        RawWindow(id: 1, pid: 7, layer: 0,
+                  rect: CGRect(x: 0, y: 0, width: W, height: H), alpha: 1, owner: "Film")
+    }
+
+    // A real menu bar, tall or short: untouched, he perches on the bar's own line.
+    for barHeight in [CGFloat(24), 31, 38] {
+        let g = geometry(bar: barHeight)
+        let world = World.build(windows: [], screen: g, ownPID: 99)
+        #expect(world.surface(.menuBar)!.y == g.visibleFrame.maxY,
+                Comment(rawValue: "a \(barHeight)pt bar moved his perch off the bar line"))
+    }
+
+    // Fullscreen: the line stays at the top, coplanar with the window, or he jumps at it.
+    let fs = geometry(bar: 0)
+    let fsWorld = World.build(windows: [fullscreenWindow(fs)], screen: fs, ownPID: 99)
+    #expect(fsWorld.surface(.menuBar)!.y == fs.frame.maxY,
+            "the fullscreen line moved off the window's top edge")
+
+    // Auto-hidden bar, no fullscreen window: he needs panel above him to be drawn on.
+    let hidden = geometry(bar: 0)
+    let hiddenWorld = World.build(windows: [], screen: hidden, ownPID: 99)
+    #expect(hiddenWorld.surface(.menuBar)!.y + Feel.Shape.height <= hidden.frame.maxY,
+            Comment(rawValue: "with the bar hidden he is drawn to y="
+                    + "\(hiddenWorld.surface(.menuBar)!.y + Feel.Shape.height) on a screen "
+                    + "ending at \(hidden.frame.maxY)"))
+}

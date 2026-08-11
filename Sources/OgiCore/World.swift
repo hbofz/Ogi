@@ -159,6 +159,24 @@ extension ClosedRange where Bound == CGFloat {
 public enum World {
 
     /// Turns a raw window list into walkable terrain. Pure: this is the entire test surface.
+    /// Is a fullscreen Space covering this screen?
+    ///
+    /// Full-width bands whose union covers the screen from its bottom EDGE up to the menu bar
+    /// line. The bottom edge, not `visibleFrame.minY`, is what separates fullscreen from
+    /// merely maximized: fullscreen owns the Dock band and zoom does not.
+    public static func somethingFullscreen(in raw: [RawWindow], screen: ScreenGeometry,
+                                           ownPID: pid_t) -> Bool {
+        let f = screen.frame
+        let tol = Feel.World.coplanarTolerance
+        var bare = [f.minY...screen.visibleFrame.maxY]
+        for w in raw where w.layer == 0 && w.pid != ownPID
+            && w.alpha >= Feel.World.minWindowAlpha
+            && w.rect.minX <= f.minX + tol && w.rect.maxX >= f.maxX - tol {
+            bare = subtract(bare, w.rect.minY...w.rect.maxY)
+        }
+        return bare.allSatisfy { $0.length <= tol }
+    }
+
     public static func build(windows: [RawWindow],
                              screen: ScreenGeometry,
                              ownPID: pid_t) -> Skyline {
@@ -268,13 +286,24 @@ public enum World {
         // Menu bar. Always present, effectively never occluded (z = -1), but the notch is a
         // genuine hole in it: a hardware cutout with no pixels behind it. Cutting it out of
         // `solid` is what stops him walking through the doorway and disappearing.
-        // NOT clamped to keep his whole body on the panel, though on a 24pt menu bar a few
-        // points of his head do sit above the top edge. `visibleFrame.maxY == frame.maxY` is
-        // true both for a display with the menu bar auto-hidden AND inside a fullscreen space,
-        // where this line is synthetic and has to stay coplanar with the fullscreen window's
-        // top edge or every landing on it re-plans as a jump. The geometry cannot tell those
-        // two apart, and a few points of overlap is the cheaper of the two wrongs.
-        let menuY = screen.visibleFrame.maxY
+        // **When there is no bar at all, give him something to stand on.**
+        //
+        // `visibleFrame.maxY == frame.maxY` means nothing is reserved at the top, and that is
+        // true in two completely different situations which the geometry alone cannot tell
+        // apart. Inside a fullscreen Space this line is synthetic and MUST stay at the top,
+        // coplanar with the fullscreen window's own top edge, or he reads that edge as a
+        // separate ledge 32pt up and crouches and jumps at it forever. With the menu bar
+        // merely auto-hidden there is no such window, and perching him at `frame.maxY` draws
+        // his whole body off the top of the display.
+        //
+        // So ask which one it is, using the same window list already in hand. Every other
+        // case is untouched: a real bar of any height keeps its own line, notch or not, and a
+        // few points of his head over a short bar stay as they were, because standing him
+        // lower to reclaim them would move him off the bar on every ordinary Mac.
+        let bar = screen.frame.maxY - screen.visibleFrame.maxY
+        let menuY = bar < 1 && !World.somethingFullscreen(in: windows, screen: screen, ownPID: ownPID)
+            ? screen.frame.maxY - Feel.Shape.height
+            : screen.visibleFrame.maxY
         let barSolid = punchNotch([standable], at: menuY)
             .filter { $0.length >= Feel.World.minStandWidth }
         surfaces.append(Surface(id: .menuBar, z: -1, y: menuY, extent: screenSpan,

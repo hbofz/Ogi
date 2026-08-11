@@ -1023,17 +1023,12 @@ public final class OgiApp: NSObject, NSApplicationDelegate {
     /// since a fullscreen window on another display spans none of this screen's x.
     ///
     /// Pure and static so the multi-display cases are testable without an NSApplication.
+    /// Lives in `World` now, because `World.build` needs the same answer to know whether its
+    /// menu bar line is a real bar or a fullscreen space's synthetic one. Forwarded rather
+    /// than moved outright so the call sites and the nine tests naming it keep working.
     static func somethingFullscreen(in raw: [RawWindow], screen: ScreenGeometry,
                                     ownPID: pid_t) -> Bool {
-        let f = screen.frame
-        let tol = Feel.World.coplanarTolerance
-        var bare = [f.minY...screen.visibleFrame.maxY]
-        for w in raw where w.layer == 0 && w.pid != ownPID
-            && w.alpha >= Feel.World.minWindowAlpha
-            && w.rect.minX <= f.minX + tol && w.rect.maxX >= f.maxX - tol {
-            bare = subtract(bare, w.rect.minY...w.rect.maxY)
-        }
-        return bare.allSatisfy { $0.length <= tol }
+        World.somethingFullscreen(in: raw, screen: screen, ownPID: ownPID)
     }
 
     /// His depth in the window stack, which decides what is allowed to occlude him.
