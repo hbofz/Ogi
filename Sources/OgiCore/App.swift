@@ -627,13 +627,24 @@ public final class OgiApp: NSObject, NSApplicationDelegate {
         // He purrs for exactly as long as he is being petted. Edge-triggered off the pose
         // rather than off `beingStroked`, so the buzz and the drawing can never disagree:
         // whatever bars him from the pose (a show, the freeze, being carried) bars the purr.
-        if (cat.activity == .stroked) != purring { purr(cat.activity == .stroked) }
+        //
+        // **A counted burst is exempt, and without that exemption it never played.** A tap
+        // starts eight taps from `handleDrag(.ended)`, but `Cat.pet` puts him in `.alert`, not
+        // `.stroked`: a poke is not a stroke and is not drawn as one. So one tick later this
+        // line read "purring, but not being stroked" and cancelled the burst it had never
+        // started. `pet` also zeroes `squashElapsed`, which makes him `isMoving` and pins the
+        // tick at full rate, so the cancel landed inside 16-33ms against a 40ms tap interval:
+        // one tap of the eight, every click, on every Mac. `Feel.Mind.petPurrTaps` was dead.
+        if !purrBurst, (cat.activity == .stroked) != purring { purr(cat.activity == .stroked) }
     }
 
     // MARK: - The purr
 
     private var purrTimer: DispatchSourceTimer?
     private var purrTapsLeft = 0
+    /// A counted burst is running and owns the trackpad until it has spent its taps. The
+    /// stroke's edge check has to leave it alone: see the note there.
+    private var purrBurst = false
     private var purring: Bool { purrTimer != nil }
 
     /// A purr through the trackpad. `taps: nil` runs until stopped.
@@ -648,6 +659,7 @@ public final class OgiApp: NSObject, NSApplicationDelegate {
     private func purr(_ on: Bool, taps: Int? = nil) {
         purrTimer?.cancel()
         purrTimer = nil
+        purrBurst = on && taps != nil
         guard on else { return }
         purrTapsLeft = taps ?? .max
         let t = DispatchSource.makeTimerSource(queue: .main)
