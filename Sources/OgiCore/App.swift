@@ -456,6 +456,27 @@ public final class OgiApp: NSObject, NSApplicationDelegate {
     /// it is where you click to quit. Nil only when there is no bar at all, in which case
     /// retreats do nothing and quitting is instant.
     private var effectiveHomeX: CGFloat? {
+        // **Whichever doorway is nearer to where he is now.** A notch has two, and `homeX`
+        // records only the one he happened to come out of at launch. Using that forever meant
+        // he walked *past* the near door to reach the far one: dropped at x=1606, well right of
+        // a notch spanning 856...1064, he crossed the whole bar to stand at 833. It also made
+        // the choice look broken rather than arbitrary, because a centred notch ties in
+        // `arrival` (`screenMaxX - notch.maxX > notch.minX` is false when they are equal) and
+        // the tie always breaks the same way, so he used the left door every single time.
+        //
+        // Stable rather than dithering: walking toward the nearer door only reduces its
+        // distance, so the choice cannot flip underneath him. The midpoint is inside the
+        // cutout, which he can only be in while crossing, and a crossing carries its own intent.
+        if homeX != nil, let notch = skyline.screen.notch,
+           let bar = skyline.surface(.menuBar) {
+            let usable = [notch.minX, notch.maxX].filter { door in
+                bar.solid.contains { $0.contains(OgiApp.denX(door, notch: notch)) }
+            }
+            if let nearest = usable.min(by: {
+                abs(OgiApp.denX($0, notch: notch) - cat.position.x)
+                    < abs(OgiApp.denX($1, notch: notch) - cat.position.x)
+            }) { return nearest }
+        }
         if let homeX { return homeX }
         guard let bar = skyline.surface(.menuBar) else { return nil }
         let icon = statusItem?.button?.window?.frame.midX
