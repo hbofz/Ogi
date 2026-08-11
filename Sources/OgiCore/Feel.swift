@@ -618,12 +618,22 @@ public enum Feel {
     public enum Shape {
         // A cat in side view is much longer than it is tall. Getting this ratio wrong is
         // what makes these things read as bears or rats.
-        public static let height: CGFloat = 32
-        public static let width: CGFloat = 52
-        /// A final multiplier on top of the eye-width normalisation, kept at 1: his actual
-        /// size comes from `referenceEyeWidth` below, and this is the knob for scaling him
-        /// globally without retuning that.
-        public static let spriteScale: CGFloat = 1.0
+        //
+        // Scaled with `spriteScale` below and by the same factor, which is the part that is
+        // easy to miss: this box is his PHYSICAL size (the occlusion band, the standing-room
+        // inset, the click target, the contact shadow's width) while `spriteScale` is only his
+        // drawing. Move one without the other and he is drawn bigger while still being clicked,
+        // shadowed and hidden as the smaller cat.
+        public static let height: CGFloat = 40      // was 32
+        public static let width: CGFloat = 65       // was 52
+        /// A final multiplier on top of the eye-width normalisation. His proportions come from
+        /// `referenceEyeWidth` below; this is the knob for scaling him globally without
+        /// retuning that, and it scales the band-height clips too, since `Sprites.scale` is
+        /// `spriteScale * clipScale(clip)` for every clip alike.
+        ///
+        /// 1.25 on Hamzah's report that he was "super small". Keep `Shape.height` and
+        /// `Shape.width` in step with it.
+        public static let spriteScale: CGFloat = 1.25
         /// Target on-screen eye width in points. Every clip is scaled to match it, which is
         /// what keeps him the same size whether he is sitting or walking.
         ///

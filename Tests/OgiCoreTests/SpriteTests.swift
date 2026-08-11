@@ -182,10 +182,12 @@ private func eyeToInk(_ clip: Sprites.Clip, _ i: Int) -> Double? {
     // The one clip normalised on ink height rather than eye width. Keyed on its huge
     // front-facing eyes it rendered at nine points; keyed on height it is a head over a
     // lip, the same size as the head on his side-view body.
+    // Bounds expressed against his body rather than in absolute points, so scaling him
+    // globally (`Feel.Shape.spriteScale`) does not turn this into a failure about nothing.
     let size = Sprites.size(.peer, 0)
-    #expect(abs(size.height - Feel.Shape.peerHeight) < 0.5)
-    #expect(size.width > 12 && size.width < 30,
-            "a peeking head \(size.width)pt wide is not the same cat as his 16-28pt body")
+    #expect(abs(size.height - Feel.Shape.peerHeight * Feel.Shape.spriteScale) < 0.5)
+    #expect(size.width > Feel.Shape.height * 0.375 && size.width < Feel.Shape.height * 0.95,
+            "a peeking head \(size.width)pt wide is not the same cat as his \(Feel.Shape.height)pt body")
 }
 
 @MainActor
