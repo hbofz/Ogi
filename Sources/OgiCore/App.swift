@@ -520,12 +520,9 @@ public final class OgiApp: NSObject, NSApplicationDelegate {
         // line rewrites `repose` every frame from your HID idle time, and under OGI_RESTLESS
         // with `.awake` unconditionally, so a forced state has to override both or it never
         // survives a tick.
-        // A covered screen settles him faster: five minutes to sleep rather than ten. See
-        // `Feel.Notch.coveredSlumberScale` for why that is the situation and not a shortcut.
-        let slumber = Repose.timeScale * (cat.screenCovered ? Feel.Notch.coveredSlumberScale : 1)
         cat.repose = debugRepose
             ?? (Feel.Timing.restless ? .awake
-                : Repose.from(idleSeconds: sense.idleSeconds, scale: slumber))
+                : Repose.from(idleSeconds: sense.idleSeconds, scale: slumberScale))
         cat.listening = debugCall?.mic ?? sense.micLive
         // The camera lives in the notch. This is what bars him from his own den for the length
         // of a call, and what puts the headphones on him.
@@ -802,6 +799,22 @@ public final class OgiApp: NSObject, NSApplicationDelegate {
                             : drawnRect).insetBy(dx: -Feel.Shape.hitPad, dy: -Feel.Shape.hitPad)
     }
 
+    /// The idle ladder he is currently on.
+    ///
+    /// A covered screen settles him faster: five minutes to sleep rather than ten. See
+    /// `Feel.Notch.coveredSlumberScale` for why that is the situation and not a shortcut.
+    ///
+    /// **Both ends of the slumber have to read this, and one of them used to not.** The tick
+    /// armed the slumber on the covered ladder while the watchdog below decided he was done
+    /// on the default one, so with a film up and idle between five and ten minutes the two
+    /// took turns undoing each other: `enterSlumber` stops the display link, the watchdog
+    /// calls `leaveSlumber` a second later, the next tick puts him straight back under. About
+    /// three hundred link suspends, renders and timer pairs, every time anyone watched
+    /// anything fullscreen, and nothing visible on screen to say so.
+    private var slumberScale: Double {
+        Repose.timeScale * (cat.screenCovered ? Feel.Notch.coveredSlumberScale : 1)
+    }
+
     /// Stops the clock entirely and watches for your return once a second. One wakeup a
     /// second is ~600k a week, comfortably under what the Dock itself costs.
     private func enterSlumber() {
@@ -813,7 +826,7 @@ public final class OgiApp: NSObject, NSApplicationDelegate {
             guard let self else { return }
             let idle = CGEventSource.secondsSinceLastEventType(
                 .hidSystemState, eventType: CGEventType(rawValue: ~0)!)
-            guard Repose.from(idleSeconds: idle) != .asleep else { return }
+            guard Repose.from(idleSeconds: idle, scale: self.slumberScale) != .asleep else { return }
             self.leaveSlumber()
         }
         t.resume()
