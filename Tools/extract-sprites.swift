@@ -304,8 +304,18 @@ func pawCentre(_ b: Blob) -> Int {
 let anchors = kept.map { groundAlign ? pawCentre($0) : ($0.minX + $0.maxX) / 2 }
 let leftOf = zip(kept, anchors).map { $1 - $0.minX }
 let rightOf = zip(kept, anchors).map { $0.maxX - $1 }
-let padLeft = leftOf.max() ?? 0
-let commonWidth = padLeft + (rightOf.max() ?? 0) + 1
+// SYMMETRIC about the anchor, so the anchor is the frame's centre.
+//
+// `Sprites.Frame.rect(at:)` centres a frame on his world position, so whatever sits at the
+// middle of the frame is what lands where the engine thinks he is standing, and the contact
+// shadow is drawn at that same world position. Padding to `max(left) + max(right)` puts the
+// anchor at `max(left)` instead, which is only the centre when he happens to be symmetric.
+// A leaning pose is not: the five-frame `lookDown` came out with his paws 31px right of
+// centre, so he was drawn a third of a body-width past the lip he was supposed to be peering
+// over, with his shadow trailing behind his feet.
+let half = max(leftOf.max() ?? 0, rightOf.max() ?? 0)
+let padLeft = half
+let commonWidth = 2 * half + 1
 if groundAlign {
     let widths = kept.map { $0.maxX - $0.minX + 1 }
     print("anchored: \(commonWidth)px common width, was \(widths.min() ?? 0)-\(widths.max() ?? 0)px")
