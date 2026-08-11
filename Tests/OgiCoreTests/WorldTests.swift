@@ -410,35 +410,43 @@ private let screen = ScreenGeometry(
 /// the display. All four rows here, so neither fix can be made at the other's expense.
 @Test func theMenuBarLineKnowsWhyThereIsNoBar() {
     let H = CGFloat(1117), W = CGFloat(1728)
-    func geometry(bar: CGFloat, notch: CGRect? = nil) -> ScreenGeometry {
-        ScreenGeometry(frame: CGRect(x: 0, y: 0, width: W, height: H),
-                       visibleFrame: CGRect(x: 0, y: 90, width: W, height: H - 90 - bar),
+    func geometry(bar: CGFloat, notch: CGRect? = nil, height: CGFloat = H) -> ScreenGeometry {
+        ScreenGeometry(frame: CGRect(x: 0, y: 0, width: W, height: height),
+                       visibleFrame: CGRect(x: 0, y: 90, width: W, height: height - 90 - bar),
                        notch: notch)
     }
-    func fullscreenWindow(_ g: ScreenGeometry) -> RawWindow {
-        RawWindow(id: 1, pid: 7, layer: 0,
-                  rect: CGRect(x: 0, y: 0, width: W, height: H), alpha: 1, owner: "Film")
-    }
 
-    // A real menu bar, tall or short: untouched, he perches on the bar's own line.
-    for barHeight in [CGFloat(24), 31, 38] {
-        let g = geometry(bar: barHeight)
-        let world = World.build(windows: [], screen: g, ownPID: 99)
-        #expect(world.surface(.menuBar)!.y == g.visibleFrame.maxY,
-                Comment(rawValue: "a \(barHeight)pt bar moved his perch off the bar line"))
-    }
+    // A NOTCHED display: the line is the notch's lower lip and must not move a point, because
+    // the cutout, the den, the doorways and the tunnel are all measured from it.
+    let notched = geometry(bar: 38, notch: CGRect(x: 856, y: 1206, width: 208, height: 37),
+                           height: 1243)
+    #expect(World.build(windows: [], screen: notched, ownPID: 99).surface(.menuBar)!.y
+                == notched.visibleFrame.maxY,
+            "the notch's lower lip moved, which moves the den with it")
 
-    // Fullscreen: the line stays at the top, coplanar with the window, or he jumps at it.
-    let fs = geometry(bar: 0)
-    let fsWorld = World.build(windows: [fullscreenWindow(fs)], screen: fs, ownPID: 99)
-    #expect(fsWorld.surface(.menuBar)!.y == fs.frame.maxY,
+    // A FULLSCREEN Space: synthetic line, must stay at the top and coplanar with the window's
+    // own top edge, or every landing on it re-plans as a jump.
+    let fs = geometry(bar: 0, height: 1243)
+    let film = RawWindow(id: 1, pid: 7, layer: 0,
+                         rect: CGRect(x: 0, y: 0, width: W, height: 1243), alpha: 1, owner: "Film")
+    #expect(World.build(windows: [film], screen: fs, ownPID: 99).surface(.menuBar)!.y
+                == fs.frame.maxY,
             "the fullscreen line moved off the window's top edge")
 
-    // Auto-hidden bar, no fullscreen window: he needs panel above him to be drawn on.
-    let hidden = geometry(bar: 0)
-    let hiddenWorld = World.build(windows: [], screen: hidden, ownPID: 99)
-    #expect(hiddenWorld.surface(.menuBar)!.y + Feel.Shape.height <= hidden.frame.maxY,
-            Comment(rawValue: "with the bar hidden he is drawn to y="
-                    + "\(hiddenWorld.surface(.menuBar)!.y + Feel.Shape.height) on a screen "
-                    + "ending at \(hidden.frame.maxY)"))
+    // Any OTHER display: he has to fit in the strip he stands on. A plain bar is 24-25pt
+    // through Sequoia and about 31pt on Tahoe, against a cat who is `Shape.height` tall, so
+    // the line drops as far as it must and no further.
+    for bar in [CGFloat(0), 24, 25, 31, 38, 60] {
+        let g = geometry(bar: bar)
+        let y = World.build(windows: [], screen: g, ownPID: 99).surface(.menuBar)!.y
+        #expect(y + Feel.Shape.height <= g.frame.maxY,
+                Comment(rawValue: "with a \(bar)pt bar his head is drawn \(y + Feel.Shape.height - g.frame.maxY)pt off the top"))
+        #expect(y <= g.visibleFrame.maxY,
+                Comment(rawValue: "with a \(bar)pt bar he perches ABOVE the bar line"))
+        // ...and never lower than it has to be: a bar tall enough for him keeps its own line.
+        if bar >= Feel.Shape.height {
+            #expect(y == g.visibleFrame.maxY,
+                    Comment(rawValue: "a \(bar)pt bar has room for him and still moved his perch"))
+        }
+    }
 }

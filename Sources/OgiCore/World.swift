@@ -286,24 +286,28 @@ public enum World {
         // Menu bar. Always present, effectively never occluded (z = -1), but the notch is a
         // genuine hole in it: a hardware cutout with no pixels behind it. Cutting it out of
         // `solid` is what stops him walking through the doorway and disappearing.
-        // **When there is no bar at all, give him something to stand on.**
+        // **He has to fit in whatever strip he is standing on.**
         //
-        // `visibleFrame.maxY == frame.maxY` means nothing is reserved at the top, and that is
-        // true in two completely different situations which the geometry alone cannot tell
-        // apart. Inside a fullscreen Space this line is synthetic and MUST stay at the top,
+        // He stands on this line with a foot anchor of 0, so his body occupies the strip ABOVE
+        // it, and that strip is only as tall as the menu bar. A notched Mac's is 38pt and he
+        // fits. A plain one is 24-25pt through Sequoia and about 31pt on Tahoe, and at
+        // `Shape.height` he does not: his ears are drawn off the top of the display.
+        //
+        // Inside a FULLSCREEN Space this line is synthetic and must stay exactly at the top,
         // coplanar with the fullscreen window's own top edge, or he reads that edge as a
-        // separate ledge 32pt up and crouches and jumps at it forever. With the menu bar
-        // merely auto-hidden there is no such window, and perching him at `frame.maxY` draws
-        // his whole body off the top of the display.
-        //
-        // So ask which one it is, using the same window list already in hand. Every other
-        // case is untouched: a real bar of any height keeps its own line, notch or not, and a
-        // few points of his head over a short bar stay as they were, because standing him
-        // lower to reclaim them would move him off the bar on every ordinary Mac.
-        let bar = screen.frame.maxY - screen.visibleFrame.maxY
-        let menuY = bar < 1 && !World.somethingFullscreen(in: windows, screen: screen, ownPID: ownPID)
-            ? screen.frame.maxY - Feel.Shape.height
-            : screen.visibleFrame.maxY
+        // separate ledge and crouches and jumps at it forever. `visibleFrame.maxY ==
+        // frame.maxY` is true both there and with the menu bar merely auto-hidden, and the
+        // geometry alone cannot tell them apart, so ask the window list, which is already in
+        // hand. That distinction is why an earlier unconditional clamp had to be reverted.
+        // Two cases keep the line exactly where the system puts it. A fullscreen Space, per
+        // above. And a NOTCHED display, where this line is the notch's lower lip: the cutout,
+        // the den, the doorways and the tunnel are all measured from it, so moving it two
+        // points to buy headroom quietly breaks all of them (`theNotchsLowerLipIsTheMenuBarLine`
+        // says so). A notch strip is 38pt anyway, which he fits.
+        let fullscreen = World.somethingFullscreen(in: windows, screen: screen, ownPID: ownPID)
+        let menuY = fullscreen || screen.notch != nil
+            ? screen.visibleFrame.maxY
+            : min(screen.visibleFrame.maxY, screen.frame.maxY - Feel.Shape.height)
         let barSolid = punchNotch([standable], at: menuY)
             .filter { $0.length >= Feel.World.minStandWidth }
         surfaces.append(Surface(id: .menuBar, z: -1, y: menuY, extent: screenSpan,
