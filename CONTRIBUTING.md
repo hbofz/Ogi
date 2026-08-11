@@ -29,12 +29,12 @@ you should know that before you spend an evening on a patch, not after.
 
 Open an issue first so we can agree the shape of it. Then:
 
-- `swift test` has to stay green. It is 363 tests and it runs in about twenty seconds.
-  **It is also probabilistic**, so read a red run before you believe it: about a dozen
-  behavioural tests roll unseeded dice, and roughly one full run in twenty fails on luck alone.
-  Re-run it. If the same test fails twice you have found something. This is also why CI builds
-  and packages but does not run the suite, and making it deterministic is the single most
-  useful change anyone could send.
+- `swift test` has to stay green. It is 363 tests, it runs in about twenty seconds, and it is
+  **deterministic**: a red run means you broke something, not that you were unlucky. The
+  behavioural tests still roll dice, but every roll comes from a seeded generator
+  (`CatState.roll`), so the same commit gives the same answer every time. CI runs it on every
+  push. If you add a test that samples a tendency over many trials, give each trial its own
+  seed (`cat.roll = Roll(seed: UInt64(trial))`) or all your trials are one trial.
 - **Watch it on the machine.** `./run.sh`, and `OGI_DEBUG=1` narrates what he is doing. Four
   separate bugs in this project survived hundreds of passing tests and were caught by somebody
   looking at the screen.

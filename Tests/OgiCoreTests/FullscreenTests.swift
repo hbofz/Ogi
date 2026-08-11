@@ -123,8 +123,11 @@ import CoreGraphics
         let world = fullscreenWorld()
         let floor = world.surface(.floor)!
         var seen = Set<Int>()
-        for _ in 0..<20 {
+        for trial in 0..<20 {
+            // A seed per trial. Every cat defaults to the same fixed stream, so without this
+            // all the trials are one trial and a "sometimes" test becomes an "always" one.
             var cat = CatState(position: CGPoint(x: 700, y: floor.y))
+            cat.roll = Roll(seed: UInt64(trial))
             cat.support = .grounded(Perch(id: .floor, dx: 700 - floor.extent.lowerBound))
             guard Cat.surfaceOverTheLip(&cat, world: world) else {
                 Issue.record("did not surface at all")

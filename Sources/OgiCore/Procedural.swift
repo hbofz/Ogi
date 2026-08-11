@@ -13,6 +13,10 @@ import CoreGraphics
 ///    small involuntary movements even when nothing has changed.
 public struct Gaze: Sendable {
 
+    /// Its own stream, for the same reason `CatState` has one, and fixed by default for the
+    /// same reason too. `OgiApp` randomises it at launch. See `Roll`.
+    public var roll = Roll(seed: 0)
+
     // Saccade state. All offsets are in the unit disc, scaled to pixels at render time.
     public private(set) var offset: CGPoint = .zero
     private var fixation: CGPoint = .zero     // what he is locked onto
@@ -28,12 +32,12 @@ public struct Gaze: Sendable {
     private var blinkT: CGFloat = -1
     private var queuedDouble = false
 
-    public init() { untilBlink = Self.nextBlinkInterval() }
+    public init() { untilBlink = Self.nextBlinkInterval(using: &roll) }
 
     /// Mean 4s, exponentially distributed. `-ln(U)/λ` with λ = 0.25.
     /// A metronome blink reads as a machine; this reads as an animal.
-    static func nextBlinkInterval() -> CGFloat {
-        let u = Double.random(in: .leastNonzeroMagnitude...1)
+    static func nextBlinkInterval(using roll: inout Roll) -> CGFloat {
+        let u = Double.random(in: .leastNonzeroMagnitude...1, using: &roll)
         return CGFloat(min(max(-log(u) * 4.0, 0.8), 14))
     }
 
@@ -102,7 +106,7 @@ public struct Gaze: Sendable {
                     queuedDouble = false
                     untilBlink = Feel.Eyes.doubleBlinkGap
                 } else {
-                    untilBlink = Self.nextBlinkInterval()
+                    untilBlink = Self.nextBlinkInterval(using: &roll)
                 }
             }
             return
@@ -112,7 +116,7 @@ public struct Gaze: Sendable {
         if untilBlink <= 0 {
             blinkT = 0
             // Cats double-blink. Cheap, and people notice it without knowing why.
-            queuedDouble = Double.random(in: 0...1) < Feel.Eyes.doubleBlinkChance
+            queuedDouble = Double.random(in: 0...1, using: &roll) < Feel.Eyes.doubleBlinkChance
         }
     }
 }

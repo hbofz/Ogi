@@ -138,8 +138,11 @@ private let dt = Feel.Timing.fixedDT
     func tripShare(arousal: Double) -> Double {
         let ground = surface(.floor, y: 90, from: 0, to: 1920, z: .max)
         var trips = 0, bouts = 0
-        for _ in 0..<200 {
+        // A seed per trial, and the SAME two hundred seeds for both arousal levels, so the
+        // comparison is between the two settings rather than between two dice rolls.
+        for trial in 0..<200 {
             var cat = CatState(position: CGPoint(x: 300, y: 90))
+            cat.roll = Roll(seed: UInt64(trial))
             cat.support = .grounded(Perch(id: .floor, dx: 300))
             cat.repose = .curled
             for _ in 0..<(120 * 600) {
@@ -673,8 +676,10 @@ private func twoLedges() -> Skyline {
     // the commoner.
     let bar = surface(.menuBar, y: 1205, from: 0, to: 1920, z: -1)
     var stretches = 0, washes = 0
-    for _ in 0..<200 {
+    // A seed per trial: see `boredomAtALipReachesAllThreeNotchPoses`.
+    for trial in 0..<200 {
         var cat = CatState(position: CGPoint(x: 900, y: 1205))
+        cat.roll = Roll(seed: UInt64(trial))
         cat.support = .grounded(Perch(id: .menuBar, dx: 900))
         cat.repose = .curled          // inPlaceChance 0.95: the roll is almost always in place
         cat.restLeft = 0.01

@@ -106,9 +106,11 @@ swift test          # 363 tests; the world model and physics are pure functions
 Intel and Apple Silicon together, and that routes through XCBuild, which only ships inside
 Xcode.app. Plain `swift build` and `swift test` are fine with the Command Line Tools alone.
 
-The suite is honest but probabilistic: a dozen behavioural tests roll dice, so it fails on luck
-roughly one run in twenty. Re-run it before you go hunting. That is also why CI builds and
-packages but does not run it, and it is the first thing worth fixing in here.
+The suite is deterministic. The behavioural tests still roll dice, but every roll comes from a
+seeded generator, so the same commit gives the same answer every run and a red suite means you
+broke something. `OGI_SEED=n` pins the running app's chance too, so he makes the same
+decisions in the same order; his exact positions still drift a point or two, because the real
+frame timing does.
 
 Some of what was learned building this is written up in
 [docs/macos-notes.md](docs/macos-notes.md) — most of it is either undocumented or widely

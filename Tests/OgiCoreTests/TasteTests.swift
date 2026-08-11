@@ -89,8 +89,9 @@ private let dt = Feel.Timing.fixedDT
     cat.support = .grounded(Perch(id: .window(1), dx: 250))
     cat.age = 100
     // Fifty elections: every .go must carry a move routing agreed to, whatever was drawn.
+    cat.roll = Roll(seed: 0x60)
     for _ in 0..<50 {
-        guard case .go(let intent)? = Cat.idea(from: cat, on: ledge, world: world) else {
+        guard case .go(let intent)? = Cat.idea(from: &cat, on: ledge, world: world) else {
             continue
         }
         #expect(Cat.nextMove(from: cat, on: ledge, toward: intent.destination,
@@ -113,8 +114,9 @@ private let dt = Feel.Timing.fixedDT
     cat.memory[.menuBar] = lived    // stale but familiar; unreachable from the floor anyway
 
     var lounges = 0
+    cat.roll = Roll(seed: 0x10)
     for _ in 0..<200 {
-        if case .lounge? = Cat.idea(from: cat, on: floor, world: world) { lounges += 1 }
+        if case .lounge? = Cat.idea(from: &cat, on: floor, world: world) { lounges += 1 }
     }
     #expect(lounges > 100, "the lounge won only \(lounges)/200 bare-desk elections")
     #expect(lounges < 195, "the lounge never loses; he would never stroll at all")

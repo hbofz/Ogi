@@ -523,8 +523,12 @@ private func onBar(at x: CGFloat, world: Skyline) -> CatState {
     let world = notchedWorld()
     let bar = world.surface(.menuBar)!
     var seen: Set<String> = []
-    for _ in 0..<300 {
+    // A seed per trial. Every cat starts from the same fixed stream by default, so without
+    // this all three hundred trials are the same trial and a "sometimes" test collapses into
+    // an "always" one.
+    for trial in 0..<300 {
         var cat = onBar(at: notch.minX - Feel.Shape.clearance, world: world)
+        cat.roll = Roll(seed: UInt64(trial))
         let den = Cat.denDoor(cat, on: bar)!
         Cat.enterNotch(&cat, on: bar, notch: notch, out: den.out)
         seen.insert("\(cat.activity)/\(cat.notchSide)")

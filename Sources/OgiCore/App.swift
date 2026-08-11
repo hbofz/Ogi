@@ -182,7 +182,7 @@ public final class OgiApp: NSObject, NSApplicationDelegate {
         }
 
         poll(force: true)
-        cat = arrival(on: screen)
+        cat = seeded(arrival(on: screen))
         overlay.start()
 
         let g = ScreenGeometry(screen)
@@ -349,6 +349,21 @@ public final class OgiApp: NSObject, NSApplicationDelegate {
     }
 
     /// First launch: the notch opens and a cat walks out. That is the entire onboarding.
+    ///
+    /// **The one place chance enters the shipping app.** `CatState.roll` and `Gaze.roll` both
+    /// default to a fixed seed so the suite is reproducible; a real cat has to be different
+    /// every launch, so this is where the system is asked, once, and everything downstream is
+    /// a pure function of it. `OGI_SEED` pins it, which makes a reported oddity reproducible.
+    private func seeded(_ c: CatState) -> CatState {
+        var c = c
+        let seed = ProcessInfo.processInfo.environment["OGI_SEED"].flatMap(UInt64.init)
+            ?? .random(in: .min ... .max)
+        c.roll = Roll(seed: seed)
+        gaze.roll = Roll(seed: seed &* 0x9E37_79B9_7F4A_7C15)
+        log("seed \(seed)")
+        return c
+    }
+
     private func arrival(on screen: NSScreen) -> CatState {
         // OGI_START="x,y" drops him somewhere specific instead. Test scaffolding.
         if let env = ProcessInfo.processInfo.environment["OGI_START"] {

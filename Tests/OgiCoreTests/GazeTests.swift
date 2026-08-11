@@ -67,7 +67,9 @@ private func run(_ g: inout Gaze, target: CGPoint, seconds: CGFloat, dt: CGFloat
 
 @Test func blinkIntervalsAreIrregular() {
     // A metronome blink reads as a machine. Sample the distribution directly.
-    let samples = (0..<200).map { _ in Gaze.nextBlinkInterval() }
+    var roll = Roll(seed: 0xB11)
+    var samples: [CGFloat] = []
+    for _ in 0..<200 { samples.append(Gaze.nextBlinkInterval(using: &roll)) }
     let mean = samples.reduce(0, +) / CGFloat(samples.count)
     let spread = samples.map { abs($0 - mean) }.reduce(0, +) / CGFloat(samples.count)
     #expect(mean > 2 && mean < 6, "mean blink interval drifted from ~4s")

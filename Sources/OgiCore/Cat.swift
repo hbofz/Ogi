@@ -243,7 +243,44 @@ public enum Repose: Sendable, Equatable {
     }
 }
 
+/// The one source of chance in the simulation, carried in the state rather than taken from the
+/// system at each call site.
+///
+/// **Why this exists.** Seventeen call sites used to reach for `Double.random` directly, so a
+/// run could not be reproduced even from an identical world, and the dozen behavioural tests
+/// that measure tendencies (how often he backs off a high drop, how often a bare desk elects
+/// the lounge) failed on luck about one full run in twenty. A suite that reddens for no reason
+/// trains everyone to ignore it, which is why CI built the package but would not run it.
+///
+/// SplitMix64: sixty-four bits of state, no warm-up, and good enough for deciding whether a cat
+/// washes or looks out of a window. `CatState` seeds itself from the system once at
+/// construction, so shipping behaviour is as varied as it ever was; a test sets `roll` and gets
+/// the same cat every time.
+public struct Roll: RandomNumberGenerator, Sendable, Equatable {
+    private var state: UInt64
+
+    public init(seed: UInt64) { state = seed }
+
+    public mutating func next() -> UInt64 {
+        state &+= 0x9E37_79B9_7F4A_7C15
+        var z = state
+        z = (z ^ (z >> 30)) &* 0xBF58_476D_1CE4_E5B9
+        z = (z ^ (z >> 27)) &* 0x94D0_49BB_1331_11EB
+        return z ^ (z >> 31)
+    }
+}
+
 public struct CatState: Sendable {
+    /// Every chance he takes, in one reproducible stream.
+    ///
+    /// **The default is a fixed seed, and that is the whole point.** A default drawn from the
+    /// system would leave every test that builds a cat nondeterministic, which is the state
+    /// this replaced: the suite failed about one run in twenty on luck alone, so CI would not
+    /// run it and `release.sh` aborted roughly one release attempt in thirty for no reason.
+    /// Deterministic by default, random only where somebody asks for it, which is `OgiApp` at
+    /// launch and nowhere else. See `Roll`.
+    public var roll = Roll(seed: 0)
+
     /// AppKit global, at his feet, on his midline.
     public var position: CGPoint
     public var velocity: CGVector
@@ -1325,7 +1362,7 @@ public enum Cat {
             s.hurrying = false
             s.activity = s.repose.restingActivity
             s.activityElapsed = 0
-            s.restLeft = Feel.Timing.restMin + Double.random(in: 0...Feel.Timing.restJitter)
+            s.restLeft = Feel.Timing.restMin + Double.random(in: 0...Feel.Timing.restJitter, using: &s.roll)
         }
 
         /// One step of the plan is finished. Re-plan toward the same destination rather than
@@ -1484,9 +1521,9 @@ public enum Cat {
                 // head appearing over the lip.
                 if surfaceOverTheLip(&s, world: world) { return s }
                 // Nothing to surface at. Somewhere else entirely, and the first that routes.
-                for other in world.surfaces.shuffled()
+                for other in world.surfaces.shuffled(using: &s.roll)
                 where other.id != surface.id && other.targetable && !other.spans.isEmpty {
-                    guard let span = other.spans.randomElement() else { continue }
+                    guard let span = other.spans.randomElement(using: &s.roll) else { continue }
                     let x = (span.lowerBound + span.upperBound) / 2
                     if let move = nextMove(from: s, on: surface, toward: other.id, x: x,
                                            world: world) {
@@ -1547,7 +1584,7 @@ public enum Cat {
                 if s.activityElapsed > hold {
                     s.activity = s.repose.restingActivity
                     s.activityElapsed = 0
-                    s.restLeft = Feel.Timing.restMin + Double.random(in: 0...Feel.Timing.restJitter)
+                    s.restLeft = Feel.Timing.restMin + Double.random(in: 0...Feel.Timing.restJitter, using: &s.roll)
                 }
                 return s
             }
@@ -1595,7 +1632,7 @@ public enum Cat {
                 // settled he is, the likelier that is what it turns out to be.
                 // ...and a stirred-up cat is likelier to go somewhere than to wash.
                 let inPlace = s.repose.inPlaceChance * (1 - s.arousal * Feel.Mind.travelUrgency)
-                if Double.random(in: 0...1) < inPlace {
+                if Double.random(in: 0...1, using: &s.roll) < inPlace {
                     // Standing at a notch lip there are two things to do that exist nowhere
                     // else on the screen, both of them the same geometric fact used twice: the
                     // cutout is a hole in `solid` sitting above the bar line, so the one
@@ -1607,7 +1644,7 @@ public enum Cat {
                     // already is. It is rarer than `lipIdeaChance` suggests: reaching it at all
                     // needs boredom to come up in-place while he happens to be at a doorway.
                     if let notch = world.screen.notch, let den = denDoor(s, on: surface),
-                       Double.random(in: 0...1) < Feel.Notch.lipIdeaChance {
+                       Double.random(in: 0...1, using: &s.roll) < Feel.Notch.lipIdeaChance {
                         // Three things to do in a hole, and which one is a coin flip between
                         // going *into* it and leaning out of the side he is already standing at.
                         //
@@ -1618,12 +1655,12 @@ public enum Cat {
                         // Usually a wash, sometimes a stretch: more is wanted than
                         // one in-place behaviour, and until the stretch the wash was the only
                         // one that existed.
-                        s.activity = Double.random(in: 0...1) < Feel.Timing.stretchChance
+                        s.activity = Double.random(in: 0...1, using: &s.roll) < Feel.Timing.stretchChance
                             ? .stretch : .groom
                     }
                     s.activityElapsed = 0
                 } else if !s.screenCovered,
-                          let choice = idea(from: s, on: surface, world: world) {
+                          let choice = idea(from: &s, on: surface, world: world) {
                     switch choice {
                     case .go(let intent):
                         s.intent = intent
@@ -1690,7 +1727,7 @@ public enum Cat {
                 let drop = s.footing.dropAhead ?? 0
                 guard s.activityElapsed >= hesitation(forDrop: drop) else { return s }
 
-                guard Double.random(in: 0...1) < commitChance(forDrop: drop) else {
+                guard Double.random(in: 0...1, using: &s.roll) < commitChance(forDrop: drop) else {
                     // Thought better of it. He turns, walks a little way back along the ledge
                     // and sits down pretending he was never considering it.
                     //
@@ -1861,7 +1898,8 @@ public enum Cat {
                 break
             }
             guard let dest = world.surface(destID),
-                  let v = launch(dx: destX - s.position.x, dy: dest.y - s.position.y) else {
+                  let v = launch(dx: destX - s.position.x, dy: dest.y - s.position.y,
+                                 using: &s.roll) else {
                 // The window moved while he was winding up and it is out of reach now.
                 // Give up rather than teleporting.
                 settle(&s)
@@ -1935,7 +1973,7 @@ public enum Cat {
             // that then refused to hold him.
             guard let target = world.surface(destID), let rect = target.rect,
                   rect.minX <= s.position.x, s.position.x < rect.maxX,
-                  let v = launch(dx: 0, dy: climbLift(to: rect, from: s.position)) else {
+                  let v = launch(dx: 0, dy: climbLift(to: rect, from: s.position), using: &s.roll) else {
                 // The window moved out from over him while he was winding up.
                 settle(&s)
                 break
@@ -1973,7 +2011,7 @@ public enum Cat {
                 s.perchSpeed = 0
                 break
             }
-            guard Double.random(in: 0...1) < commitChance(forDrop: depth) else {
+            guard Double.random(in: 0...1, using: &s.roll) < commitChance(forDrop: depth) else {
                 settle(&s)      // thought better of it; the next idea starts from scratch
                 break
             }
@@ -2302,8 +2340,12 @@ public enum Cat {
                       // the way up is exactly that test, so a launch this admitted at maxX
                       // would rise through a face that refused to hold him.
                       rect.minX <= x, x < rect.maxX,
-                      launch(dx: 0, dy: climbLift(to: rect, from: CGPoint(x: x, y: surface.y)),
-                             jitter: 0) != nil else { return nil }
+                      {
+                          var noAimError = Roll(seed: 0)   // jitter 0: nothing is drawn
+                          return launch(dx: 0,
+                                        dy: climbLift(to: rect, from: CGPoint(x: x, y: surface.y)),
+                                        jitter: 0, using: &noAimError) != nil
+                      }() else { return nil }
                 let from = hypot(x - target.x, surface.y - target.y)
                 let d = hypot(x - target.x, other.y - target.y)
                 return d < from - Feel.Physics.arrivalSlop ? (other.id, x, d) : nil
@@ -2326,7 +2368,9 @@ public enum Cat {
     /// get clear of his own ledge he jumps, and if he cannot he walks to the edge and drops.
     static func clears(_ surface: Surface, from: CGPoint, to: CGPoint) -> Bool {
         guard to.y < surface.y else { return true }
-        guard let v = launch(dx: to.x - from.x, dy: to.y - from.y, jitter: 0) else { return false }
+        var noAimError = Roll(seed: 0)   // jitter 0: nothing is drawn
+        guard let v = launch(dx: to.x - from.x, dy: to.y - from.y, jitter: 0,
+                             using: &noAimError) else { return false }
         // Range at launch height: 2·vx·vy/g, but he judges soberly and executes with a wobble,
         // so what he actually gets is that range scaled by (1 ± aimError)². Every crossing in
         // that band has to clear, not just the sober one: a jump whose sober crossing sits a
@@ -2384,18 +2428,18 @@ public enum Cat {
     ///
     /// **This chooses a destination and nothing else.** `nextMove` is final, and the scorer
     /// never assumes reachability: unroutable dreams simply lose the draw.
-    static func idea(from s: CatState, on surface: Surface, world: Skyline) -> Idea? {
+    static func idea(from s: inout CatState, on surface: Surface, world: Skyline) -> Idea? {
         var pool = [Candidate(id: nil, x: s.position.x, y: s.position.y)]
         for other in world.surfaces where other.targetable {
             for span in other.spans where span.length > Feel.World.minStandWidth {
                 pool.append(Candidate(id: other.id,
-                                      x: .random(in: span.lowerBound...span.upperBound),
+                                      x: .random(in: span.lowerBound...span.upperBound, using: &s.roll),
                                       y: other.y))
             }
         }
         var scores = pool.map { score($0, from: s, world: world) }
         while let i = draw(scores, temperature: Feel.Taste.temperature,
-                           roll: .random(in: 0..<1)) {
+                           roll: .random(in: 0..<1, using: &s.roll)) {
             let c = pool[i]
             if let id = c.id {
                 // A stroll to the spot he is already standing on is not an idea.
@@ -2518,7 +2562,7 @@ public enum Cat {
             .filter { $0.targetable && $0.y > s.position.y + Feel.World.coplanarEpsilon }
             .sorted { $0.y < $1.y }
         guard let lip = above.first(where: { !$0.spans.isEmpty }),
-              let x = standingRoom(near: randomX(in: lip.spans), in: lip.spans)
+              let x = standingRoom(near: randomX(in: lip.spans, using: &s.roll), in: lip.spans)
         else { return false }
         s.support = .grounded(Perch(id: lip.id, dx: x - lip.extent.lowerBound))
         s.position = CGPoint(x: x, y: lip.y)
@@ -2618,10 +2662,10 @@ public enum Cat {
     /// A uniformly random point across a set of spans, weighted by their length so a 30pt
     /// sliver is not as likely as the rest of the screen. Falls back to the first span's start
     /// when the run has no length at all.
-    static func randomX(in spans: [ClosedRange<CGFloat>]) -> CGFloat {
+    static func randomX(in spans: [ClosedRange<CGFloat>], using roll: inout Roll) -> CGFloat {
         let total = spans.reduce(0) { $0 + $1.length }
         guard total > 0 else { return spans.first?.lowerBound ?? 0 }
-        var mark = CGFloat.random(in: 0...total)
+        var mark = CGFloat.random(in: 0...total, using: &roll)
         for span in spans {
             if mark <= span.length { return span.lowerBound + mark }
             mark -= span.length
@@ -2682,7 +2726,8 @@ public enum Cat {
     public static func launch(dx: CGFloat, dy: CGFloat,
                               speed v: CGFloat = Feel.Physics.jumpImpulse,
                               g: CGFloat = Feel.Physics.gravity,
-                              jitter: CGFloat = Feel.Physics.aimError) -> CGVector? {
+                              jitter: CGFloat = Feel.Physics.aimError,
+                              using roll: inout Roll) -> CGVector? {
         // r ≥ |dy|, so dy + r ≥ 0 and neither root can be NaN. atan2 also handles dx = 0,
         // which is why this needs no straight-up special case and no angle clamp: θ lands in
         // [0, π/2] by construction and nothing perturbs it.
@@ -2690,7 +2735,7 @@ public enum Cat {
         let vMin = (g * (dy + r)).squareRoot()
         guard vMin <= v else { return nil }
 
-        let noise = jitter > 0 ? CGFloat.random(in: -jitter...jitter) : 0
+        let noise = jitter > 0 ? CGFloat.random(in: -jitter...jitter, using: &roll) : 0
         let t = atan2(dy + r, abs(dx))
         let speed = min(v, vMin * (1 + noise))
         return CGVector(dx: cos(t) * speed * (dx < 0 ? -1 : 1), dy: sin(t) * speed)
@@ -2711,7 +2756,11 @@ public enum Cat {
     /// Aimed soberly on purpose: he judges without the jitter and then executes with it,
     /// which is what lets him commit to a jump and still fall short of it.
     public static func canReach(from: CGPoint, to: CGPoint) -> Bool {
-        launch(dx: to.x - from.x, dy: to.y - from.y, jitter: 0) != nil
+        {
+            var noAimError = Roll(seed: 0)   // jitter 0: nothing is drawn
+            return launch(dx: to.x - from.x, dy: to.y - from.y, jitter: 0,
+                          using: &noAimError) != nil
+        }()
     }
 
     /// Where solid ground runs out in the direction he is facing, in world x.
@@ -2767,7 +2816,7 @@ public enum Cat {
         // Pointing back at the lip he came in by, which is how he gets out again.
         s.facing = out
 
-        switch Int.random(in: 0..<3) {
+        switch Int.random(in: 0..<3, using: &s.roll) {
         case 0, 1:
             // Under the middle of the hole. `facing` has to be re-derived here: he is no longer
             // at the lip he entered by, so "which way is out" becomes "which lip is nearer".
@@ -2775,7 +2824,7 @@ public enum Cat {
             s.facing = out
             s.notchSide = .below
             s.notchLift = 0
-            s.activity = Bool.random() ? .hang : .peerDown
+            s.activity = Bool.random(using: &s.roll) ? .hang : .peerDown
         default:
             // Out of the side wall he is already standing at.
             let x = out < 0 ? notch.minX : notch.maxX

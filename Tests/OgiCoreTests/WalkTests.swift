@@ -533,10 +533,14 @@ private func bareDesktop() -> Skyline {
     let aim = try! #require(Cat.aimX(on: there, from: from, toward: 400))
     #expect(aim > 500 && aim < 560, "expected an aim just inside the lip, got \(aim)")
 
-    let short = (0..<400).filter { _ in
-        let v = Cat.launch(dx: aim - from.x, dy: 0)!
-        return from.x + 2 * v.dx * v.dy / Feel.Physics.gravity < 500
-    }.count
+    // One generator across the four hundred trials, so they still scatter and the count is
+    // still the same number every run. See `Roll`.
+    var roll = Roll(seed: 0x5CA7)
+    var short = 0
+    for _ in 0..<400 {
+        let v = Cat.launch(dx: aim - from.x, dy: 0, using: &roll)!
+        if from.x + 2 * v.dx * v.dy / Feel.Physics.gravity < 500 { short += 1 }
+    }
     #expect(short > 40, "he fell short only \(short)/400 times; the margin has eaten the error")
 }
 

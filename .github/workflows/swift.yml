@@ -25,14 +25,14 @@ jobs:
     - name: Build
       run: swift build
 
-    # NOT here: `swift test`. The suite is honest but probabilistic: fifteen unseeded
-    # `Double.random` call sites drive the boredom rolls, the taste election and the edge
-    # refusal, so it fails occasionally on luck alone. A badge that goes red for no reason
-    # trains everyone to ignore it, and a red cross is what a stranger sees first.
-    #
-    # The suite runs on every release instead (`release.sh` runs it before it will package
-    # anything), which is the moment it actually has to be green. Put it back here the day the
-    # RNG is injectable and a seeded run is reproducible.
+    # Back in CI, and it took making it deterministic to get here. The suite used to be
+    # honest but probabilistic: seventeen call sites drew straight from the system, so a full
+    # run failed on luck roughly once in twenty and a badge that reddens for no reason trains
+    # everyone to ignore it. `CatState.roll` and `Gaze.roll` now default to a fixed seed and
+    # only `OgiApp` asks the system, once, at launch. Measured at 0 failures in 25 consecutive
+    # runs. If this ever goes red twice on the same commit, it is real.
+    - name: Test
+      run: swift test
 
     # Everything below tests the *shipping* path rather than the source, because that is where
     # this project's worst bug lived: a release built, tested and ran perfectly on the machine
