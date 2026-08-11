@@ -765,3 +765,25 @@ func aNotchPoseRunsItsFullLengthWithAFilmUp(pose: Activity) {
             Comment(rawValue: "peerDown ended as \(ended), not the pull-up: the hidden branch "
                     + "beat it by one comparison"))
 }
+
+/// `leaveNotch` rewrites both `support` and `position.x`, but `standing` binds its local
+/// `perch` before that runs. Left stale, the walk arm read `extent.lowerBound + perch.dx` and
+/// wrote it straight back on the same tick, undoing the reposition: one frame of `.slip`, a
+/// spurious `.land` with its squash bounce, and a re-planned walk, every time he left the notch.
+@MainActor
+@Test func leavingTheNotchDoesNotSlipOnTheWayOut() {
+    let world = World.build(windows: [], screen: screen, ownPID: 99)
+    var s = CatState(position: CGPoint(x: notch.midX, y: notch.minY))
+    s.support = .grounded(Perch(id: .menuBar,
+                                dx: notch.midX - world.surface(.menuBar)!.extent.lowerBound))
+    s.inNotch = true
+    s.activity = .walk
+    s.intent = Intent(destination: .menuBar, destinationX: 400, move: .walk(400))
+
+    var sawSlip = false
+    for _ in 0..<Int(1 / dt) {
+        s = Cat.step(s, world: world, dt: dt)
+        if s.activity == .slip { sawSlip = true }
+    }
+    #expect(!sawSlip, "he slipped coming out of the notch onto ground that was always there")
+}

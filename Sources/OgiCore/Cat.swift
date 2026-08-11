@@ -1123,7 +1123,16 @@ public enum Cat {
         //
         // First in the function, before any of the branches that can cause it, so the exit is
         // never more than one tick late.
-        if s.inNotch, !s.mayStayInNotch { leaveNotch(&s, on: surface, world: world) }
+        if s.inNotch, !s.mayStayInNotch {
+            leaveNotch(&s, on: surface, world: world)
+            // `leaveNotch` rewrites BOTH `s.support` and `s.position.x`, and `perch` above is a
+            // copy taken before it ran. Left stale, the `.walk` arm below reads
+            // `surface.extent.lowerBound + perch.dx` and writes that straight back, undoing the
+            // reposition on the same tick: one frame of `.slip`, a spurious `.land` with its
+            // squash bounce, and a re-planned walk, every time he came out of the notch.
+            // This is the only support mutation on this path that falls through to `switch move`.
+            if case .grounded(let fresh) = s.support { perch = fresh }
+        }
 
         // Frozen. Ears forward, tail dead still. He hears you, or you are typing hard enough
         // that the kind thing is to stay out of the way, and it doubles as a privacy indicator:

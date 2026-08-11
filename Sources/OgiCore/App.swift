@@ -596,6 +596,14 @@ public final class OgiApp: NSObject, NSApplicationDelegate {
         // You locked the screen, so he goes home and everything suspends. This is the
         // "all polling suspends" rule, and it costs one early return.
         if sense.asleep {
+            // Stop the purr on the way out. This returns 60-odd lines above the stroke's edge
+            // check, which is the only thing that ever ends a continuous purr, and a continuous
+            // purr has `purrTapsLeft = .max`, so its own self-cancel is about 1.2e10 seconds
+            // away. `suspend()` only stops the display link, and the link is what would have
+            // run the edge check, so a screen locked mid-stroke left the timer buzzing the
+            // trackpad until the machine woke. `strokeTravel` decays inside `Cat.step`, which
+            // this return also skips, so the state could not lapse out of it either.
+            purr(false)
             overlay.suspend()   // resumed by Signals.onWake, never from in here
             return
         }
