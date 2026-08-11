@@ -115,7 +115,10 @@ public enum Sprites {
             // three keystrokes a second, which is a cat pretending to work rather than a
             // person actually working.
             case .callWork, .callFull: 8
-            case .denSleep: 2.5   // breathing and a tail, like sleep, which is what it is
+            // The tail is the whole animation: his body is inside the cutout where the notch
+            // occluder erases it, so what hangs out of the hole and sways is all you see. At
+            // 2.5 it read as a stalled drawing rather than a sleeping cat.
+            case .denSleep: 5     // a tail keeping time, not breathing
             case .hang: 6         // a rep takes two thirds of a second
             case .peerDown: 4     // a nosy look down, a shade quicker than peer's 2.5
             // A cat pushing his head up into your hand does it slowly. Faster than the

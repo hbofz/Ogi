@@ -368,6 +368,18 @@ public enum Feel {
     }
 
     public enum Timing {
+        /// A gap in input longer than this means he settled again, so the wake timer restarts.
+        /// Short enough that a real burst of typing keeps it alive between keystrokes.
+        public static let stirWindow: TimeInterval = 2
+
+        /// How long the machine has to be in CONTINUOUS use before a sleeping cat wakes.
+        ///
+        /// Waking used to be instant: any HID event drops idle to zero, the ladder says awake,
+        /// and he snapped upright, which Hamzah described as scary. A real cat sleeps through a
+        /// keystroke. Four seconds of sustained use is roughly "you have actually come back",
+        /// and a stray keypress or a nudge of the mouse no longer counts as one.
+        public static let wakeSettle: TimeInterval = 4
+
         public static let fixedDT: TimeInterval = 1.0 / 120
         /// Without this clamp the first tick after the display link resumes from screen
         /// lock integrates a multi-hour delta and launches him into orbit.
@@ -513,6 +525,19 @@ public enum Feel {
         /// nowhere to go and nothing to look at, the taste election is gated off entirely, and
         /// ten minutes of a cat waiting in a doorway is ten minutes of nothing. Five is roughly
         /// how long it takes to stop fidgeting with the volume and actually watch.
+        /// How far from the den door he may wander while the screen is covered.
+        ///
+        /// A RANGE, not a spot, and that distinction is the whole point. The standing order
+        /// used to hold him inside `arrivalSlop * 3`, nine points, which is why a cat at the
+        /// top of the screen during a film was a statue: every idea that moved him more than
+        /// a body width was immediately undone by the order dragging him back. Nine points is
+        /// not a home, it is a peg.
+        ///
+        /// 150 is about four body widths: far enough that he can leave the doorway, mooch,
+        /// look over the lip and come back, tight enough that he is obviously still living at
+        /// the notch rather than roaming the bar.
+        public static let denYard: CGFloat = 150
+
         public static let coveredSlumberScale: Double = 0.5
         /// How far up the cutout's side he grips when he peeks out of a vertical edge, as a
         /// fraction of its height. Two thirds: level with the top of the strip rather than

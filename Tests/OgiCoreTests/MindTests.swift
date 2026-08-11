@@ -385,16 +385,33 @@ private func twoLedges() -> Skyline {
 
 // MARK: - Holding still
 
-@Test func typingFastFreezesHim() {
+@Test func typingDoesNotFreezeHim() {
+    // The reversal, pinned as precisely as it can be: typing is read by nothing, so the same
+    // cat in the same world with the same seed must live exactly the same life whether you are
+    // hammering the keyboard or not. A call still stops him; `onlyACallHoldsHimStill` covers it.
+    //
+    // Asserted as "identical" rather than "he moved a lot", because he can legitimately elect a
+    // 45-second lounge and spend a short window doing nothing at all, which is a cat, not a bug.
     let ground = surface(.floor, y: 90, from: 0, to: 1920, z: .max)
-    var cat = CatState(position: CGPoint(x: 300, y: 90))
-    cat.support = .grounded(Perch(id: .floor, dx: 300))
-    cat.typingHard = true
-    cat.restLeft = 0                     // he would otherwise be about to have an idea
-
-    for _ in 0..<(120 * 30) { cat = Cat.step(cat, world: sky([ground]), dt: dt) }
-    #expect(cat.activity == .alert, "he did not snap alert while you were typing")
-    #expect(cat.intent == nil, "he set off somewhere while you were typing")
+    func life(typing: Bool) -> [String] {
+        var cat = CatState(position: CGPoint(x: 300, y: 90))
+        cat.roll = Roll(seed: 4)
+        cat.support = .grounded(Perch(id: .floor, dx: 300))
+        cat.typingHard = typing
+        cat.restLeft = 0
+        var trail: [String] = []
+        var last: Activity = .idle
+        for _ in 0..<(120 * 120) {
+            cat = Cat.step(cat, world: sky([ground]), dt: dt)
+            cat.typingHard = typing          // App re-derives it every tick
+            if cat.activity != last { trail.append("\(cat.activity)@\(Int(cat.position.x))"); last = cat.activity }
+        }
+        return trail
+    }
+    let quiet = life(typing: false)
+    let typed = life(typing: true)
+    #expect(quiet == typed, "typing changed what he did, so it is still steering him")
+    #expect(quiet.count > 3, Comment(rawValue: "he only did \(quiet), so this proves little"))
 }
 
 @Test func aHotMicDoesNotDestroyWhereHeWasGoing() {
@@ -442,14 +459,19 @@ private func twoLedges() -> Skyline {
     #expect(cat.isMoving == true, "he stopped rendering mid-fall because your mic was live")
 }
 
-@Test func holdingStillIsEitherReason() {
+@Test func onlyACallHoldsHimStill() {
+    // Typing used to count too. It was removed on Hamzah's report: you are typing most of the
+    // time you are looking at him, so the frozen pose was the one you saw most.
     var cat = CatState(position: .zero)
     #expect(cat.holdingStill == false)
     cat.listening = true
-    #expect(cat.holdingStill)
+    #expect(cat.holdingStill, "a hot mic must still stop him: the freeze is the privacy tell")
     cat.listening = false
+    cat.onCamera = true
+    #expect(cat.holdingStill, "a live camera must still stop him")
+    cat.onCamera = false
     cat.typingHard = true
-    #expect(cat.holdingStill)
+    #expect(cat.holdingStill == false, "typing froze him again")
 }
 
 @Test func theTypingThresholdsCannotFlicker() {
@@ -1363,4 +1385,24 @@ private func partlyCoveredLedge() -> Surface {
     #expect(flips <= 2, Comment(rawValue: "\(flips) activity changes in 5s of a sleeping cat"))
     #expect(s.activity == .sleep, "he did not stay asleep")
     #expect(s.position.x == startX, "he moved while asleep")
+}
+
+/// A sleeping cat sleeps through a keystroke. Waking used to be instant: any HID event drops
+/// the idle clock to zero, the ladder says awake, and he snapped upright from a dead sleep.
+/// Hamzah's word for it was scary. A wake has to be earned now, and the ladder itself is what
+/// this pins: the gate lives in `OgiApp`, but the numbers it uses live here.
+@Test func wakingTakesSustainedUseNotOneKeystroke() {
+    // The shape of the gate: continuous use for `wakeSettle`, where any gap longer than
+    // `stirWindow` restarts the count.
+    #expect(Feel.Timing.wakeSettle > Feel.Timing.stirWindow,
+            "a single burst inside one stir window would earn a wake on its own")
+    #expect(Feel.Timing.stirWindow >= 1.5,
+            "shorter than this and an ordinary pause between keystrokes restarts the count")
+    #expect(Feel.Timing.wakeSettle <= 8,
+            "longer than this and coming back to the machine leaves him asleep in your face")
+
+    // And the ladder it gates is still the one the tick uses: asleep well past ten minutes,
+    // awake the instant the idle clock is low. The gate is what stops that being immediate.
+    #expect(Repose.from(idleSeconds: 601, scale: 1) == .asleep)
+    #expect(Repose.from(idleSeconds: 0, scale: 1) == .awake)
 }

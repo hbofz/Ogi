@@ -365,7 +365,20 @@ public struct CatState: Sendable {
     /// **"Still" means he stops travelling, not that nothing moves.** `callTalk` has him
     /// yapping, mouth and head. The invariant that matters is untouched: `perchSpeed` goes to
     /// zero and he walks nowhere. Only his head moves, in place.
-    public var holdingStill: Bool { listening || typingHard || onCamera }
+    /// A live microphone or camera stops him dead: he is being quiet for you, and the freeze
+    /// doubles as a privacy tell.
+    ///
+    /// **Typing deliberately does NOT, and that is a reversal.** It used to, and it was the
+    /// single biggest reason he looked dead on this machine: you are typing most of the time
+    /// you are looking at him, so the pose you saw most was the frozen one, on the menu bar,
+    /// going nowhere. Hamzah asked for the opposite, in his words "give him full moving
+    /// ability".
+    ///
+    /// `typingHard` is still measured, with hysteresis, in `App.tick`, but nothing reads it
+    /// now. Left in place rather than ripped out because it is a real signal that costs one
+    /// counter, and the next thing that wants "is he hammering the keyboard" should use it.
+    /// If nothing does, delete the whole path rather than leaving it to rot.
+    public var holdingStill: Bool { listening || onCamera }
 
     /// Your cursor, screen-global. Set by `App` each tick, and in practice never nil: he is
     /// pinned to one screen and the global mouse location is always somewhere, so a cursor on
@@ -1512,7 +1525,7 @@ public enum Cat {
                // length of a film.
                !s.inNotch, s.activity != .peer, !s.beingStroked,
                !upTop(s, on: surface, world: world)
-                   || abs(s.position.x - home) > Feel.Physics.arrivalSlop * 3,
+                   || abs(s.position.x - home) > Feel.Notch.denYard,
                let move = nextMove(from: s, on: surface, toward: .menuBar, x: home,
                                    world: world) {
                 s.intent = Intent(destination: .menuBar, destinationX: home, move: move)

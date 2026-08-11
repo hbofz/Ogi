@@ -597,9 +597,12 @@ public final class OgiApp: NSObject, NSApplicationDelegate {
         // line rewrites `repose` every frame from your HID idle time, and under OGI_RESTLESS
         // with `.awake` unconditionally, so a forced state has to override both or it never
         // survives a tick.
+        let ladder = Feel.Timing.restless ? .awake
+            : Repose.from(idleSeconds: sense.idleSeconds, scale: slumberScale)
+        // A sleeping cat sleeps through a keystroke. See `wakeIsEarned`.
         cat.repose = debugRepose
-            ?? (Feel.Timing.restless ? .awake
-                : Repose.from(idleSeconds: sense.idleSeconds, scale: slumberScale))
+            ?? ((cat.repose == .asleep && ladder != .asleep
+                 && !wakeIsEarned(idle: sense.idleSeconds, now: now)) ? .asleep : ladder)
         cat.listening = debugCall?.mic ?? sense.micLive
         // The camera lives in the notch. This is what bars him from his own den for the length
         // of a call, and what puts the headphones on him.
@@ -919,6 +922,25 @@ public final class OgiApp: NSObject, NSApplicationDelegate {
 
     /// Stops the clock entirely and watches for your return once a second. One wakeup a
     /// second is ~600k a week, comfortably under what the Dock itself costs.
+    /// When the machine started being used continuously, or nil once it has gone quiet again.
+    private var stirredAt: CFTimeInterval?
+
+    /// Has the machine been in use long enough to be worth waking a sleeping cat for?
+    ///
+    /// Waking was instant: any HID event drops the idle clock to zero, the ladder immediately
+    /// says awake, and he snapped upright from a dead sleep. One keystroke did it. That reads
+    /// as a jump scare rather than an animal, and it is not how sleeping works.
+    ///
+    /// So a wake has to be EARNED: continuous use for `wakeSettle`, where any gap longer than
+    /// `stirWindow` puts him back to sleep and restarts the count. Tap one key and he sleeps
+    /// on. Actually come back to the machine and he gets up, with the stretch `onWake` owes him.
+    private func wakeIsEarned(idle: Double, now: CFTimeInterval) -> Bool {
+        guard idle < Feel.Timing.stirWindow else { stirredAt = nil; return false }
+        let start = stirredAt ?? now
+        stirredAt = start
+        return now - start >= Feel.Timing.wakeSettle
+    }
+
     private func enterSlumber() {
         guard slumberTimer == nil else { return }
         overlay.suspend()
@@ -928,7 +950,10 @@ public final class OgiApp: NSObject, NSApplicationDelegate {
             guard let self else { return }
             let idle = CGEventSource.secondsSinceLastEventType(
                 .hidSystemState, eventType: CGEventType(rawValue: ~0)!)
-            guard Repose.from(idleSeconds: idle, scale: self.slumberScale) != .asleep else { return }
+            // Same bar as the tick's: the display link is stopped in here, so this watchdog is
+            // the only thing that can wake him, and without the gate a single keystroke did.
+            guard Repose.from(idleSeconds: idle, scale: self.slumberScale) != .asleep,
+                  self.wakeIsEarned(idle: idle, now: CACurrentMediaTime()) else { return }
             self.leaveSlumber()
         }
         t.resume()

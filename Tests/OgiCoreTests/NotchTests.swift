@@ -170,10 +170,12 @@ private func onBar(at x: CGFloat, world: Skyline) -> CatState {
     // drawing, so "ears up means your mic is hot" had stopped being true. They must not
     // converge again.
     let world = notchedWorld()
+    // Typing no longer poses him at all, so the two cannot converge by construction now. What
+    // still has to hold is the half that carries the meaning: a hot mic puts him on the call.
     var typing = onBar(at: 400, world: world)
     typing.typingHard = true
     typing = Cat.step(typing, world: world, dt: dt)
-    #expect(typing.activity == .alert)
+    #expect(typing.activity != .onCall, "typing wore the call rig")
 
     var mic = onBar(at: 400, world: world)
     mic.listening = true
@@ -452,7 +454,10 @@ private func onBar(at x: CGFloat, world: Skyline) -> CatState {
     // anything that swapped the activity out from under him — the mic, the cursor, waking —
     // evaporated it, and the next tick's ground test ran before anything could catch him. He
     // fell out of the hole onto the desktop, wearing a laptop.
-    for interrupt in ["mic", "camera", "typing", "waking"] {
+    // "typing" is deliberately absent: it stopped being an interrupt when it stopped holding
+    // him still, so there is nothing for it to interrupt. The mic, the camera and waking all
+    // still have to get him out of the hole without dropping him.
+    for interrupt in ["mic", "camera", "waking"] {
         let world = notchedWorld()
         var cat = onBar(at: notch.midX, world: world)
         cat.activity = .hang
