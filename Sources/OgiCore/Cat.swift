@@ -1021,6 +1021,21 @@ public enum Cat {
         s.activity = .scruffed
         s.activityElapsed = 0
         s.intent = nil
+        // Picking him up takes him out of the notch, and these have to say so.
+        //
+        // They used to survive the whole carry: the `.held` branch returns early and
+        // `standing` bails unless he is `.grounded`, so nothing on the path cleared them. Two
+        // things followed. `Overlay` applies `notchLift` unconditionally, so he dangled ~25pt
+        // above the cursor the entire time it was set. And on touchdown `standing`'s first act
+        // is `leaveNotch`, which fired against whatever he had landed on and repositioned him
+        // to the notch lip: released at x=300, standing at x=1086 two seconds later.
+        //
+        // The sibling rotation two lines down in `Overlay.apply` is already gated on the frame
+        // for exactly this reason, with the note that the flag outlives the pose it belongs
+        // to. Same hazard, and `notchLift` was missed.
+        s.inNotch = false
+        s.notchSide = .below
+        s.notchLift = 0
         return s
     }
 

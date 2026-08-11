@@ -679,3 +679,32 @@ func aNotchPoseRunsItsFullLengthWithAFilmUp(pose: Activity) {
     let msg = "\(pose) lasted \(String(format: "%.3f", covered))s of \(hold)s with a film up: the retreat cancelled the pose it exists to produce"
     #expect(covered > hold - 0.1, Comment(rawValue: msg))
 }
+
+/// Picking him out of the notch used to keep `inNotch`, `notchSide` and `notchLift` set for
+/// the whole carry: the `.held` branch returns early and `standing` bails unless he is
+/// grounded, so nothing cleared them. He dangled a `notchLift` above the cursor, and on
+/// touchdown `standing`'s first act, `leaveNotch`, fired against whatever he had landed on and
+/// threw him back to the notch lip.
+@MainActor
+@Test func pickingHimOutOfTheNotchDoesNotTeleportHimOnLanding() {
+    let world = World.build(windows: [], screen: screen, ownPID: 99)
+    var s = CatState(position: CGPoint(x: notch.midX, y: notch.minY))
+    s.support = .grounded(Perch(id: .menuBar,
+                                dx: notch.midX - world.surface(.menuBar)!.extent.lowerBound))
+    s.inNotch = true
+    s.notchLift = 24.7
+    s.activity = .hang
+
+    s = Cat.grab(s, at: CGPoint(x: 700, y: 900))
+    #expect(!s.inNotch, "still flagged as in the notch while being carried")
+    #expect(s.notchLift == 0, "drawn \(s.notchLift)pt above the cursor while carried")
+
+    let dropX: CGFloat = 300
+    s = Cat.release(s, throwVelocity: .zero, world: world)
+    s.position = CGPoint(x: dropX, y: 900)
+    for _ in 0..<Int(4 / dt) { s = Cat.step(s, world: world, dt: dt) }
+
+    #expect(abs(s.position.x - dropX) < 200,
+            Comment(rawValue: "dropped at \(Int(dropX)) and ended at \(Int(s.position.x)): "
+                    + "the notch exit fired on a surface he never came from"))
+}
