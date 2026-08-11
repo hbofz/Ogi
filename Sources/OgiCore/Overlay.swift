@@ -64,7 +64,15 @@ public final class Overlay {
     /// Stop the clock entirely rather than ticking at a low rate: a paused display link is
     /// zero wakeups, and "the screen locks and all polling suspends" is a stated behaviour,
     /// not an optimisation.
-    public func suspend() { view.setPaused(true) }
+    ///
+    /// Hands the mouse back on the way down. `setInteractive` is driven from the tick, and the
+    /// tick is what is about to stop, so whatever it last decided would stick for the whole
+    /// slumber: a cat who fell asleep under your cursor left a screen-sized window swallowing
+    /// clicks until something woke him. Nothing else clears it, because nothing else runs.
+    public func suspend() {
+        setInteractive(false)
+        view.setPaused(true)
+    }
     public func resume() { view.setPaused(false) }
 
     /// Asks the system for fewer callbacks when he is settled.

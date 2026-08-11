@@ -1332,3 +1332,30 @@ private func partlyCoveredLedge() -> Surface {
     #expect(abs(cat.position.x - 900) >= clear - Feel.Physics.arrivalSlop * 3,
             "he stayed under a jiggling pointer at \(cat.position.x), eating every click")
 }
+
+/// The yield sets an intent and returns; the sleep gate below it opens by clearing the intent.
+/// A sleeping cat under a parked cursor therefore flipped between the two at the full link
+/// rate and never moved a point. Sleep is the hard stop, so it wins.
+@MainActor
+@Test func aSleepingCatUnderAParkedCursorDoesNotFlap() {
+    let world = World.build(windows: [], screen: screen, ownPID: 99)
+    let bar = world.surface(.menuBar)!
+    var s = CatState(position: CGPoint(x: 400, y: bar.y))
+    s.support = .grounded(Perch(id: .menuBar, dx: 400 - bar.extent.lowerBound))
+    s.repose = .asleep
+    s.activity = .sleep
+    s.cursor = CGPoint(x: 400, y: bar.y + 10)
+    s.cursorOnHimFor = Feel.Mind.yieldPatience * 3
+
+    var flips = 0
+    var last = s.activity
+    let startX = s.position.x
+    for _ in 0..<Int(5 / Feel.Timing.fixedDT) {
+        s = Cat.step(s, world: world, dt: Feel.Timing.fixedDT)
+        s.cursorOnHimFor += Feel.Timing.fixedDT
+        if s.activity != last { flips += 1; last = s.activity }
+    }
+    #expect(flips <= 2, Comment(rawValue: "\(flips) activity changes in 5s of a sleeping cat"))
+    #expect(s.activity == .sleep, "he did not stay asleep")
+    #expect(s.position.x == startX, "he moved while asleep")
+}

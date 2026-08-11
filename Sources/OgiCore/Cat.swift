@@ -1183,7 +1183,15 @@ public enum Cat {
         // ...but a hand that is MOVING over him is a pet, not an obstruction, and the yield is
         // the one thing in the app that would read it backwards. Without this guard, stroking
         // him for longer than `yieldPatience` walks him out from under your hand.
-        if s.intent == nil, !s.beingStroked, let cursor = s.cursor,
+        //
+        // **Not while he is asleep**, and the two used to fight every frame. This sets an
+        // intent and returns; the sleep gate below opens with `s.intent = nil`. A sleeping cat
+        // under a parked cursor therefore flipped sleep -> walk -> sleep at the full link rate,
+        // 420 activity changes in five seconds, and never moved a single point. Sleep is the
+        // hard stop and it wins. What the yield is really for down here (not swallowing your
+        // clicks) is `Overlay.suspend`'s job instead: it drops `ignoresMouseEvents` when the
+        // clock stops, so a sleeping cat is click-through wherever he lies.
+        if s.intent == nil, !s.beingStroked, s.repose != .asleep, let cursor = s.cursor,
            s.cursorOnHimFor >= Feel.Mind.yieldPatience,
            let x = beside(cursor: cursor, on: surface, from: s.position.x,
                           width: s.drawnBox?.width ?? Feel.Shape.width),
