@@ -1648,14 +1648,18 @@ private func steppingOff() -> CatState {
     // failed at before the generator was seedable, so it is long-standing and not new. It is
     // pinned so the suite is honest about being green rather than red one run in seventy, and
     // it is written down here so the next person does not rediscover it as "flakiness".
-    cat.roll = Roll(seed: 1)
     cat.support = .grounded(Perch(id: .menuBar, dx: notch.maxX + 40 - bar.extent.lowerBound))
     cat.facing = -1
     // Aimed at the floor *under the cutout*: the nearest way down is through it.
     cat.intent = Intent(destination: .floor, destinationX: notch.midX, move: .stepOff)
 
     var lookedNear = CGFloat.greatestFiniteMagnitude
-    var westmost = CGFloat.greatestFiniteMagnitude
+    // The x he came to be at while NOT crossing. Measured as "was he ever in the hole", not
+    // "was he ever west of it": those are different questions, and this asked the wrong one
+    // for a long time. Crossing the tunnel is legal and leaves him legitimately west of the
+    // cutout, so a run that happened to cross failed a test about hesitating at it. Seeded,
+    // that was 3 runs in 200; unseeded it was the ~1% this test was known to "flake" at.
+    var stoodInTheCutout: CGFloat?
     for _ in 0..<Int(60 / dt) {
         cat = Cat.step(cat, world: world, dt: dt)
         // Until he leaves the bar, however he leaves it. Threading a jump down through the
@@ -1665,11 +1669,13 @@ private func steppingOff() -> CatState {
         // ever legal as a CROSSING. Wandering in, hesitating at it, or coming to rest in it are
         // all the trap this test guards, and `insideNotch` is exactly the difference. Sampled
         // rather than asserted so the failure names the x.
-        if !cat.insideNotch { westmost = min(westmost, cat.position.x) }
+        if !cat.insideNotch, cat.position.x > notch.minX, cat.position.x < notch.maxX {
+            stoodInTheCutout = cat.position.x
+        }
         if cat.activity == .edgeLook { lookedNear = min(lookedNear, cat.position.x) }
     }
-    #expect(westmost >= notch.maxX,
-            "he stood in the cutout at x=\(Int(westmost)) without crossing it")
+    #expect(stoodInTheCutout == nil,
+            "he stood in the cutout at x=\(Int(stoodInTheCutout ?? 0)) without crossing it")
     #expect(lookedNear < .greatestFiniteMagnitude, "he never looked at anything")
     #expect(lookedNear > notch.maxX + Feel.Physics.edgeApproach,
             "he put his head over the cutout at x=\(Int(lookedNear))")
