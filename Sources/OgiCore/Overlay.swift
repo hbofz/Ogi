@@ -38,18 +38,25 @@ public final class Overlay {
         // Click-through is driven by `setInteractive`, not by per-pixel alpha hit testing.
         // See the note there. Default to swallowing nothing.
         window.ignoresMouseEvents = true
-        window.orderFrontRegardless()
 
         view.overlay = self
+        // Sizes the view AND sets the global-to-view translation, before anything is shown.
+        setFrame(screen.frame)
+        window.orderFrontRegardless()
     }
 
     public var windowNumber: Int { window.windowNumber }
 
     /// The display changed shape under him. Without this the window keeps the old
     /// configuration's size and he is drawn outside it, which looks exactly like a crash.
+    ///
+    /// **The only place that knows where this window sits.** `init` routes through here too,
+    /// rather than repeating the three lines, so a future third way to move the window cannot
+    /// pick up the size and miss the coordinate translation. See `setScreenOrigin`.
     public func setFrame(_ r: CGRect) {
         window.setFrame(r, display: false)
         view.frame = CGRect(origin: .zero, size: r.size)
+        view.setScreenOrigin(r.origin)
     }
 
     public func start() { view.startLink() }
@@ -181,6 +188,27 @@ final class OgiView: NSView {
         let s = window?.backingScaleFactor ?? 2
         for l in [root, maskContainer, maskShape, shadowLayer, bodyLayer, eyesLayer, pupilLayer, zzzLayer] { l.contentsScale = s }
     }
+
+    /// The one conversion between his world and this view.
+    ///
+    /// Everything below `root` is positioned in NSScreen-GLOBAL coordinates, because that is
+    /// what the world model, the skyline and `cat.position` are all in, and keeping one
+    /// coordinate system is the whole point of `isFlipped == false` above. A view's own space,
+    /// though, starts at its window's origin. On the primary display that origin is (0, 0) and
+    /// the two are the same numbers, which is why this was invisible for the life of the
+    /// project: it is an identity transform on exactly one machine setup.
+    ///
+    /// On any other arrangement (a display left of or below the primary, or an external as
+    /// `NSScreen.main`) every layer lands `origin` away from where it belongs, which is far
+    /// enough to be outside the window entirely, and a sublayer outside its window is not
+    /// clipped, it is simply never drawn. He vanishes. Meanwhile `hitRect` and
+    /// `NSEvent.mouseLocation` are global and are NOT translated, so `setInteractive` keeps
+    /// swallowing clicks at the place he logically is, and you get an invisible dead patch
+    /// that walks around the screen.
+    ///
+    /// `root` carries it alone: it has no bounds of its own, so its `position` is a pure
+    /// translation of every child, and `noActions` already bars this property from animating.
+    func setScreenOrigin(_ o: CGPoint) { root.position = CGPoint(x: -o.x, y: -o.y) }
 
     func startLink() {
         link?.invalidate()
