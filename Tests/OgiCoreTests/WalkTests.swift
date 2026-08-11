@@ -1014,3 +1014,32 @@ private func curtainWorld(bottom: CGFloat = 200) -> Skyline {
     #expect(worstAirborne < 12, "longest unsupported stretch was \(worstAirborne)s")
     #expect(worstRun < 30, "slowest run took \(worstRun)s")
 }
+
+/// The sibling test above hand-builds spans, so it never meets `World.build`, which insets
+/// every window's standable span by `cornerInset` at each end. Through the real world builder
+/// the number `strideGap` is compared against is the physical crack plus 20, so a constant
+/// written about the crack itself only ever admitted cracks of 0 to 4 points. `stepAcross`'s
+/// own doc names a six-point crack between two tiled windows as the case a leap must never be
+/// used for, and six is exactly what got a leap.
+@Test func realTiledWindowsGetAStrideAndNotALeap() {
+    let screen = ScreenGeometry(frame: CGRect(x: 0, y: 0, width: 1920, height: 1080),
+                               visibleFrame: CGRect(x: 0, y: 0, width: 1920, height: 1080),
+                               notch: nil)
+    for crack in [CGFloat(0), 2, 4, 6, 8] {
+        let a = RawWindow(id: 1, pid: 1, layer: 0,
+                          rect: CGRect(x: 100, y: 200, width: 600, height: 400), alpha: 1, owner: "A")
+        let b = RawWindow(id: 2, pid: 2, layer: 0,
+                          rect: CGRect(x: 700 + crack, y: 200, width: 600, height: 400), alpha: 1, owner: "B")
+        let world = World.build(windows: [a, b], screen: screen, ownPID: 99)
+        guard let left = world.surfaces.first(where: { $0.id == .window(1) }),
+              let lip = left.solid.last?.upperBound else {
+            Issue.record("no left surface at crack \(crack)"); return
+        }
+        let move = Cat.nextMove(from: standing(at: lip, on: left), on: left,
+                                toward: .window(2), x: 1000, world: world)
+        guard case .stepAcross = move else {
+            Issue.record("a \(crack)pt crack between two tiled windows got \(String(describing: move))")
+            return
+        }
+    }
+}

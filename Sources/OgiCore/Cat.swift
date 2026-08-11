@@ -1445,7 +1445,16 @@ public enum Cat {
             // uses to decide what to clip. He steps out along his own ledge if any of it is
             // still showing, and only leaves the ledge entirely when the whole thing is
             // covered.
-            if s.hiddenFor >= Feel.Mind.hiddenPatience {
+            //
+            // **A cat who chose the hole is not hiding by accident.** The notch is an occluder
+            // by design, so every notch pose accrues `hiddenFor` at exactly the rate its own
+            // clock runs. With `peerDownSeconds` and `hiddenPatience` both at 10, a `.below`
+            // peer-down (which stands at `notch.midX`, outside `bar.spans`) had the two
+            // counters bit-identical, and this branch is tested first and uses `>=` while the
+            // pose's own exit below uses `>`. So it won by one comparison, every time, and the
+            // pull-up out of the notch never played for half of all peer-downs. The intent
+            // planted here then survived `leaveNotch`'s reposition and walked him off the lip.
+            if s.hiddenFor >= Feel.Mind.hiddenPatience, !s.inNotch {
                 if let x = standingRoom(near: s.position.x, in: surface.spans),
                    abs(x - s.position.x) > Feel.Physics.arrivalSlop * 3 {
                     s.intent = Intent(destination: surface.id, destinationX: x, move: .walk(x))
@@ -2101,7 +2110,13 @@ public enum Cat {
         if abs(dest.y - surface.y) <= Feel.World.coplanarTolerance,
            let far = nearestSpanX(to: here.x, in: dest.spans),
            let lip = edgeAhead(from: here.x, facing: far > here.x ? 1 : -1, on: surface),
-           abs(far - lip) <= Feel.Physics.strideGap {
+           // Measured between STANDABLE spans, and `World.build` insets every window's by
+           // `cornerInset` at each end, so the number here is the physical crack plus 20.
+           // Compared against the bare `strideGap` (a constant written about the crack itself)
+           // the stride only ever fired for cracks of 0 to 4 points, and `stepAcross`'s own doc
+           // names a six-point crack between two tiled windows as the thing a leap must never
+           // be used for. Six was exactly what got a leap.
+           abs(far - lip) <= Feel.Physics.strideGap + 2 * Feel.World.cornerInset {
             return abs(here.x - lip) <= Feel.Physics.arrivalSlop
                 ? .stepAcross(destID, far) : .walk(lip)
         }

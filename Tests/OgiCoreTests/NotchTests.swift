@@ -739,3 +739,29 @@ func aNotchPoseRunsItsFullLengthWithAFilmUp(pose: Activity) {
     #expect(bar.solid.contains { $0.contains(s.position.x) },
             "frozen somewhere the bar has no pixels behind it")
 }
+
+/// `peerDownSeconds` and `hiddenPatience` are both 10, and a `.below` peer-down stands at
+/// `notch.midX`, which is not in `bar.spans`, so `hiddenFor` and `activityElapsed` accrued the
+/// same dt on the same ticks and came out bit-identical. The hidden branch is tested first and
+/// uses `>=` while the pose's own exit uses `>`, so it won every time and the pull-up back over
+/// the lip never played for half of all peer-downs.
+@MainActor
+@Test func theBelowPeerDownEndsWithItsOwnPullUp() {
+    let world = World.build(windows: [], screen: screen, ownPID: 99)
+    var s = CatState(position: CGPoint(x: notch.midX, y: notch.minY))
+    s.support = .grounded(Perch(id: .menuBar,
+                                dx: notch.midX - world.surface(.menuBar)!.extent.lowerBound))
+    s.inNotch = true
+    s.notchSide = .below
+    s.activity = .peerDown
+    s.activityElapsed = 0
+
+    var ended: Activity = .peerDown
+    for _ in 0..<Int((Feel.Notch.peerDownSeconds + 2) / dt) {
+        s = Cat.step(s, world: world, dt: dt)
+        if s.activity != .peerDown { ended = s.activity; break }
+    }
+    #expect(ended == .land,
+            Comment(rawValue: "peerDown ended as \(ended), not the pull-up: the hidden branch "
+                    + "beat it by one comparison"))
+}
