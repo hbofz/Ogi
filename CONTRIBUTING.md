@@ -3,14 +3,11 @@
 ## The short version
 
 **Issues, bug reports, and "I watched him do something odd" are the most useful thing you can
-send, and they need nothing from you but the report.** Almost every real defect in this project
-was found by running it and watching, never by reading the code or by the three hundred and
-fifty tests. If he does something wrong on your machine, that is genuinely valuable and I want
+send, and they need nothing from you but the report.** If he does something wrong on your machine, that is genuinely valuable and I want
 to hear about it.
 
 **Pull requests containing code need a copyright assignment before they can be merged.** If you
-would rather not sign one, open an issue describing the change instead. That is not a brush-off:
-a well-described bug is worth more here than a patch, for the reason above.
+would rather not sign one, open an issue describing the change instead.
 
 ## Why the assignment
 
@@ -19,8 +16,7 @@ commercially.
 
 I can only do that while I hold copyright in all of it. The moment someone else's code is merged,
 they own copyright in their lines, and relicensing then requires tracking down every contributor
-who ever landed a patch and getting each of them to agree in writing. Projects get permanently
-stuck this way, and it is not recoverable once it happens.
+who ever landed a patch and getting each of them to agree in writing.
 
 So this is stated up front rather than discovered later. You are giving up something real, and
 you should know that before you spend an evening on a patch, not after.
