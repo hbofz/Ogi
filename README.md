@@ -35,8 +35,9 @@ Download the latest `Ogi-<version>.zip` from
 [**Releases**](https://github.com/hbofz/Ogi/releases/latest), unzip it, and drag `Ogi.app` to
 `/Applications`.
 
-macOS blocks the first launch, because Ogi is signed but not notarised (that needs a paid Apple
-Developer account, and there isn't one yet). Three steps, and the first one is not optional:
+macOS blocks the first launch. Ogi is ad-hoc signed, so the bundle is sealed against tampering
+but carries no developer identity, and it is not notarised. Both of those want a paid Apple
+Developer account, and there isn't one yet. Three steps, and the first one is not optional:
 
 1. **Open `Ogi.app`.** It will refuse, and say it cannot be opened. Do it anyway: the button in
    step 2 does not exist until macOS has blocked it once, and it expires about an hour later.
