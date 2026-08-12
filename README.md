@@ -125,7 +125,7 @@ preferences, and installs no login item, agent, or helper.
 
 ## License
 
-[PolyForm Noncommercial 1.0.0](LICENSE.md). Source-available, not open source.
+[PolyForm Noncommercial 1.0.0](LICENSE.md).
 
 ## Contributing
 
