@@ -54,7 +54,7 @@ design constraint of these three and the reason none of them can be screenshotte
 
 | | Clip | Frames | Rate | When |
 |---|---|---|---|---|
-| <img src="clips/denSleep.gif" height="110"> | `denSleep` | 4 | 2.5fps | Asleep inside the notch. All you can see is a tail below the bar line. |
+| <img src="clips/denSleep.gif" height="110"> | `denSleep` | 4 | 5fps | Asleep inside the notch. All you can see is a tail below the bar line. |
 | <img src="clips/hang.gif" height="110"> | `hang` | 6 | 6fps | Hanging off the notch's lower lip by his front paws, doing reps. |
 | <img src="clips/peerDown.gif" height="110"> | `peerDown` | 4 | 4fps | Lying in the notch, head over its lower lip, watching you. |
 

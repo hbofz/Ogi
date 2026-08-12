@@ -29,7 +29,7 @@ you should know that before you spend an evening on a patch, not after.
 
 Open an issue first so we can agree the shape of it. Then:
 
-- `swift test` has to stay green. It is 363 tests, it runs in about twenty seconds, and it is
+- `swift test` has to stay green. It is 367 tests, it runs in about twenty seconds, and it is
   **deterministic**: a red run means you broke something, not that you were unlucky. The
   behavioural tests still roll dice, but every roll comes from a seeded generator
   (`CatState.roll`), so the same commit gives the same answer every time. CI runs it on every

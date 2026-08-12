@@ -48,7 +48,7 @@ Or, in a terminal, instead of all three:
 `xattr -dr com.apple.quarantine /Applications/Ogi.app`
 
 > Being suspicious of an app that asks you to do that is the right instinct. The source is all
-> here, and `./release.sh 1.0.0` builds the same bundle from it.
+> here, and `./release.sh 1.1.1` builds the same bundle from it.
 
 **To quit, click the cat in your menu bar.** There is no Dock icon by design, so that icon is
 the only way out: if your menu bar is full and macOS has hidden it, `killall Ogi` in a terminal
@@ -98,8 +98,8 @@ That builds a debug, this-machine-only bundle and launches it, which is all you 
 him.
 
 ```sh
-swift test          # 363 tests; the world model and physics are pure functions
-./release.sh 1.0.0  # builds, tests, bundles and zips a release
+swift test          # 367 tests; the world model and physics are pure functions
+./release.sh 1.1.1  # builds, tests, bundles and zips a release
 ```
 
 `release.sh` needs a **full Xcode**, not just the Command Line Tools: a release is built for
