@@ -44,7 +44,8 @@ Open an issue first so we can agree the shape of it. Then:
 - `docs/macos-notes.md` collects the platform behaviour that cost the most time to discover.
   Worth reading before you fight the window server.
 
-Art is not open to contribution. The sprites are generated and hand-cut through a private
-pipeline, and the frame counts, rates and anchors in `Sprites.swift` are tied to specific
-sheets. If a clip looks wrong on your machine, an issue with a screen recording is the right
-way to report it.
+Art is not open to contribution. The sheets are generated and are not in the repository, and the
+frame counts, rates and anchors in `Sprites.swift` are tied to specific ones, so a new clip means
+regenerating and re-cutting rather than adding a file. `Tools/extract-sprites.swift` is the
+cutter, if you want to see how frames come out of a sheet. If a clip looks wrong on your machine,
+an issue with a screen recording is the right way to report it.
