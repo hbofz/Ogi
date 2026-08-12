@@ -87,3 +87,7 @@ Drawn as green-screen sheets, one animation to a row, and cut into transparent
 frames by `Tools/extract-sprites.swift`. Every clip is normalised on the width of
 his eye so that sheets generated weeks apart still render the same cat — except the
 handful whose eyes cannot be measured, which carry their own height instead.
+
+The sheets themselves came out of an image model. Everything after that was by hand:
+cutting the frames, cleaning them, sizing them, picking which ones hold and which get
+dropped, and setting every rate in the tables above.
