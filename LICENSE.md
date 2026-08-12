@@ -1,5 +1,3 @@
-Required Notice: Copyright 2026 Hamzah Azzam (https://github.com/hbofz/Ogi)
-
 Ogi is licensed under the **PolyForm Noncommercial License 1.0.0**. Everything below the rule is
 the full text of that licence, unmodified and byte for byte as published at
 <https://polyformproject.org/licenses/noncommercial/1.0.0>. Nothing has been added to it or
