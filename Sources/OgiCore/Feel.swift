@@ -386,6 +386,20 @@ public enum Feel {
         /// keystrokes Hamzah asked for.
         public static let wakeSettle: TimeInterval = 6
 
+        /// Wakeups a second while he is asleep INSIDE the notch, so his tail keeps swaying.
+        ///
+        /// The clock stops outright for an ordinary sleep, because the battery cost of a
+        /// desktop pet is wakeups rather than pixels. The den is the one exception, and it is
+        /// the exception because the tail IS the animation: his body is inside the cutout where
+        /// the occluder erases it, so a stopped clock leaves a single frozen frame of tail and
+        /// the README's "sleeps inside it with only his tail showing" stops being true.
+        ///
+        /// Five, matching `denSleep`'s frame rate, and driven by a timer rather than by the
+        /// display link: `preferredFrameRateRange` is honoured on ProMotion and IGNORED on a
+        /// fixed-refresh display, where the link would keep firing sixty times a second to
+        /// draw five frames. Five wakeups is five wakeups on every Mac.
+        public static let denTailRate: Double = 5
+
         public static let fixedDT: TimeInterval = 1.0 / 120
         /// Without this clamp the first tick after the display link resumes from screen
         /// lock integrates a multi-hour delta and launches him into orbit.

@@ -83,7 +83,8 @@ each one is for.
 
 **He costs nothing.** 0.0% CPU when idle, measured. Once he settles, the display link stops
 outright and he wakes once a second to check whether you are back. The battery cost of a desktop
-pet is processor wakeups, not pixels.
+pet is processor wakeups, not pixels. The one exception is asleep inside the notch, where his
+tail is the whole animation, so that keeps a five-a-second clock rather than freezing mid-sway.
 
 ## Build from source
 

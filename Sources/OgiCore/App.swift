@@ -950,11 +950,25 @@ public final class OgiApp: NSObject, NSApplicationDelegate {
 
     private func enterSlumber() {
         guard slumberTimer == nil else { return }
-        overlay.suspend()
+        // **Asleep in the den keeps a clock, and only the den does.** Everywhere else the link
+        // stops outright and he is a still frame, which is right: nothing about a curled cat
+        // moves. Inside the notch the tail hanging below the bar line is the entire drawing,
+        // so a stopped clock froze it mid-sway and the den's whole picture stopped being true.
+        // A timer rather than the link, at `denTailRate`, because a lowered link rate is
+        // ignored on a fixed-refresh display and would cost sixty wakeups to draw five.
+        let drawing = cat.inDen
+        if !drawing { overlay.suspend() }
+        let period = drawing ? 1 / Feel.Timing.denTailRate : 1
         let t = DispatchSource.makeTimerSource(queue: .main)
-        t.schedule(deadline: .now() + 1, repeating: 1, leeway: .milliseconds(400))
+        t.schedule(deadline: .now() + period, repeating: period,
+                   leeway: .milliseconds(drawing ? 20 : 400))
         t.setEventHandler { [weak self] in
             guard let self else { return }
+            if drawing {
+                // The tail, and nothing else: he is asleep, so the world poll stays stopped.
+                self.stepPhysics(CACurrentMediaTime())
+                self.renderNow()
+            }
             let idle = CGEventSource.secondsSinceLastEventType(
                 .hidSystemState, eventType: CGEventType(rawValue: ~0)!)
             // Same bar as the tick's: the display link is stopped in here, so this watchdog is
@@ -965,7 +979,8 @@ public final class OgiApp: NSObject, NSApplicationDelegate {
         }
         t.resume()
         slumberTimer = t
-        log("asleep — display link stopped, watching at 1Hz")
+        log(drawing ? "asleep in the den — link stopped, tail at \(Int(Feel.Timing.denTailRate))Hz"
+                    : "asleep — display link stopped, watching at 1Hz")
     }
 
     private func leaveSlumber() {
