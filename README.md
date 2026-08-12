@@ -131,4 +131,4 @@ preferences, and installs no login item, agent, or helper.
 
 **Bug reports are the most useful thing you can send**, and they need nothing from you but the
 report. Code contributions need a copyright assignment first, and
-[CONTRIBUTING.md](CONTRIBUTING.md) explains exactly why rather than leaving you to guess.
+[CONTRIBUTING.md](CONTRIBUTING.md) explains why.
