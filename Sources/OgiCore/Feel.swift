@@ -638,8 +638,51 @@ public enum Feel {
         // inset, the click target, the contact shadow's width) while `spriteScale` is only his
         // drawing. Move one without the other and he is drawn bigger while still being clicked,
         // shadowed and hidden as the smaller cat.
-        public static let height: CGFloat = 40      // was 32
-        public static let width: CGFloat = 65       // was 52
+        /// How big he is on THIS Mac, as a fraction of the machine he was tuned on.
+        ///
+        /// Every number below is hand-tuned against a 16-inch MacBook Pro, whose menu bar strip
+        /// is 38 points. A notched display cannot give him any more room than its strip: that
+        /// line is the cutout's lower lip and the den, the tunnel and both doorways are measured
+        /// from it, so unlike a notchless Mac, where `World.build` simply drops the line until he
+        /// fits, there is nothing to move but the cat. A 14-inch Pro and every M2-or-later Air
+        /// have a 32pt strip, and at full size that drew a cat with his ears sawn off.
+        ///
+        /// Written once at launch and again on every display change, from the main actor, before
+        /// anything reads it. `nonisolated(unsafe)` because `World.build` is deliberately pure
+        /// and nonisolated and reads the sizes below; making this actor-bound would drag the
+        /// entire world model onto the main actor to buy nothing.
+        ///
+        /// ponytail: his GAIT is deliberately not scaled. `strideLength` and the speeds are a
+        /// matched pair (`buildPose` advances the phase by `speed / stride`, and
+        /// `eachGaitPlaysAtItsOwnClipsDeclaredRate` holds them against the sheets' own fps), so
+        /// scaling one without the other cranks the sheet and scaling both is a second tuning
+        /// pass. At the worst real fit, 0.84, he covers 16% more ground per stride than his paws
+        /// suggest. Look at a 14-inch before deciding whether that reads as skating.
+        nonisolated(unsafe) public static var fit: CGFloat = 1
+
+        public static var height: CGFloat { 40 * fit }      // was 32
+        public static var width: CGFloat { 65 * fit }       // was 52
+        /// The strip `fit` is measured against: the one on the machine every number here was
+        /// tuned by eye on. Changing it resizes him on every Mac at once.
+        public static let referenceStrip: CGFloat = 38
+        /// How tall he is actually DRAWN while standing on a ledge, as opposed to `height`
+        /// above, which is the nominal collision box.
+        ///
+        /// The two are not the same number and assuming they were is what cut his head off. A
+        /// MacBook Air M1 with Chrome fullscreen drew him with the top of his skull sliced flat
+        /// against the panel's edge, because the only guard against the top of the display
+        /// reserved `height` (40) for a cat whose tallest standing clip is `zap` at 47.
+        ///
+        /// Six clips are drawn taller than the box: `alert` and `lookDown` 42, `callTalk` and
+        /// `curious` 43, `stretch` and the two desk clips 44, `curl` 46, `zap` 47. The sheets
+        /// are cropped to their own ink with no padding, so the band height IS the drawn
+        /// height, which `standingHeightIsTheTallestClipHeCanStandIn` re-measures rather than
+        /// trusting this comment.
+        ///
+        /// **Only for the top of the display.** Occlusion, gaze, the notch punch and the hit
+        /// rect all still use `height`: they want the box he usually occupies, not the tallest
+        /// he ever gets, and swapping them would report him hidden while he is plainly visible.
+        public static var standingHeight: CGFloat { 47 * fit }
         /// A final multiplier on top of the eye-width normalisation. His proportions come from
         /// `referenceEyeWidth` below; this is the knob for scaling him globally without
         /// retuning that, and it scales the band-height clips too, since `Sprites.scale` is
@@ -647,7 +690,7 @@ public enum Feel {
         ///
         /// 1.25 on Hamzah's report that he was "super small". Keep `Shape.height` and
         /// `Shape.width` in step with it.
-        public static let spriteScale: CGFloat = 1.25
+        public static var spriteScale: CGFloat { 1.25 * fit }
         /// Target on-screen eye width in points. Every clip is scaled to match it, which is
         /// what keeps him the same size whether he is sitting or walking.
         ///
@@ -716,7 +759,9 @@ public enum Feel {
         /// comes half out of the notch, and the goodbye walks back into it. Coming to rest
         /// there is what reads as a broken sprite. `reseat` keeps him on screen with the same
         /// half-width.
-        public static let clearance: CGFloat = width / 2
+        /// Computed, not stored: `width` follows `fit` now, and a `let` here would freeze this
+        /// at whatever the fit happened to be the first time anything asked.
+        public static var clearance: CGFloat { width / 2 }
         /// How far past his drawn ink a click still counts as touching him. He is a small
         /// target, so the hit rect is padded, and the yield box is built from the same
         /// figure, because the box he moves aside for must be the box that swallows clicks.

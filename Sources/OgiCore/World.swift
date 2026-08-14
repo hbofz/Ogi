@@ -77,6 +77,29 @@ public struct ScreenGeometry: Sendable {
         self.frame = frame; self.visibleFrame = visibleFrame; self.notch = notch
     }
 
+    /// How big he has to be drawn to sit in THIS screen's menu bar strip the way he was tuned
+    /// to sit in a 16-inch MacBook Pro's. Feeds `Feel.Shape.fit`; see the essay there.
+    ///
+    /// **Notched displays only, and that asymmetry is the whole point.** A notchless Mac gets
+    /// him room by dropping the line he stands on until he fits (`World.build`'s ceiling), so
+    /// shrinking him there as well would be paying twice: its bar is 24 to 31 points and this
+    /// formula would render him at two thirds for no reason at all. A notched Mac cannot move
+    /// that line, because it is the cutout's lower lip and the den, the tunnel and both doorways
+    /// are measured from it, so the cat is the only thing left to change.
+    ///
+    /// Measured off the frame rather than off `safeAreaInsets.top`, because the strip he is
+    /// drawn into runs from the bar line to the panel's edge, and the two disagree by a point on
+    /// real hardware (37 against 38 on an M2).
+    ///
+    /// Never above 1: a roomier strip is headroom, not a licence to grow past the size he was
+    /// tuned at.
+    public var catFit: CGFloat {
+        guard notch != nil else { return 1 }
+        let strip = frame.maxY - visibleFrame.maxY
+        guard strip > 0 else { return 1 }
+        return min(1, strip / Feel.Shape.referenceStrip)
+    }
+
     #if canImport(AppKit)
     public init(_ s: NSScreen) {
         frame = s.frame
@@ -223,6 +246,23 @@ public enum World {
         } ?? fromWindows
         let screenSpan = screen.visibleFrame.minX...screen.visibleFrame.maxX
 
+        /// The highest line he can stand on and still be drawn whole.
+        ///
+        /// He is drawn UPWARDS from his feet, so a ledge this close to the top of the panel puts
+        /// his head off it. Reported from a MacBook Air M1 with Chrome fullscreen: the top of
+        /// his skull sliced flat against the display's edge, because the menu bar line was
+        /// pinned to `frame.maxY` there and the fullscreen window's own top edge was accepted as
+        /// a second ledge in the same place.
+        ///
+        /// `standingHeight` and not `Shape.height`: the latter is his nominal collision box and
+        /// six of his standing clips are drawn taller than it, so it was never the right
+        /// yardstick for this even where it was applied.
+        ///
+        /// A notched display is the one exception and it is a hardware one: that line is the
+        /// cutout's lower lip, the den and the tunnel are measured from it, and it cannot move.
+        /// He is scaled to fit the strip instead. See `Feel.Shape.spriteScale`.
+        let headroomLine = screen.frame.maxY - Feel.Shape.standingHeight
+
         /// Where he can stand and still be drawn whole, as opposed to where the desktop
         /// happens to extend.
         ///
@@ -293,21 +333,34 @@ public enum World {
         // fits. A plain one is 24-25pt through Sequoia and about 31pt on Tahoe, and at
         // `Shape.height` he does not: his ears are drawn off the top of the display.
         //
-        // Inside a FULLSCREEN Space this line is synthetic and must stay exactly at the top,
-        // coplanar with the fullscreen window's own top edge, or he reads that edge as a
-        // separate ledge and crouches and jumps at it forever. `visibleFrame.maxY ==
-        // frame.maxY` is true both there and with the menu bar merely auto-hidden, and the
-        // geometry alone cannot tell them apart, so ask the window list, which is already in
-        // hand. That distinction is why an earlier unconditional clamp had to be reverted.
-        // Two cases keep the line exactly where the system puts it. A fullscreen Space, per
-        // above. And a NOTCHED display, where this line is the notch's lower lip: the cutout,
-        // the den, the doorways and the tunnel are all measured from it, so moving it two
-        // points to buy headroom quietly breaks all of them (`theNotchsLowerLipIsTheMenuBarLine`
-        // says so). A notch strip is 38pt anyway, which he fits.
-        let fullscreen = World.somethingFullscreen(in: windows, screen: screen, ownPID: ownPID)
-        let menuY = fullscreen || screen.notch != nil
+        // Inside a FULLSCREEN Space this line is synthetic, and it used to be pinned to the very
+        // top so it stayed coplanar with the fullscreen window's own top edge: off that edge, he
+        // read the edge as a separate ledge and crouched and jumped at it forever. That pinning
+        // is what drew his whole body off a notchless panel, and it is gone. The coplanar
+        // problem is solved from the other end instead, by `ceiling`: the window's top edge is
+        // no longer a ledge either, so there is nothing up there to jump at and one line is left
+        // where he fits. That is why an earlier unconditional clamp had to be reverted and this
+        // one does not.
+        //
+        // A NOTCHED display is the one case that keeps the line exactly where the system puts
+        // it, because this line is the notch's lower lip: the cutout, the den, the doorways and
+        // the tunnel are all measured from it, so moving it two points to buy headroom quietly
+        // breaks all of them (`theNotchsLowerLipIsTheMenuBarLine` says so). The strip is 32pt on
+        // a 14-inch Pro or any Air and 38pt on a 16-inch, against clips up to 47, so the fit is
+        // bought by scaling HIM to the strip rather than by moving the lip.
+        let menuY = screen.notch != nil
             ? screen.visibleFrame.maxY
-            : min(screen.visibleFrame.maxY, screen.frame.maxY - Feel.Shape.height)
+            : min(screen.visibleFrame.maxY, headroomLine)
+
+        /// The highest a WINDOW's top edge may be and still be walkable ground.
+        ///
+        /// `headroomLine`, except that the line he lives on is always allowed even when the
+        /// hardware gives it less room than he needs. On a notched Mac the bar line is the
+        /// cutout's lower lip at 32 or 38 points, a fullscreen window's top edge sits exactly on
+        /// it, and the covered-screen retreat puts him there: that ledge has to survive, or the
+        /// notch stops being a hole in it and he walks through the cutout and vanishes
+        /// (`theNotchIsAHoleInEveryLedgeAtThatHeight`).
+        let ceiling = max(menuY, headroomLine)
         let barSolid = punchNotch([standable], at: menuY)
             .filter { $0.length >= Feel.World.minStandWidth }
         surfaces.append(Surface(id: .menuBar, z: -1, y: menuY, extent: screenSpan,
@@ -322,8 +375,13 @@ public enum World {
             // became walkable ground off the top of the panel: he can reach it with an
             // ordinary ~190pt jump, and then he is grounded somewhere he is never drawn, with
             // the click dead zone parked up there with him. It stays an occluder either way.
+            //
+            // `ceiling` and not `frame.maxY`: a top edge within his own drawn height of the
+            // panel's edge is ground he cannot stand on whole, and a fullscreen window's top
+            // edge is exactly that. Dropping it is also what lets the menu bar line move down
+            // in a fullscreen Space without leaving a second ledge above it to jump at.
             guard w.rect.width >= Feel.World.minStandWidth + 2 * inset, w.rect.height >= 20,
-                  w.rect.maxY <= screen.frame.maxY else { continue }
+                  w.rect.maxY <= ceiling else { continue }
             let extent = w.rect.minX...w.rect.maxX
             let start = subtract([(w.rect.minX + inset)...(w.rect.maxX - inset)],
                                  // clip to where he is drawable by cutting everything outside it

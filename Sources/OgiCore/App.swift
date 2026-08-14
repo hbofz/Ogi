@@ -68,6 +68,8 @@ public final class OgiApp: NSObject, NSApplicationDelegate {
         homeScreen = screen
         homeDisplay = OgiApp.displayID(screen)
         flipOrigin = NSScreen.screens[0].frame.maxY
+        // Before the overlay, the first poll and `arrival`, all of which measure him.
+        Feel.Shape.fit = ScreenGeometry(screen).catFit
 
         setupStatusItem()
 
@@ -186,7 +188,11 @@ public final class OgiApp: NSObject, NSApplicationDelegate {
         overlay.start()
 
         let g = ScreenGeometry(screen)
-        log("screen=\(g.frame) visible=\(g.visibleFrame) notch=\(g.notch.map { "\($0)" } ?? "none")")
+        // The fit and the strip are in here because this whole class of bug arrives as a photo
+        // from someone else's Mac, and these two numbers are the ones that tell you which.
+        log("screen=\(g.frame) visible=\(g.visibleFrame) notch=\(g.notch.map { "\($0)" } ?? "none")"
+            + " strip=\(g.frame.maxY - g.visibleFrame.maxY) fit=\(Feel.Shape.fit)"
+            + " standing=\(Feel.Shape.standingHeight)")
     }
 
     /// Puts him into one of the notch behaviours on demand, for OGI_DEBUG builds only.
@@ -294,6 +300,10 @@ public final class OgiApp: NSObject, NSApplicationDelegate {
             ?? NSScreen.main ?? NSScreen.screens[0]
         homeScreen = screen
         flipOrigin = NSScreen.screens[0].frame.maxY     // the primary display can be a new one
+        // He may have moved between a notched panel and an external, or the user may have
+        // changed the scaling under him, and both change the strip he has to fit in. Ahead of
+        // the poll, which builds a world out of `standingHeight` and `clearance`.
+        Feel.Shape.fit = ScreenGeometry(screen).catFit
         overlay.setFrame(screen.frame)
         poll(force: true)
         cat = OgiApp.reseat(cat, into: screen.visibleFrame)

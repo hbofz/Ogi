@@ -1409,7 +1409,10 @@ private func desktop(with w: CGRect) -> Skyline {
     }
 
     // Fullscreen: its bottom edge sits ON the floor, so the floor is carved away entirely.
-    let full = desktop(with: CGRect(x: 0, y: 90, width: 1920, height: 1115))
+    // The top edge stops short of `World.build`'s ceiling, which is what the property under
+    // test needs: a ledge inside his own drawn height of the panel's edge is no ledge at all
+    // now, and a window with no top edge to mantle onto cannot show whether he mantles.
+    let full = desktop(with: CGRect(x: 0, y: 90, width: 1920, height: 1100))
     #expect(full.surface(.floor)?.spans.isEmpty == true, "the floor is still visible; fixture is wrong")
     var cat = gripped(full, dy: 505)          // far past mantleReach: today he slides
     for _ in 0..<(120 * 30) {
@@ -1421,12 +1424,12 @@ private func desktop(with w: CGRect) -> Skyline {
         return
     }
     #expect(p.id == .window(1))
-    #expect(abs(cat.position.y - 1205) < 0.001, "he did not mantle onto the top edge")
+    #expect(abs(cat.position.y - 1190) < 0.001, "he did not mantle onto the top edge")
 
     // The same window lifted off the desktop. Now the floor below him IS visible, so the slide
     // is still the right answer — a cat slipping down a curtain is the behaviour that earned
     // the sheet, and this is what stops the new rule from eating it.
-    let floating = desktop(with: CGRect(x: 0, y: 300, width: 1920, height: 900))
+    let floating = desktop(with: CGRect(x: 0, y: 300, width: 1920, height: 880))
     #expect(floating.surface(.floor)?.spans.isEmpty == false, "the floor vanished; fixture is wrong")
     var slider = gripped(floating, dy: 505)
     for _ in 0..<(120 * 30) {
@@ -1459,8 +1462,11 @@ private func desktop(with w: CGRect) -> Skyline {
         windows: [RawWindow(id: 1, pid: 2, layer: 0,
                             rect: CGRect(x: 700, y: 400, width: 500, height: 300),
                             alpha: 1, owner: "Front"),
+                  // Top edge below `World.build`'s ceiling, so it is still a ledge he can mantle
+                  // onto. Flush with the panel's edge it would not be one, and the oscillation
+                  // this test exists to catch needs something to arrive at.
                   RawWindow(id: 2, pid: 2, layer: 0,
-                            rect: CGRect(x: 0, y: 90, width: 1920, height: 1115),
+                            rect: CGRect(x: 0, y: 90, width: 1920, height: 1100),
                             alpha: 1, owner: "Maximized")],
         screen: screen, ownPID: 99)
     #expect(world.surface(.floor)?.spans.isEmpty == true,
@@ -1471,7 +1477,7 @@ private func desktop(with w: CGRect) -> Skyline {
     // On the maximized window's face at x=950, a hundred points above the other's top edge and
     // far past `mantleReach`. No intent: this is a release, not a deliberate climb.
     var cat = CatState(position: CGPoint(x: 950, y: 800))
-    cat.support = .clinging(Grip(id: .window(2), dx: 950, dy: 405))
+    cat.support = .clinging(Grip(id: .window(2), dx: 950, dy: 390))
 
     for _ in 0..<(120 * 30) {
         cat = Cat.step(cat, world: world, dt: dt)
@@ -1483,7 +1489,7 @@ private func desktop(with w: CGRect) -> Skyline {
         return
     }
     #expect(p.id == .window(2), "he mantled onto the wrong thing")
-    #expect(abs(cat.position.y - 1205) < 0.001)
+    #expect(abs(cat.position.y - 1190) < 0.001)
 }
 
 // MARK: - The tell

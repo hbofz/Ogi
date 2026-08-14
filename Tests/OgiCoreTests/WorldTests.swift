@@ -403,6 +403,123 @@ private let screen = ScreenGeometry(
             "there is a walkable surface above the top of the screen")
 }
 
+/// A notched display cannot give him room the way a notchless one can. That line is the
+/// cutout's lower lip and the den, the tunnel and both doorways are measured from it, so it
+/// cannot drop. The strip is whatever the hardware says: 38pt on a 16-inch MacBook Pro, 32pt on
+/// a 14-inch or any MacBook Air, and smaller again under a Larger Text scaling.
+///
+/// So on those Macs the cat moves instead of the line. He was tuned by eye against a 38pt strip;
+/// every other strip gets him at the same fraction of it, which is what makes a 14-inch look
+/// like the 16-inch he was tuned on rather than like a cat with his ears sawn off.
+@Test func aNotchedStripScalesTheCatRatherThanTheLine() {
+    func notched(strip: CGFloat) -> ScreenGeometry {
+        let H: CGFloat = 1243
+        return ScreenGeometry(
+            frame: CGRect(x: 0, y: 0, width: 1920, height: H),
+            visibleFrame: CGRect(x: 0, y: 90, width: 1920, height: H - 90 - strip),
+            notch: CGRect(x: 856, y: H - strip, width: 208, height: strip - 1))
+    }
+
+    // The 16-inch he was tuned on. Anything but exactly 1 here silently resizes the cat Hamzah
+    // hand-tuned, on the one machine the numbers were chosen against.
+    #expect(notched(strip: 38).catFit == 1, "the reference strip resized the cat")
+
+    // A 14-inch Pro, and every M2-or-later Air.
+    #expect(abs(notched(strip: 32).catFit - 32.0 / 38.0) < 0.001)
+
+    // He never grows. A taller strip is headroom, not an invitation.
+    #expect(notched(strip: 60).catFit == 1, "a roomy strip made him bigger than he was tuned")
+
+    // A notchless display gets room by moving the LINE (see `noLedgeSitsCloserToTheTopThanHeIsTall`),
+    // so it must never also shrink him. Its bar is 24-31pt and that formula would render him at
+    // two thirds for no reason.
+    for bar in [CGFloat(0), 24, 31, 38] {
+        let g = ScreenGeometry(frame: CGRect(x: 0, y: 0, width: 1920, height: 1243),
+                               visibleFrame: CGRect(x: 0, y: 90, width: 1920, height: 1153 - bar),
+                               notch: nil)
+        #expect(g.catFit == 1, Comment(rawValue: "a notchless \(bar)pt bar shrank him to \(g.catFit)"))
+    }
+}
+
+/// Everything about how big he is has to move together. The drawing, the collision box, the
+/// standing-room inset and the headroom clamp are four readings of ONE size, and a fit that
+/// scaled the drawing alone would render a smaller cat that is still clicked, hidden, shadowed
+/// and given room as the larger one.
+///
+/// `clearance` is why this samples rather than reasons: it was `static let width / 2`, which
+/// under a computed `width` freezes at whatever the fit happened to be the first time anything
+/// asked. Nothing but a real change of fit catches that.
+@MainActor
+@Test func fitMovesEveryMeasurementOfHimTogether() {
+    // Read, flip, sample, restore, all straight-line and with no suspension point in it. `fit`
+    // is process-global and most of this suite is nonisolated, so the window in which another
+    // test could see the flipped value is a handful of property reads wide.
+    let one = (Feel.Shape.spriteScale, Feel.Shape.height, Feel.Shape.width,
+               Feel.Shape.standingHeight, Feel.Shape.clearance, Sprites.size(.idle, 0).height)
+    Feel.Shape.fit = 0.5
+    let half = (Feel.Shape.spriteScale, Feel.Shape.height, Feel.Shape.width,
+                Feel.Shape.standingHeight, Feel.Shape.clearance, Sprites.size(.idle, 0).height)
+    Feel.Shape.fit = 1
+
+    #expect(half.0 == one.0 * 0.5, "the drawing scale did not follow the fit")
+    #expect(half.1 == one.1 * 0.5, "the collision box did not follow the fit")
+    #expect(half.2 == one.2 * 0.5, "his width did not follow the fit")
+    #expect(half.3 == one.3 * 0.5, "the headroom clamp did not follow the fit")
+    #expect(half.4 == one.4 * 0.5, "the standing-room inset did not follow the fit")
+    // ...and the sheets, which are the only one of these that reaches the screen.
+    #expect(abs(half.5 - one.5 * 0.5) < 0.01,
+            "the drawing did not follow the fit; `clipScale` is caching `spriteScale`")
+}
+
+/// He is drawn UPWARDS from the line he stands on, so any ledge within his own drawn height of
+/// the top of the display puts part of him off the panel. Reported from a MacBook Air M1 (no
+/// notch, 1440x900) with Chrome fullscreen: his head was sliced off flat at the panel's edge.
+///
+/// Two ledges did it and both are covered here. In a fullscreen Space the menu bar line was
+/// pinned to `frame.maxY`, which is zero headroom, and the fullscreen window's own top edge was
+/// accepted as a second ledge at the same place. `Feel.Shape.height` is not the measurement
+/// either: it is his nominal collision box, and six standing clips are drawn taller than it.
+@Test func noLedgeSitsCloserToTheTopThanHeIsTall() {
+    // The reporter's machine, in the state the photograph was taken in.
+    let air = ScreenGeometry(frame: CGRect(x: 0, y: 0, width: 1440, height: 900),
+                             visibleFrame: CGRect(x: 0, y: 0, width: 1440, height: 900),
+                             notch: nil)
+    let chrome = win(1, air.frame)
+    let world = World.build(windows: [chrome], screen: air, ownPID: 99)
+
+    for s in world.surfaces {
+        #expect(s.y + Feel.Shape.standingHeight <= air.frame.maxY,
+                Comment(rawValue: "\(s.id) is \(s.y + Feel.Shape.standingHeight - air.frame.maxY)pt "
+                        + "too close to the top; standing there draws his head off the panel"))
+    }
+
+    // ...and the two ledges must not become a pair he crouches and jumps between. A fullscreen
+    // window's top edge is now no ledge at all, so the bar line is the only thing up there.
+    #expect(!world.surfaces.contains { $0.id == .window(1) },
+            "the fullscreen window's top edge is still a ledge with nothing above it")
+}
+
+/// The nominal collision box is not what gets drawn. `standingHeight` is the yardstick for the
+/// top of the display and has to stay equal to the tallest clip he can be in while standing on
+/// a ledge, or the clamp it feeds is wrong again the next time a sheet is added.
+///
+/// Jumping and falling are excluded on purpose: he is airborne, not standing, and there is
+/// nothing above the top line to jump at.
+@MainActor
+@Test func standingHeightIsTheTallestClipHeCanStandIn() {
+    let airborne: Set<Sprites.Clip> = [.jump, .fall, .cling, .climbUp, .held,
+                                       .hang, .peer, .peerDown, .denSleep]
+    var tallest: (Sprites.Clip, CGFloat) = (.idle, 0)
+    for c in Sprites.Clip.allCases where !airborne.contains(c) {
+        for i in 0..<c.count where Sprites.size(c, i).height > tallest.1 {
+            tallest = (c, Sprites.size(c, i).height)
+        }
+    }
+    #expect(abs(Feel.Shape.standingHeight - tallest.1) < 1,
+            Comment(rawValue: "the tallest standing clip is \(tallest.0.rawValue) at "
+                    + "\(tallest.1)pt, but standingHeight says \(Feel.Shape.standingHeight)"))
+}
+
 /// `visibleFrame.maxY == frame.maxY` means nothing is reserved at the top, and that is true in
 /// two situations the geometry alone cannot tell apart: a fullscreen Space, where the menu bar
 /// line is synthetic and must stay coplanar with the fullscreen window's top edge, and a menu
@@ -424,27 +541,37 @@ private let screen = ScreenGeometry(
                 == notched.visibleFrame.maxY,
             "the notch's lower lip moved, which moves the den with it")
 
-    // A FULLSCREEN Space: synthetic line, must stay at the top and coplanar with the window's
-    // own top edge, or every landing on it re-plans as a jump.
+    // A FULLSCREEN Space on a notchless display: the line used to be pinned to the very top so
+    // it stayed coplanar with the window's own top edge, or every landing on it re-planned as a
+    // jump. Pinned there it also drew his entire body off the panel, which is what a MacBook Air
+    // M1 running Chrome fullscreen actually looked like.
+    //
+    // So the line drops to where he fits, and the coplanar problem is answered from the other
+    // end: the window's top edge is no longer a ledge either, so there is no second ledge left
+    // to crouch and jump at. Both halves are asserted, because either one alone is a bug.
     let fs = geometry(bar: 0, height: 1243)
     let film = RawWindow(id: 1, pid: 7, layer: 0,
                          rect: CGRect(x: 0, y: 0, width: W, height: 1243), alpha: 1, owner: "Film")
-    #expect(World.build(windows: [film], screen: fs, ownPID: 99).surface(.menuBar)!.y
-                == fs.frame.maxY,
-            "the fullscreen line moved off the window's top edge")
+    let fsWorld = World.build(windows: [film], screen: fs, ownPID: 99)
+    #expect(fsWorld.surface(.menuBar)!.y + Feel.Shape.standingHeight <= fs.frame.maxY,
+            "in a fullscreen Space his head is still drawn off the top of the panel")
+    #expect(!fsWorld.surfaces.contains { $0.id == .window(1) },
+            "the fullscreen window's top edge is a second ledge above the line he stands on")
 
     // Any OTHER display: he has to fit in the strip he stands on. A plain bar is 24-25pt
-    // through Sequoia and about 31pt on Tahoe, against a cat who is `Shape.height` tall, so
-    // the line drops as far as it must and no further.
-    for bar in [CGFloat(0), 24, 25, 31, 38, 60] {
+    // through Sequoia and about 31pt on Tahoe, against a cat drawn `standingHeight` tall, so
+    // the line drops as far as it must and no further. `standingHeight` and not `Shape.height`:
+    // the nominal box is 40 and six standing clips are taller, so the old figure left his ears
+    // off the panel on every notchless Mac in the tallest of them.
+    for bar in [CGFloat(0), 24, 25, 31, 38, 47, 60] {
         let g = geometry(bar: bar)
         let y = World.build(windows: [], screen: g, ownPID: 99).surface(.menuBar)!.y
-        #expect(y + Feel.Shape.height <= g.frame.maxY,
-                Comment(rawValue: "with a \(bar)pt bar his head is drawn \(y + Feel.Shape.height - g.frame.maxY)pt off the top"))
+        #expect(y + Feel.Shape.standingHeight <= g.frame.maxY,
+                Comment(rawValue: "with a \(bar)pt bar his head is drawn \(y + Feel.Shape.standingHeight - g.frame.maxY)pt off the top"))
         #expect(y <= g.visibleFrame.maxY,
                 Comment(rawValue: "with a \(bar)pt bar he perches ABOVE the bar line"))
         // ...and never lower than it has to be: a bar tall enough for him keeps its own line.
-        if bar >= Feel.Shape.height {
+        if bar >= Feel.Shape.standingHeight {
             #expect(y == g.visibleFrame.maxY,
                     Comment(rawValue: "a \(bar)pt bar has room for him and still moved his perch"))
         }
